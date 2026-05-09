@@ -835,17 +835,14 @@ final class PlaceholderTextView: NSTextView {
   /// layout manager centers glyphs inside that fragment, so the caret uses
   /// the same vertical inset.
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-    let rect = normalizedInsertionPointRect(rect)
-    let caretFont = font ?? .systemFont(ofSize: 14)
-    let fontHeight = caretFont.ascender - caretFont.descender
-    let centeredGlyphInset = max(0, rect.height - fontHeight) / 2
+    let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
-      let blockWidth = max(rect.width, 8)
+      let blockWidth = max(displayRect.width, 8)
       let blockRect = NSRect(
-        x: rect.origin.x,
-        y: rect.origin.y + centeredGlyphInset,
+        x: displayRect.origin.x,
+        y: displayRect.origin.y,
         width: blockWidth,
-        height: fontHeight
+        height: displayRect.height
       )
       guard flag else {
         invalidateInsertionPointRect(blockRect)
@@ -855,14 +852,33 @@ final class PlaceholderTextView: NSTextView {
       color.withAlphaComponent(0.4).setFill()
       blockRect.fill()
     } else {
-      let shrunk = NSRect(
-        x: rect.origin.x,
-        y: rect.origin.y + centeredGlyphInset,
-        width: rect.width,
-        height: fontHeight
-      )
-      super.drawInsertionPoint(in: shrunk, color: color, turnedOn: flag)
+      super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
+      if flag {
+        lastInsertionPointDisplayRect = displayRect
+      } else {
+        invalidateInsertionPointRect(displayRect)
+      }
     }
+  }
+
+  func insertionPointDisplayRect(for rect: NSRect, turnedOn flag: Bool) -> NSRect {
+    if !flag, let lastInsertionPointDisplayRect {
+      return lastInsertionPointDisplayRect
+    }
+    let baseRect = flag ? normalizedInsertionPointRect(rect) : rect
+    return shrinkInsertionPointRectToFont(baseRect)
+  }
+
+  private func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
+    let caretFont = font ?? .systemFont(ofSize: 14)
+    let fontHeight = caretFont.ascender - caretFont.descender
+    let centeredGlyphInset = max(0, rect.height - fontHeight) / 2
+    return NSRect(
+      x: rect.origin.x,
+      y: rect.origin.y + centeredGlyphInset,
+      width: rect.width,
+      height: fontHeight
+    )
   }
 
   private func invalidateInsertionPointRect(_ rect: NSRect) {

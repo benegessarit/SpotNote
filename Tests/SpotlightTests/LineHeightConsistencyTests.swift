@@ -116,9 +116,6 @@ struct LineHeightConsistencyTests {
       useFixedLayoutManager: true
     )
     #expect(lines.count == 4)
-    let gap12 = (lines[2].baseline - lines[1].baseline * 100).rounded() / 100
-    let gap23 = (lines[3].baseline - lines[2].baseline * 100).rounded() / 100
-    // Use the actual computed gaps, not the intermediate expression
     let realGap12 = lines[2].baseline - lines[1].baseline
     let realGap23 = lines[3].baseline - lines[2].baseline
     #expect(
@@ -131,10 +128,6 @@ struct LineHeightConsistencyTests {
   func multipleEmptyLines() {
     let lines = layoutLines(for: "A\n\n\n\nB\n")
     #expect(lines.count == 5)
-    var gaps: [CGFloat] = []
-    for i in 1..<lines.count {
-      gaps.append((lines[i].baseline - lines[i - 1].baseline * 100).rounded() / 100)
-    }
     let realGaps = (1..<lines.count).map {
       lines[$0].baseline - lines[$0 - 1].baseline
     }

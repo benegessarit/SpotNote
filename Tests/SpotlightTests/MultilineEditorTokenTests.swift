@@ -341,6 +341,29 @@ struct MultilineEditorChecklistToggleTests {
     #expect(textView.string == "prefix ☑ cursor placement")
   }
 
+  @Test("caret erase uses previously painted rect after selection moves")
+  func caretEraseUsesPreviousPaintedRectAfterSelectionMoves() {
+    let textView = makeChecklistTextView(text: "old caret\nnew caret")
+    textView.setSelectedRange(NSRange(location: 3, length: 0))
+
+    let painted = textView.insertionPointDisplayRect(
+      for: NSRect(x: 30, y: 0, width: 1, height: EditorMetrics.lineHeight),
+      turnedOn: true
+    )
+    let image = NSImage(size: NSSize(width: 240, height: 80))
+    image.lockFocus()
+    defer { image.unlockFocus() }
+    textView.drawInsertionPoint(in: painted, color: .labelColor, turnedOn: true)
+    textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+
+    let erase = textView.insertionPointDisplayRect(
+      for: NSRect(x: 160, y: EditorMetrics.lineHeight, width: 1, height: EditorMetrics.lineHeight),
+      turnedOn: false
+    )
+
+    #expect(erase == painted)
+  }
+
   private func makeChecklistTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 200))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)

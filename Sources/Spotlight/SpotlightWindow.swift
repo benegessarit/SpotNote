@@ -70,6 +70,14 @@ public final class SpotlightWindowController {
     }
   }
   private var navAnchor: NavAnchorState = .none
+  private struct MeasuredHeightCache {
+    let text: String
+    let maxVisibleLines: Int
+    let chromeAbove: CGFloat
+    let chromeBelow: CGFloat
+    let height: CGFloat
+  }
+
   /// Screen-space `y` of the editor card's top edge. Every non-nav
   /// resize (tutorial toggle, editor text growth) keeps this point
   /// fixed so the editor never visually jumps. Reset to nil on every
@@ -78,6 +86,8 @@ public final class SpotlightWindowController {
   /// what snaps the drifted-during-cycling editor back to its rest
   /// position the moment the user starts typing again.
   private var editorTopY: CGFloat?
+  private var measuredHeightCache: MeasuredHeightCache?
+  private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
   /// Layout above the editor card inside the panel (find bar + tutorial
@@ -108,9 +118,24 @@ public final class SpotlightWindowController {
   /// Total panel height SwiftUI will render with the current state.
   /// Mirrors `SpotlightRootView.extraChromeHeight + editor`.
   private var expectedPanelHeight: CGFloat {
+    let chromeAbove = chromeAboveEditor
+    let chromeBelow = chromeBelowEditor
+    if let measuredHeightCache {
+      if hasMeasuredHeight(forChromeAbove: chromeAbove, chromeBelow: chromeBelow) {
+        return measuredHeightCache.height
+      }
+    }
     let lines = EditorMetrics.lineCount(in: session.currentText)
     let editor = EditorMetrics.panelHeight(forLines: lines, maxLines: preferences.maxVisibleLines)
-    return editor + chromeAboveEditor + chromeBelowEditor
+    return editor + chromeAbove + chromeBelow
+  }
+
+  private func hasMeasuredHeight(forChromeAbove chromeAbove: CGFloat, chromeBelow: CGFloat) -> Bool {
+    guard let measuredHeightCache else { return false }
+    return measuredHeightCache.text == session.currentText
+      && measuredHeightCache.maxVisibleLines == preferences.maxVisibleLines
+      && measuredHeightCache.chromeAbove == chromeAbove
+      && measuredHeightCache.chromeBelow == chromeBelow
   }
 
   public init(
@@ -249,7 +274,7 @@ public final class SpotlightWindowController {
       pinnedTopY = top
     }
     let x = (screenFrame.midX - panel.frame.width / 2).rounded()
-    panel.setFrame(
+    setPanelFrame(
       NSRect(x: x, y: top - height, width: panel.frame.width, height: height),
       display: false
     )
@@ -270,12 +295,12 @@ public final class SpotlightWindowController {
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.hasShadow = true
-    panel.level = .floating
+    panel.level = Self.panelLevel
     panel.isFloatingPanel = true
     panel.hidesOnDeactivate = false
     panel.becomesKeyOnlyIfNeeded = false
     panel.isMovableByWindowBackground = true
-    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    panel.collectionBehavior = Self.panelCollectionBehavior
     panel.contentView = NSHostingView(
       rootView: SpotlightRootView(
         focusTrigger: focusTrigger,
@@ -332,7 +357,10 @@ public final class SpotlightWindowController {
     guard dx <= Self.driftCorrectionThreshold, dy <= Self.driftCorrectionThreshold else {
       return
     }
-    panel.setFrameOrigin(target)
+    setPanelFrame(
+      NSRect(origin: target, size: panel.frame.size),
+      display: true
+    )
   }
 
   private func setPanelHeight(_ height: CGFloat, animated: Bool) {
@@ -356,12 +384,40 @@ public final class SpotlightWindowController {
       width: current.size.width,
       height: height
     )
-    panel.setFrame(newFrame, display: true, animate: animated)
+    measuredHeightCache = MeasuredHeightCache(
+      text: session.currentText,
+      maxVisibleLines: preferences.maxVisibleLines,
+      chromeAbove: chromeAbove,
+      chromeBelow: chromeBelowEditor,
+      height: height
+    )
+    setPanelFrame(newFrame, display: true, animate: animated)
     if case .pendingFirstResize = navAnchor {
       // The overlay is now on screen. Lock its bottom edge for every
       // subsequent cycle.
       navAnchor = .bottomPinned(newY)
     }
+  }
+
+  private func setPanelFrame(_ frame: NSRect, display: Bool, animate: Bool = false) {
+    guard let panel else { return }
+    programmaticFrameToIgnore = frame
+    panel.setFrame(frame, display: display, animate: animate)
+  }
+
+  private func shouldIgnoreProgrammaticMove(_ frame: NSRect) -> Bool {
+    guard let expected = programmaticFrameToIgnore else { return false }
+    guard Self.rect(frame, isApproximatelyEqualTo: expected) else { return false }
+    programmaticFrameToIgnore = nil
+    return true
+  }
+
+  private static func rect(_ lhs: NSRect, isApproximatelyEqualTo rhs: NSRect) -> Bool {
+    let tolerance: CGFloat = 0.5
+    return abs(lhs.origin.x - rhs.origin.x) <= tolerance
+      && abs(lhs.origin.y - rhs.origin.y) <= tolerance
+      && abs(lhs.size.width - rhs.size.width) <= tolerance
+      && abs(lhs.size.height - rhs.size.height) <= tolerance
   }
 
 }
@@ -405,6 +461,7 @@ extension SpotlightWindowController {
       ) { [weak self, weak panel] _ in
         MainActor.assumeIsolated {
           guard let self, let panel else { return }
+          if self.shouldIgnoreProgrammaticMove(panel.frame) { return }
           let newTop = panel.frame.origin.y + panel.frame.size.height
           self.pinnedTopY = newTop
           self.editorTopY = newTop - self.chromeAboveEditor
