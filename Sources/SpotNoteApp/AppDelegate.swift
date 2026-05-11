@@ -3,6 +3,7 @@ import AppKit
 import Carbon.HIToolbox
 import Combine
 import Core
+import CoreServices
 import Spotlight
 
 @MainActor
@@ -118,11 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
       .store(in: &cancellables)
 
-    presentOnboardingIfNeeded()
+    let didPresentOnboarding = presentOnboardingIfNeeded()
+    if !didPresentOnboarding && !Self.wasLaunchedAsBackgroundItem {
+      spotlight.openHUD()
+    }
   }
 
-  private func presentOnboardingIfNeeded() {
-    guard OnboardingController.shouldShow() else { return }
+  private func presentOnboardingIfNeeded() -> Bool {
+    guard OnboardingController.shouldShow() else { return false }
     let controller = OnboardingController(
       theme: preferences.activeTheme,
       shortcuts: shortcutStore,
@@ -130,13 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let self else { return }
         self.onboarding = nil
         self.preferences.showHints = true
-        self.spotlight.handleHotkey()
+        self.spotlight.openHUD()
       }
     )
     onboarding = controller
     // Defer one runloop tick so the spotlight controller and menu bar
     // finish their own first-pass setup before the tutorial steals focus.
     DispatchQueue.main.async { [weak controller] in controller?.show() }
+    return true
   }
 
   private func showSettings() {
@@ -160,13 +165,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     hasVisibleWindows flag: Bool
   ) -> Bool {
     if OnboardingController.shouldShow() {
-      presentOnboardingIfNeeded()
+      _ = presentOnboardingIfNeeded()
     } else if onboarding?.isActive == true {
       onboarding?.handleGlobalToggleChord()
     } else {
-      spotlight.handleHotkey()
+      spotlight.openHUD()
     }
     return true
+  }
+
+  private static var wasLaunchedAsBackgroundItem: Bool {
+    guard
+      let event = NSAppleEventManager.shared().currentAppleEvent,
+      event.eventID == kAEOpenApplication,
+      let launchKind = event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue
+    else {
+      return false
+    }
+    return launchKind == keyAELaunchedAsLogInItem || launchKind == keyAELaunchedAsServiceItem
   }
 
   func applicationWillTerminate(_ notification: Notification) {

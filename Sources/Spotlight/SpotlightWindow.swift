@@ -283,6 +283,10 @@ public final class SpotlightWindowController {
     }
   }
 
+  public func openHUD() {
+    focusOrShow()
+  }
+
   /// Summons the HUD on the most recently edited note with the caret
   /// already at the end. Bound to the `appendToLastNote` global chord
   /// (default ⌘⇧.). Falls back to plain show if the chat list hasn't
