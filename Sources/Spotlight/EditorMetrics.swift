@@ -30,13 +30,12 @@ enum EditorMetrics {
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 30
 
-  /// Panel height for `lines` display rows, clamped to `[1, maxLines]`.
-  /// `maxLines` is the user-configurable upper bound (see
-  /// `ThemePreferences.maxVisibleLines`); the clamp floor is always 1 so
-  /// the HUD never renders shorter than a single row.
+  /// Panel height for `lines` display rows, clamped to the user-selected
+  /// visible-line cap while keeping short notes at the default roomy size.
   static func panelHeight(forLines lines: Int, maxLines: Int) -> CGFloat {
     let clampedMax = max(1, maxLines)
-    let clamped = min(max(1, lines), clampedMax)
+    let roomyFloor = min(clampedMax, max(1, ThemePreferences.defaultVisibleLines))
+    let clamped = min(max(roomyFloor, lines), clampedMax)
     return CGFloat(clamped) * lineHeight + verticalInset * 2 + outerPadding * 2
   }
 

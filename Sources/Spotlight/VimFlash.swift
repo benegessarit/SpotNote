@@ -1,10 +1,12 @@
 import Foundation
 
+/// Direction for native Flash-style jumps.
 enum VimFlashDirection: Equatable, Sendable {
   case forward
   case backward
 }
 
+/// Search request emitted by the vim controller while Flash is active.
 struct VimFlashRequest: Equatable, Sendable {
   let query: String
   let direction: VimFlashDirection
@@ -17,33 +19,84 @@ struct VimFlashRequest: Equatable, Sendable {
   }
 }
 
+/// A labeled Flash destination. The location is a UTF-16 offset suitable
+/// for `NSTextView.setSelectedRange(_:)`; the label is what the user types
+/// after the search query to jump there.
+struct VimFlashTarget: Equatable, Sendable {
+  let location: Int
+  let label: String
+}
+
 enum VimFlash {
+  private static let labelAlphabet = Array("asdfghjklqwertyuiopzxcvbnm")
+
   static func targetLocation(in text: String, from location: Int, request: VimFlashRequest) -> Int? {
     guard !request.query.isEmpty, !text.isEmpty else { return nil }
-    let clampedLocation = min(max(0, location), text.utf16.count)
-    switch request.direction {
-    case .forward:
-      return target(in: text, from: clampedLocation, request: request) { $0 > $1 }
-    case .backward:
-      return target(in: text, from: clampedLocation, request: request) { $0 < $1 }
-    }
+    let matches = matchingLocations(in: text, from: location, request: request)
+    guard matches.count >= request.count else { return nil }
+    return matches[request.count - 1]
   }
 
-  private static func target(
+  static func targets(
     in text: String,
     from location: Int,
     request: VimFlashRequest,
-    isCandidate: (Int, Int) -> Bool
-  ) -> Int? {
-    var remaining = request.count
+    limit: Int = .max
+  ) -> [VimFlashTarget] {
+    let locations = matchingLocations(in: text, from: location, request: request, limit: limit)
+    let labels = labels(for: locations.count)
+    return zip(locations, labels).map { location, label in
+      VimFlashTarget(location: location, label: label)
+    }
+  }
+
+  private static func matchingLocations(
+    in text: String,
+    from location: Int,
+    request: VimFlashRequest,
+    limit: Int = .max
+  ) -> [Int] {
+    guard !request.query.isEmpty, !text.isEmpty, limit > 0 else { return [] }
+    let clampedLocation = min(max(0, location), text.utf16.count)
     let indices = request.direction == .forward ? Array(text.indices) : Array(text.indices.reversed())
+    var matches: [Int] = []
+    matches.reserveCapacity(min(limit, 96))
     for index in indices {
       let offset = utf16Offset(of: index, in: text)
-      guard isCandidate(offset, location), text[index...].hasPrefix(request.query) else { continue }
-      remaining -= 1
-      if remaining == 0 { return offset }
+      guard isCandidate(offset, relativeTo: clampedLocation, direction: request.direction),
+        text[index...].hasPrefix(request.query)
+      else { continue }
+      matches.append(offset)
+      if matches.count == limit { break }
     }
-    return nil
+    return matches
+  }
+
+  private static func isCandidate(
+    _ offset: Int,
+    relativeTo location: Int,
+    direction: VimFlashDirection
+  ) -> Bool {
+    switch direction {
+    case .forward: return offset > location
+    case .backward: return offset < location
+    }
+  }
+
+  private static func labels(for count: Int) -> [String] {
+    guard count > 0 else { return [] }
+    let alphabet = labelAlphabet.map(String.init)
+    if count <= alphabet.count { return Array(alphabet.prefix(count)) }
+
+    var labels: [String] = []
+    labels.reserveCapacity(count)
+    for first in alphabet {
+      for second in alphabet {
+        labels.append(first + second)
+        if labels.count == count { return labels }
+      }
+    }
+    return Array(labels.prefix(count))
   }
 
   private static func utf16Offset(of index: String.Index, in text: String) -> Int {

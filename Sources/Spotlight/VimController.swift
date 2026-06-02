@@ -129,8 +129,8 @@ final class VimController: ObservableObject {
       case .flash(let direction, let count) = current.kind
     else { return }
     prompt = nil
-    guard let first = query.first else { return }
-    let request = VimFlashRequest(query: String(first), direction: direction, count: count)
+    guard !query.isEmpty else { return }
+    let request = VimFlashRequest(query: query, direction: direction, count: count)
     if flashHandler?(request) == true {
       message = nil
     } else {
@@ -419,8 +419,8 @@ enum VimCommandReference {
         ),
         Entry(
           id: "flash",
-          usage: "s<char>  ·  S<char>",
-          summary: "Flash-lite jump: `s` moves forward to a character, `S` searches backward. Counts skip matches."
+          usage: "s<query><label>  ·  S<query><label>",
+          summary: "Flash jump: type a query, then one of the inline hint labels to jump. Return jumps by count."
         ),
         Entry(
           id: "n",

@@ -121,6 +121,32 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(composed == ("x " as NSString).length)
   }
 
+  @Test("Flash targets include stable labels for visible hints")
+  func flashTargetsHaveLabels() {
+    let targets = VimFlash.targets(
+      in: "alpha beta gamma",
+      from: 0,
+      request: VimFlashRequest(query: "a", direction: .forward, count: 1)
+    )
+
+    #expect(targets.map(\.location) == [4, 9, 12, 15])
+    #expect(targets.map(\.label) == ["a", "s", "d", "f"])
+  }
+
+  @Test("Flash target labels switch to two characters when needed")
+  func flashTargetsUseTwoCharacterLabelsForLargeMatchSets() {
+    let text = Array(repeating: "a", count: 30).joined(separator: " ")
+    let targets = VimFlash.targets(
+      in: text,
+      from: 0,
+      request: VimFlashRequest(query: "a", direction: .forward, count: 1)
+    )
+
+    #expect(targets.count == 29)
+    #expect(targets.allSatisfy { $0.label.count == 2 })
+    #expect(targets.prefix(3).map(\.label) == ["aa", "as", "ad"])
+  }
+
   private func makeVimMotionTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 240))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)

@@ -5,9 +5,9 @@ import SwiftUI
 /// User-configurable preferences, persisted to `UserDefaults`.
 @MainActor
 public final class ThemePreferences: ObservableObject {
-  public static let minVisibleLines = 1
-  public static let maxVisibleLinesCap = 30
-  public static let defaultVisibleLines = 3
+  nonisolated public static let minVisibleLines = 1
+  nonisolated public static let maxVisibleLinesCap = 30
+  nonisolated public static let defaultVisibleLines = 5
 
   private enum Key {
     static let selectedID = "theme.selected.id"

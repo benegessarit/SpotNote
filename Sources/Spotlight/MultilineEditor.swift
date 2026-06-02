@@ -73,6 +73,8 @@ struct MultilineEditor: NSViewRepresentable {
     scroll.drawsBackground = false
     scroll.borderType = .noBorder
     scroll.hasVerticalScroller = true
+    scroll.scrollerStyle = .overlay
+    scroll.verticalScroller?.controlSize = .small
     scroll.autohidesScrollers = true
     scroll.hasHorizontalScroller = false
     scroll.wantsLayer = true
@@ -303,6 +305,7 @@ struct MultilineEditor: NSViewRepresentable {
       if textView.normalizeSpecialTokens() {
         normalizedTextAwaitingNotification = textView.string
       }
+      textView.clearFlashHints()
       // Resize first -- synchronous and ahead of the SwiftUI @Binding
       // update that happens on the next runloop. Without this ordering,
       // NSTextView had the new line laid out before the panel had grown,
@@ -498,6 +501,8 @@ final class PlaceholderTextView: NSTextView {
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
+  var flashHints: [VimFlashTarget] = []
+  var flashLabelBuffer: String = ""
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -510,6 +515,7 @@ final class PlaceholderTextView: NSTextView {
         if vimEngine == nil { vimEngine = VimEngine() }
       } else {
         vimEngine = nil
+        clearFlashHints()
       }
       notifyVimModeChanged()
       needsDisplay = true
@@ -772,6 +778,7 @@ final class PlaceholderTextView: NSTextView {
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
     drawCheckboxSymbols(in: dirtyRect)
+    drawFlashHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [

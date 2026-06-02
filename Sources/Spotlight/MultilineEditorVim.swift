@@ -66,6 +66,9 @@ extension PlaceholderTextView {
     controller: VimController,
     mods: NSEvent.ModifierFlags
   ) -> Bool {
+    if case .flash = controller.prompt?.kind {
+      return handleFlashPromptKey(event: event, controller: controller, mods: mods)
+    }
     if event.keyCode == 53 {
       controller.cancelPrompt()
       needsDisplay = true
@@ -85,11 +88,6 @@ extension PlaceholderTextView {
     guard let typed = event.characters, !typed.isEmpty else { return true }
     let filtered = Self.filterPromptInput(typed)
     guard !filtered.isEmpty else { return true }
-    if case .flash = controller.prompt?.kind {
-      controller.submitFlash(String(filtered.prefix(1)))
-      needsDisplay = true
-      return true
-    }
     controller.appendToPrompt(filtered)
     return true
   }
