@@ -21,6 +21,15 @@ enum Motion: Equatable, Sendable {
   case documentEnd
 }
 
+enum TextObject: Equatable, Sendable {
+  case innerWord
+}
+
+enum MarkdownWrapStyle: Equatable, Sendable {
+  case bold
+  case italic
+}
+
 enum VimAction: Equatable, Sendable {
   case none
   case switchToInsert
@@ -42,12 +51,17 @@ enum VimAction: Equatable, Sendable {
   case findNext
   case findPrevious
   case enterFlash(VimFlashDirection, count: Int)
+  case enterLineFlash(count: Int)
   case gotoLine(Int)
   case enterVisualLine
   case extendVisualLine(Motion)
   case yankVisualLine
   case deleteVisualLineSelection
   case changeVisualLineSelection
+  case changeTextObject(TextObject)
+  case deleteTextObject(TextObject)
+  case wrapCurrentWord(MarkdownWrapStyle)
+  case wrapVisualLine(MarkdownWrapStyle)
 }
 
 final class VimEngine {
@@ -100,34 +114,61 @@ final class VimEngine {
 
   private func handlePending(key: String) -> VimAction {
     let count = resolvedCount
+    let buffered = pendingBuffer
+    pendingBuffer = ""
     defer { clearAccumulator() }
 
-    switch pendingBuffer {
-    case "d":
-      pendingBuffer = ""
-      if key == "d" { return .deleteLine(count: count) }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "c":
-      pendingBuffer = ""
-      if key == "c" {
-        mode = .insert
-        return .deleteLineInsert(count: count)
-      }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "g":
-      pendingBuffer = ""
-      if key == "g" { return .moveCursor(.documentStart) }
-      return .none
-    default:
-      pendingBuffer = ""
-      return .none
+    switch buffered {
+    case "d": return pendingDeleteAction(key: key, count: count)
+    case "c": return pendingChangeAction(key: key, count: count)
+    case "di": return pendingInnerDeleteAction(key: key)
+    case "ci": return pendingInnerChangeAction(key: key)
+    case "g": return key == "g" ? .moveCursor(.documentStart) : .none
+    case ";": return pendingWrapAction(key: key)
+    default: return .none
     }
   }
 
+  private func pendingDeleteAction(key: String, count: Int) -> VimAction {
+    if key == "d" { return .deleteLine(count: count) }
+    if key == "i" {
+      pendingBuffer = "di"
+      return .none
+    }
+    guard let motion = motionForKey(key, count: count) else { return .none }
+    return .delete(motion)
+  }
+
+  private func pendingChangeAction(key: String, count: Int) -> VimAction {
+    if key == "c" {
+      mode = .insert
+      return .deleteLineInsert(count: count)
+    }
+    if key == "i" {
+      pendingBuffer = "ci"
+      return .none
+    }
+    guard let motion = motionForKey(key, count: count) else { return .none }
+    return .delete(motion)
+  }
+
+  private func pendingInnerDeleteAction(key: String) -> VimAction {
+    key == "w" ? .deleteTextObject(.innerWord) : .none
+  }
+
+  private func pendingInnerChangeAction(key: String) -> VimAction {
+    guard key == "w" else { return .none }
+    mode = .insert
+    return .changeTextObject(.innerWord)
+  }
+
+  private func pendingWrapAction(key: String) -> VimAction {
+    guard let style = wrapStyle(for: key) else { return .none }
+    return .wrapCurrentWord(style)
+  }
+
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "g" || key == "c" {
+    if key == "d" || key == "g" || key == "c" || key == ";" {
       pendingBuffer = key
       return .none
     }
@@ -202,6 +243,11 @@ final class VimEngine {
       clearAccumulator()
       return .extendVisualLine(.documentStart)
     }
+    if buffered == ";", let style = wrapStyle(for: key) {
+      clearAccumulator()
+      mode = .normal
+      return .wrapVisualLine(style)
+    }
     return .none
   }
 
@@ -210,6 +256,9 @@ final class VimEngine {
     case "V", "\u{1B}", "escape":
       mode = .normal
       return .switchToNormal
+    case ";":
+      pendingBuffer = ";"
+      return .none
     case "y":
       mode = .normal
       return .yankVisualLine
@@ -253,6 +302,15 @@ final class VimEngine {
     switch key {
     case "s": return .enterFlash(.forward, count: count)
     case "S": return .enterFlash(.backward, count: count)
+    case "K": return .enterLineFlash(count: count)
+    default: return nil
+    }
+  }
+
+  private func wrapStyle(for key: String) -> MarkdownWrapStyle? {
+    switch key {
+    case "b": return .bold
+    case "i": return .italic
     default: return nil
     }
   }

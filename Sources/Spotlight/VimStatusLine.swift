@@ -24,7 +24,7 @@ struct VimStatusLine: View {
       } else {
         statusModeSegment(label: shortLabel(for: mode), mode: mode)
         Text(noteFileLabel)
-          .font(.system(size: 14, weight: .semibold, design: .monospaced))
+          .font(.system(size: 16, weight: .semibold, design: .monospaced))
           .foregroundStyle(theme.text.opacity(0.92))
           .lineLimit(1)
           .truncationMode(.middle)
@@ -65,13 +65,13 @@ struct VimStatusLine: View {
   private var statusTrailingText: some View {
     if let message {
       Text(message.text)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.system(size: 13, weight: .medium, design: .monospaced))
         .foregroundStyle(messageColor(for: message.kind))
         .lineLimit(1)
         .truncationMode(.tail)
     } else if let searchStatus {
       Text(searchStatus)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.system(size: 13, weight: .medium, design: .monospaced))
         .foregroundStyle(theme.text.opacity(0.58))
         .lineLimit(1)
     }
@@ -79,9 +79,9 @@ struct VimStatusLine: View {
 
   private func statusModeSegment(label: String, mode: VimMode) -> some View {
     Text(label)
-      .font(.system(size: 16, weight: .black, design: .monospaced))
+      .font(.system(size: 20, weight: .black, design: .monospaced))
       .foregroundStyle(statusModeText(for: mode))
-      .frame(width: 38, height: height)
+      .frame(width: 46, height: height)
       .background(statusModeFill(for: mode))
   }
 
@@ -98,6 +98,7 @@ struct VimStatusLine: View {
     case .command: return ":"
     case .search: return "/"
     case .flash: return "S"
+    case .lineFlash: return "K"
     }
   }
 
@@ -171,7 +172,7 @@ private struct VimPromptView: View {
           .foregroundStyle(theme.text.opacity(visible ? 0.95 : 0))
       }
     }
-    .font(.system(size: 11, weight: .regular, design: .monospaced))
+    .font(.system(size: 13, weight: .regular, design: .monospaced))
     .lineLimit(1)
     .truncationMode(.head)
   }
@@ -183,6 +184,8 @@ private struct VimPromptView: View {
     case .flash(let direction, let count):
       let marker = direction == .forward ? "s" : "S"
       return count > 1 ? "\(count)\(marker)" : marker
+    case .lineFlash(let count):
+      return count > 1 ? "\(count)K" : "K"
     }
   }
 }

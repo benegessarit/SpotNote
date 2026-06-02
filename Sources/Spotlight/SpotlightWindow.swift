@@ -40,7 +40,6 @@ public final class SpotlightWindowController {
   let findController = FindController()
   private let fuzzyController = FuzzyController()
   private let commandController = CommandController()
-  private let copyController = CopyController()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private var observers: [NSObjectProtocol] = []
@@ -405,7 +404,6 @@ public final class SpotlightWindowController {
         find: findController,
         fuzzy: fuzzyController,
         command: commandController,
-        copy: copyController,
         vimController: vimController,
         onHeightChange: { [weak self] height in
           self?.setPanelHeight(height, animated: false)
@@ -710,7 +708,7 @@ extension SpotlightWindowController {
     case .shareCurrentChat:
       shareCurrentChat()
     case .copyContent:
-      copyController.copy(session.currentText)
+      copyCurrentContent()
     case .openSettings: onOpenSettings()
     case .toggleTutorial: preferences.showHints.toggle()
     case .toggleHotkey, .appendToLastNote: break
@@ -727,6 +725,12 @@ extension SpotlightWindowController {
     } catch {
       NSSound.beep()
     }
+  }
+
+  private func copyCurrentContent() {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(session.currentText, forType: .string)
   }
 
   private func dispatchSessionAction(_ action: ShortcutAction) {

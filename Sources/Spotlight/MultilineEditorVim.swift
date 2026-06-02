@@ -66,8 +66,11 @@ extension PlaceholderTextView {
     controller: VimController,
     mods: NSEvent.ModifierFlags
   ) -> Bool {
-    if case .flash = controller.prompt?.kind {
+    switch controller.prompt?.kind {
+    case .flash, .lineFlash:
       return handleFlashPromptKey(event: event, controller: controller, mods: mods)
+    default:
+      break
     }
     if event.keyCode == 53 {
       controller.cancelPrompt()
@@ -165,23 +168,39 @@ extension PlaceholderTextView {
   /// `MultilineEditor.swift`.
   func executeVimAction(_ action: VimAction) {
     if VimActionDispatcher.handleSimple(action, on: self) { return }
-    executeMutatingVimAction(action)
+    if executeCursorEditAction(action) { return }
+    if executeGroupedOrJumpAction(action) { return }
+    if executeVisualLineAction(action) { return }
+    executeTextObjectAction(action)
   }
 
-  // swiftlint:disable:next cyclomatic_complexity
-  private func executeMutatingVimAction(_ action: VimAction) {
+  private func executeCursorEditAction(_ action: VimAction) -> Bool {
     switch action {
     case .moveCursor(let motion): executeMotion(motion)
     case .delete(let motion): executeDeleteMotion(motion)
     case .deleteLine(let count): executeDeleteLines(count)
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .deleteChar(let count): executeDeleteChar(count)
+    default: return false
+    }
+    return true
+  }
+
+  private func executeGroupedOrJumpAction(_ action: VimAction) -> Bool {
+    switch action {
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
       for sub in actions { executeVimAction(sub) }
     case .gotoLine(let line):
       _ = jumpToLine(line)
+    default: return false
+    }
+    return true
+  }
+
+  private func executeVisualLineAction(_ action: VimAction) -> Bool {
+    switch action {
     case .enterVisualLine:
       enterVisualLineMode()
     case .extendVisualLine(let motion):
@@ -192,6 +211,21 @@ extension PlaceholderTextView {
       deleteVisualLineSelection(switchingToInsert: false)
     case .changeVisualLineSelection:
       deleteVisualLineSelection(switchingToInsert: true)
+    default: return false
+    }
+    return true
+  }
+
+  private func executeTextObjectAction(_ action: VimAction) {
+    switch action {
+    case .changeTextObject(let object):
+      replaceTextObject(object, with: "", switchingToInsert: true)
+    case .deleteTextObject(let object):
+      replaceTextObject(object, with: "", switchingToInsert: false)
+    case .wrapCurrentWord(let style):
+      wrapCurrentWord(style)
+    case .wrapVisualLine(let style):
+      wrapSelection(style)
     default:
       break
     }
@@ -287,6 +321,7 @@ extension PlaceholderTextView {
     guard end > cursor else { return }
     insertText("", replacementRange: NSRange(location: cursor, length: end - cursor))
   }
+
 }
 
 /// Pure-Swift core of the substitute command -- split out so it can be
@@ -392,6 +427,9 @@ enum VimActionDispatcher {
     case .enterCommand: view.vimController?.enterPrompt(.command)
     case .enterSearch: view.vimController?.enterPrompt(.search)
     case .enterFlash(let direction, let count): view.vimController?.enterPrompt(.flash(direction, count: count))
+    case .enterLineFlash(let count):
+      view.vimController?.enterPrompt(.lineFlash(count: count))
+      view.refreshLineFlashHints()
     case .findNext: view.vimController?.findStep(1)
     case .findPrevious: view.vimController?.findStep(-1)
     default: return false

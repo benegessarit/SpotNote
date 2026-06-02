@@ -159,6 +159,13 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
+  @Test("K opens Flash row jump labels")
+  func flashRowJumpPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "K", hasModifiers: false) == .enterLineFlash(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
   @Test("count prefixes carry into Flash jump prompts")
   func countedFlashPrompt() {
     let engine = VimEngine()

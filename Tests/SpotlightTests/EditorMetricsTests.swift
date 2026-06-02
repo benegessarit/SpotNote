@@ -80,4 +80,12 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: 0) == one)
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
+
+  @Test("editor metrics use the larger nvim-style HUD scale")
+  func largerNvimStyleScale() {
+    #expect(EditorMetrics.fontSize >= 20)
+    #expect(EditorMetrics.lineHeight >= 30)
+    #expect(EditorMetrics.panelWidth >= 720)
+    #expect(EditorMetrics.textTrailingGap <= 18)
+  }
 }

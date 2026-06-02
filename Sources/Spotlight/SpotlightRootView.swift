@@ -12,8 +12,15 @@ final class FocusTrigger: ObservableObject {
   func requestCaretEnd() { caretEndTick &+= 1 }
 }
 
-private enum InterFont {
-  static let regular = "Inter-Regular"
+private enum EditorFont {
+  static let preferredNames = [
+    "Writer",
+    "MonoLisa",
+    "MonoLisa-Regular",
+    "JetBrains Mono",
+    "JetBrainsMono-Regular",
+    "JetBrainsMono Nerd Font"
+  ]
 }
 
 struct SpotlightRootView: View {
@@ -24,7 +31,6 @@ struct SpotlightRootView: View {
   @ObservedObject var find: FindController
   @ObservedObject var fuzzy: FuzzyController
   @ObservedObject var command: CommandController
-  @ObservedObject var copy: CopyController
   @ObservedObject var vimController: VimController
   /// Called synchronously from the editor delegate when the text's line
   /// count changes, so the panel resize happens in the same runloop tick
@@ -37,8 +43,11 @@ struct SpotlightRootView: View {
   private var theme: Theme { preferences.activeTheme }
 
   private var editorFont: NSFont {
-    NSFont(name: InterFont.regular, size: EditorMetrics.fontSize)
-      ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    EditorFont.preferredNames
+      .lazy
+      .compactMap { NSFont(name: $0, size: EditorMetrics.fontSize) }
+      .first
+      ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
   }
 
   /// Binding that funnels user edits through `session.persistIfNeeded()`
@@ -56,7 +65,7 @@ struct SpotlightRootView: View {
     )
   }
 
-  static let vimBarHeight: CGFloat = 28
+  static let vimBarHeight: CGFloat = 36
 
   private var extraChromeHeight: CGFloat {
     var total: CGFloat = 0
@@ -189,13 +198,6 @@ struct SpotlightRootView: View {
     .padding(.vertical, EditorMetrics.verticalInset)
     .background(editorCardShape.fill(theme.background))
     .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
-    .overlay(alignment: .topTrailing) {
-      CopyButton(controller: copy, theme: theme) {
-        copy.copy(session.currentText)
-      }
-      .padding(.trailing, 6)
-      .padding(.top, 9)
-    }
     .padding(.top, EditorMetrics.outerPadding)
     .padding(.horizontal, EditorMetrics.outerPadding)
     .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)

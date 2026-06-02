@@ -133,22 +133,115 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(targets.map(\.label) == ["a", "s", "d", "f"])
   }
 
-  @Test("Flash target labels switch to two characters when needed")
-  func flashTargetsUseTwoCharacterLabelsForLargeMatchSets() {
-    let text = Array(repeating: "a", count: 30).joined(separator: " ")
+  @Test("Flash row targets label logical line starts")
+  func flashLineTargetsLabelRows() {
+    let targets = VimFlash.lineTargets(in: "one\ntwo\nthree", from: 0)
+
+    #expect(targets.map(\.location) == [0, 4, 8])
+    #expect(targets.map(\.label) == ["a", "s", "d"])
+  }
+
+  @Test("Flash target labels use lowercase then uppercase singles before two-character fallback")
+  func flashTargetsUseUppercaseSinglesBeforeTwoCharacterLabels() {
+    let text = Array(repeating: "a", count: 56).joined(separator: " ")
     let targets = VimFlash.targets(
       in: text,
       from: 0,
       request: VimFlashRequest(query: "a", direction: .forward, count: 1)
     )
 
-    #expect(targets.count == 29)
-    #expect(targets.allSatisfy { $0.label.count == 2 })
-    #expect(targets.prefix(3).map(\.label) == ["aa", "as", "ad"])
+    #expect(targets.count == 55)
+    #expect(targets.prefix(52).allSatisfy { $0.label.count == 1 })
+    #expect(targets[25].label == "m")
+    #expect(targets[26].label == "A")
+    #expect(targets[51].label == "M")
+    #expect(targets[52].label == "aa")
   }
 
-  private func makeVimMotionTextView(text: String) -> PlaceholderTextView {
-    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 240))
+  @Test("Flash row targets follow visible display rows including soft wraps")
+  func flashLineTargetsUseVisibleDisplayRows() {
+    let text = "alpha beta gamma delta epsilon\nsecond"
+    let textView = makeVimMotionTextView(text: text, width: 120)
+
+    let targets = textView.visibleLineFlashTargets(limit: 10)
+
+    #expect(targets.count > 2)
+    #expect(targets[0].location == 0)
+    #expect(targets[1].location > 0)
+    #expect(targets[1].location < ("alpha beta gamma delta epsilon\n" as NSString).length)
+    #expect(targets.contains { $0.location == ("alpha beta gamma delta epsilon\n" as NSString).length })
+  }
+
+  @Test("Shift-K keyDown opens visible row Flash labels")
+  func shiftKKeyDownOpensLineFlash() {
+    let textView = makeVimMotionTextView(text: "one\ntwo\nthree")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+
+    textView.keyDown(with: keyEvent(characters: "K", ignoring: "k", keyCode: 40, modifiers: .shift))
+
+    #expect(controller.prompt?.kind == .lineFlash(count: 1))
+    #expect(textView.isShowingLineFlashHints)
+    #expect(textView.flashHints.map(\.label).prefix(3) == ["a", "s", "d"])
+  }
+
+  @Test("s query plus label keyDown jumps and clears Flash")
+  func flashKeyDownQueryAndLabelJumps() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "a", ignoring: "a", keyCode: 0))
+    let firstTarget = textView.flashHints[0]
+    textView.keyDown(with: keyEvent(characters: firstTarget.label, ignoring: firstTarget.label, keyCode: 0))
+
+    #expect(controller.prompt == nil)
+    #expect(textView.flashHints.isEmpty)
+    #expect(textView.selectedRange.location == firstTarget.location)
+  }
+
+  @Test("ciw deletes the word under the caret and leaves insert point at the word start")
+  func changeInnerWordDeletesWord() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    textView.setSelectedRange(NSRange(location: ("alpha be" as NSString).length, length: 0))
+
+    textView.executeVimAction(.changeTextObject(.innerWord))
+
+    #expect(textView.string == "alpha  gamma")
+    #expect(textView.selectedRange == NSRange(location: ("alpha " as NSString).length, length: 0))
+  }
+
+  @Test("semicolon-b wraps the current word in markdown bold markers")
+  func semicolonBoldWrapsCurrentWord() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    textView.setSelectedRange(NSRange(location: ("alpha be" as NSString).length, length: 0))
+
+    textView.executeVimAction(.wrapCurrentWord(.bold))
+
+    #expect(textView.string == "alpha **beta** gamma")
+    #expect(textView.selectedRange.location == ("alpha **beta**" as NSString).length)
+  }
+
+  @Test("semicolon-i wraps the current word in markdown italic markers")
+  func semicolonItalicWrapsCurrentWord() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    textView.setSelectedRange(NSRange(location: ("alpha be" as NSString).length, length: 0))
+
+    textView.executeVimAction(.wrapCurrentWord(.italic))
+
+    #expect(textView.string == "alpha *beta* gamma")
+    #expect(textView.selectedRange.location == ("alpha *beta*" as NSString).length)
+  }
+
+  private func makeVimMotionTextView(
+    text: String,
+    width: CGFloat = EditorMetrics.panelWidth
+  ) -> PlaceholderTextView {
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
     textView.string = text
     textView.textContainer?.lineFragmentPadding = 0
@@ -166,5 +259,28 @@ struct MultilineEditorVimLogicalLineMotionTests {
     fixed.addTextContainer(container)
     CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
     return textView
+  }
+
+  private func keyEvent(
+    characters: String,
+    ignoring: String,
+    keyCode: UInt16,
+    modifiers: NSEvent.ModifierFlags = []
+  ) -> NSEvent {
+    guard
+      let event = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: modifiers,
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        characters: characters,
+        charactersIgnoringModifiers: ignoring,
+        isARepeat: false,
+        keyCode: keyCode
+      )
+    else { fatalError("failed to create key event") }
+    return event
   }
 }

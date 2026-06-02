@@ -28,7 +28,8 @@ struct VimFlashTarget: Equatable, Sendable {
 }
 
 enum VimFlash {
-  private static let labelAlphabet = Array("asdfghjklqwertyuiopzxcvbnm")
+  private static let lowercaseLabelAlphabet = Array("asdfghjklqwertyuiopzxcvbnm")
+  private static let labelAlphabet = lowercaseLabelAlphabet + lowercaseLabelAlphabet.map { Character($0.uppercased()) }
 
   static func targetLocation(in text: String, from location: Int, request: VimFlashRequest) -> Int? {
     guard !request.query.isEmpty, !text.isEmpty else { return nil }
@@ -44,6 +45,25 @@ enum VimFlash {
     limit: Int = .max
   ) -> [VimFlashTarget] {
     let locations = matchingLocations(in: text, from: location, request: request, limit: limit)
+    let labels = labels(for: locations.count)
+    return zip(locations, labels).map { location, label in
+      VimFlashTarget(location: location, label: label)
+    }
+  }
+
+  static func lineTargets(in text: String, from _: Int, limit: Int = .max) -> [VimFlashTarget] {
+    guard limit > 0 else { return [] }
+    let nsString = text as NSString
+    guard nsString.length > 0 else { return [] }
+    var locations: [Int] = []
+    var location = 0
+    while location < nsString.length, locations.count < limit {
+      let line = nsString.lineRange(for: NSRange(location: location, length: 0))
+      locations.append(line.location)
+      let next = line.location + line.length
+      guard next > location else { break }
+      location = next
+    }
     let labels = labels(for: locations.count)
     return zip(locations, labels).map { location, label in
       VimFlashTarget(location: location, label: label)
@@ -83,13 +103,12 @@ enum VimFlash {
     }
   }
 
-  private static func labels(for count: Int) -> [String] {
+  static func labels(for count: Int) -> [String] {
     guard count > 0 else { return [] }
     let alphabet = labelAlphabet.map(String.init)
-    if count <= alphabet.count { return Array(alphabet.prefix(count)) }
+    var labels = Array(alphabet.prefix(min(count, alphabet.count)))
+    guard labels.count < count else { return labels }
 
-    var labels: [String] = []
-    labels.reserveCapacity(count)
     for first in alphabet {
       for second in alphabet {
         labels.append(first + second)
