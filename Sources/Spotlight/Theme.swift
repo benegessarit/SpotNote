@@ -13,7 +13,7 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let placeholder: Color
 }
 
-/// Twelve curated themes -- seven dark, five light.
+/// Fifteen curated themes -- eight dark, seven light.
 enum ThemeCatalog {
   // MARK: Dark
 
@@ -77,6 +77,16 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.431, green: 0.408, blue: 0.506)
   )
 
+  static let catppuccinFrappe = Theme(
+    id: "catppuccin-frappe",
+    name: "Catppuccin Frappé",
+    mode: .dark,
+    background: Color(red: 0.188, green: 0.204, blue: 0.275),
+    border: Color(red: 0.255, green: 0.271, blue: 0.349),
+    text: Color(red: 0.776, green: 0.816, blue: 0.961),
+    placeholder: Color(red: 0.451, green: 0.475, blue: 0.580)
+  )
+
   static let catppuccinMocha = Theme(
     id: "catppuccin-mocha",
     name: "Catppuccin Mocha",
@@ -88,6 +98,26 @@ enum ThemeCatalog {
   )
 
   // MARK: Light
+
+  static let rosePineDawn = Theme(
+    id: "rose-pine-dawn",
+    name: "Rosé Pine Dawn",
+    mode: .light,
+    background: Color(red: 0.980, green: 0.957, blue: 0.929),
+    border: Color(red: 0.875, green: 0.855, blue: 0.851),
+    text: Color(red: 0.275, green: 0.259, blue: 0.380),
+    placeholder: Color(red: 0.596, green: 0.576, blue: 0.647)
+  )
+
+  static let catppuccinLatte = Theme(
+    id: "catppuccin-latte",
+    name: "Catppuccin Latte",
+    mode: .light,
+    background: Color(red: 0.937, green: 0.945, blue: 0.961),
+    border: Color(red: 0.800, green: 0.816, blue: 0.855),
+    text: Color(red: 0.298, green: 0.310, blue: 0.412),
+    placeholder: Color(red: 0.612, green: 0.627, blue: 0.690)
+  )
 
   static let parchment = Theme(
     id: "parchment",
@@ -146,9 +176,18 @@ enum ThemeCatalog {
     midnight,
     charcoal,
     rosePineMoonlight,
+    catppuccinFrappe,
     catppuccinMocha
   ]
-  static let lightThemes: [Theme] = [parchment, mist, bone, linen, porcelain]
+  static let lightThemes: [Theme] = [
+    rosePineDawn,
+    catppuccinLatte,
+    parchment,
+    mist,
+    bone,
+    linen,
+    porcelain
+  ]
   static let all: [Theme] = darkThemes + lightThemes
 
   /// Default theme applied on first launch.

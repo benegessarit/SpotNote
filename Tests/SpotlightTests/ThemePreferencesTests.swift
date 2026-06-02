@@ -69,6 +69,33 @@ struct ThemePreferencesTests {
     #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
   }
 
+  @Test("Catppuccin Frappé is available as a dark theme")
+  func catppuccinFrappeAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-frappe")
+    #expect(theme.id == ThemeCatalog.catppuccinFrappe.id)
+    #expect(theme.name == "Catppuccin Frappé")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Catppuccin Latte is available as a light theme")
+  func catppuccinLatteAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-latte")
+    #expect(theme.id == ThemeCatalog.catppuccinLatte.id)
+    #expect(theme.name == "Catppuccin Latte")
+    #expect(theme.mode == .light)
+    #expect(ThemeCatalog.lightThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Rosé Pine Dawn is available as a light theme")
+  func rosePineDawnAvailable() {
+    let theme = ThemeCatalog.theme(withID: "rose-pine-dawn")
+    #expect(theme.id == ThemeCatalog.rosePineDawn.id)
+    #expect(theme.name == "Rosé Pine Dawn")
+    #expect(theme.mode == .light)
+    #expect(ThemeCatalog.lightThemes.contains { $0.id == theme.id })
+  }
+
   @Test("all dark themes have mode .dark; all light themes have mode .light")
   func themeModesAreConsistent() {
     for theme in ThemeCatalog.darkThemes {
@@ -79,11 +106,11 @@ struct ThemePreferencesTests {
     }
   }
 
-  @Test("catalog has exactly seven dark and five light themes")
+  @Test("catalog has exactly eight dark and seven light themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 7)
-    #expect(ThemeCatalog.lightThemes.count == 5)
-    #expect(ThemeCatalog.all.count == 12)
+    #expect(ThemeCatalog.darkThemes.count == 8)
+    #expect(ThemeCatalog.lightThemes.count == 7)
+    #expect(ThemeCatalog.all.count == 15)
   }
 
   @Test("showLineNumbers defaults to true on first launch")
