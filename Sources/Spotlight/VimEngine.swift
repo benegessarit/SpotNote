@@ -41,6 +41,7 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
+  case enterFlash(VimFlashDirection, count: Int)
   case gotoLine(Int)
   case enterVisualLine
   case extendVisualLine(Motion)
@@ -147,6 +148,7 @@ final class VimEngine {
     }
 
     if let action = enterInsertAction(for: key) { return action }
+    if let action = flashAction(for: key, count: count) { return action }
     switch key {
     case "x": return .deleteChar(count: count)
     case "D": return .deleteToEndOfLine
@@ -244,6 +246,14 @@ final class VimEngine {
       return .openLineAbove
     default:
       return nil
+    }
+  }
+
+  private func flashAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "s": return .enterFlash(.forward, count: count)
+    case "S": return .enterFlash(.backward, count: count)
+    default: return nil
     }
   }
 

@@ -14,6 +14,9 @@ extension PlaceholderTextView {
     controller.substituteHandler = { [weak self] req in
       self?.performSubstitute(req) ?? 0
     }
+    controller.flashHandler = { [weak self] request in
+      self?.performFlashJump(request) ?? false
+    }
   }
 
   /// Per-keystroke vim dispatch. Extracted from `keyDown` so the main
@@ -82,6 +85,11 @@ extension PlaceholderTextView {
     guard let typed = event.characters, !typed.isEmpty else { return true }
     let filtered = Self.filterPromptInput(typed)
     guard !filtered.isEmpty else { return true }
+    if case .flash = controller.prompt?.kind {
+      controller.submitFlash(String(filtered.prefix(1)))
+      needsDisplay = true
+      return true
+    }
     controller.appendToPrompt(filtered)
     return true
   }
@@ -137,6 +145,21 @@ extension PlaceholderTextView {
       didChangeText()
     }
     return count
+  }
+
+  /// `s<char>` / `S<char>` -- a native, Flash-style one-character jump.
+  /// The pure target selection lives in `VimFlash`; this method only applies
+  /// the resulting AppKit caret/scroll side effects to the live text view.
+  @discardableResult
+  func performFlashJump(_ request: VimFlashRequest) -> Bool {
+    guard let target = VimFlash.targetLocation(in: string, from: selectedRange.location, request: request) else {
+      return false
+    }
+    let range = NSRange(location: target, length: 0)
+    setSelectedRange(range)
+    scrollRangeToVisible(range)
+    needsDisplay = true
+    return true
   }
 
   /// Maps a parsed `VimAction` to text-view side effects. Lives in this
@@ -370,6 +393,7 @@ enum VimActionDispatcher {
     switch action {
     case .enterCommand: view.vimController?.enterPrompt(.command)
     case .enterSearch: view.vimController?.enterPrompt(.search)
+    case .enterFlash(let direction, let count): view.vimController?.enterPrompt(.flash(direction, count: count))
     case .findNext: view.vimController?.findStep(1)
     case .findPrevious: view.vimController?.findStep(-1)
     default: return false

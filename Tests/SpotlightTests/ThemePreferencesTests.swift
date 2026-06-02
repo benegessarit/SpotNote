@@ -51,6 +51,15 @@ struct ThemePreferencesTests {
     #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.obsidian.id)
   }
 
+  @Test("Catppuccin Mocha is available as a dark theme")
+  func catppuccinMochaAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-mocha")
+    #expect(theme.id == ThemeCatalog.catppuccinMocha.id)
+    #expect(theme.name == "Catppuccin Mocha")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
+  }
+
   @Test("all dark themes have mode .dark; all light themes have mode .light")
   func themeModesAreConsistent() {
     for theme in ThemeCatalog.darkThemes {
@@ -61,11 +70,11 @@ struct ThemePreferencesTests {
     }
   }
 
-  @Test("catalog has exactly five dark and five light themes")
+  @Test("catalog has exactly six dark and five light themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 5)
+    #expect(ThemeCatalog.darkThemes.count == 6)
     #expect(ThemeCatalog.lightThemes.count == 5)
-    #expect(ThemeCatalog.all.count == 10)
+    #expect(ThemeCatalog.all.count == 11)
   }
 
   @Test("showLineNumbers defaults to true on first launch")

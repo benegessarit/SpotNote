@@ -145,6 +145,28 @@ struct VimEngineTests {
     #expect(second == .moveCursor(.documentStart))
   }
 
+  @Test("s opens a forward Flash jump prompt")
+  func flashForwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("S opens a backward Flash jump prompt")
+  func flashBackwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "S", hasModifiers: false) == .enterFlash(.backward, count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("count prefixes carry into Flash jump prompts")
+  func countedFlashPrompt() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 3))
+    #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
+  }
+
   // MARK: - Count prefix
 
   @Test("3j moves down 3 lines")

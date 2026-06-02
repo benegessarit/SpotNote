@@ -304,6 +304,10 @@ private struct VimPromptView: View {
   }
 
   private var prefix: String {
-    prompt.kind == .command ? ":" : "/"
+    switch prompt.kind {
+    case .command: return ":"
+    case .search: return "/"
+    case .flash(let direction, _): return direction == .forward ? "s" : "S"
+    }
   }
 }

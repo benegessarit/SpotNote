@@ -13,7 +13,7 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let placeholder: Color
 }
 
-/// Ten curated themes -- five dark, five light.
+/// Eleven curated themes -- six dark, five light.
 enum ThemeCatalog {
   // MARK: Dark
 
@@ -65,6 +65,16 @@ enum ThemeCatalog {
     border: Color.white.opacity(0.08),
     text: Color(red: 0.922, green: 0.922, blue: 0.941),
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
+  )
+
+  static let catppuccinMocha = Theme(
+    id: "catppuccin-mocha",
+    name: "Catppuccin Mocha",
+    mode: .dark,
+    background: Color(red: 0.118, green: 0.118, blue: 0.180),
+    border: Color(red: 0.192, green: 0.196, blue: 0.267),
+    text: Color(red: 0.804, green: 0.839, blue: 0.957),
+    placeholder: Color(red: 0.424, green: 0.439, blue: 0.525)
   )
 
   // MARK: Light
@@ -119,7 +129,7 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
   )
 
-  static let darkThemes: [Theme] = [obsidian, ink, graphite, midnight, charcoal]
+  static let darkThemes: [Theme] = [obsidian, ink, graphite, midnight, charcoal, catppuccinMocha]
   static let lightThemes: [Theme] = [parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes
 

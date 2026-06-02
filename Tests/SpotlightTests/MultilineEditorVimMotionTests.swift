@@ -69,6 +69,39 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(rect.origin.y == EditorMetrics.lineHeight)
   }
 
+  @Test("Flash jump moves to the next matching character")
+  func flashJumpForward() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    let jumped = textView.performFlashJump(VimFlashRequest(query: "a", direction: .forward, count: 1))
+
+    #expect(jumped)
+    #expect(textView.selectedRange.location == ("alph" as NSString).length)
+  }
+
+  @Test("Flash jump can search backward from the caret")
+  func flashJumpBackward() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    textView.setSelectedRange(NSRange(location: ("alpha beta gam" as NSString).length, length: 0))
+
+    let jumped = textView.performFlashJump(VimFlashRequest(query: "a", direction: .backward, count: 2))
+
+    #expect(jumped)
+    #expect(textView.selectedRange.location == ("alpha bet" as NSString).length)
+  }
+
+  @Test("Flash jump reports no match without moving the caret")
+  func flashJumpNoMatch() {
+    let textView = makeVimMotionTextView(text: "alpha beta")
+    textView.setSelectedRange(NSRange(location: 3, length: 0))
+
+    let jumped = textView.performFlashJump(VimFlashRequest(query: "z", direction: .forward, count: 1))
+
+    #expect(!jumped)
+    #expect(textView.selectedRange.location == 3)
+  }
+
   private func makeVimMotionTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 240))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
