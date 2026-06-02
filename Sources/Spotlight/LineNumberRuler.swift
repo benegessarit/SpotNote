@@ -4,7 +4,7 @@ final class LineNumberRuler: NSRulerView {
   var textColor = NSColor.secondaryLabelColor.withAlphaComponent(0.8)
   var editorFont: NSFont
 
-  private let labelFontSize: CGFloat = 15
+  private var labelFontSize: CGFloat { max(15, editorFont.pointSize) }
 
   /// The gutter is non-interactive -- let drags here move the panel
   /// window like the rest of the HUD chrome instead of being swallowed
@@ -48,11 +48,8 @@ final class LineNumberRuler: NSRulerView {
     let font = NSFont.monospacedDigitSystemFont(ofSize: labelSize, weight: .regular)
     let sample = String(repeating: "8", count: digits) as NSString
     let digitWidth = sample.size(withAttributes: [.font: font]).width
-    // Continuation rows render `wrapMarker` in place of a number. Ensure
-    // the gutter is wide enough for either glyph.
-    let markerWidth = Self.wrapMarker.size(withAttributes: [.font: font]).width
     // 2pt right inset + a little left breathing room.
-    return ceil(max(digitWidth, markerWidth)) + 6
+    return ceil(digitWidth) + 6
   }
 
   /// Total laid-out display rows (line fragments + trailing blank
@@ -80,10 +77,6 @@ final class LineNumberRuler: NSRulerView {
     return max(logical, count)
   }
 
-  /// Glyph shown in place of a number on soft-wrapped continuation rows.
-  /// Kept as a `NSString` constant so `thickness` and the drawing path
-  /// agree on the width.
-  private static let wrapMarker: NSString = "↪"
   private static let newlineUnichar: unichar = 10
 
   @available(*, unavailable)
@@ -117,22 +110,24 @@ final class LineNumberRuler: NSRulerView {
       attributes: [
         .font: labelFont,
         .foregroundColor: textColor
-      ],
-      wrapAttributes: [
-        .font: labelFont,
-        .foregroundColor: textColor.withAlphaComponent(0.45)
       ]
     )
 
     let text = textView.string as NSString
+    if let placeholderTextView = textView as? PlaceholderTextView {
+      if placeholderTextView.isShowingLineFlashHints {
+        drawLineFlashHints(in: context, textView: placeholderTextView, text: text)
+        return
+      }
+    }
     if text.length == 0 {
       drawEmptyBufferNumber(in: context)
       return
     }
-    drawLineNumbersAndWrapMarkers(in: context, text: text)
+    drawLineNumbers(in: context, text: text)
   }
 
-  private struct DrawContext {
+  struct DrawContext {
     let textView: NSTextView
     let layoutManager: NSLayoutManager
     let textViewOriginInRuler: NSPoint
@@ -140,7 +135,6 @@ final class LineNumberRuler: NSRulerView {
     let insetY: CGFloat
     let labelFont: NSFont
     let attributes: [NSAttributedString.Key: Any]
-    let wrapAttributes: [NSAttributedString.Key: Any]
   }
 
   /// Draws `number` so its glyph baseline sits at `baselineY` (ruler coords).
@@ -151,7 +145,15 @@ final class LineNumberRuler: NSRulerView {
     font: NSFont,
     attrs: [NSAttributedString.Key: Any]
   ) {
-    let string = "\(number)" as NSString
+    drawString("\(number)" as NSString, baselineY: baselineY, font: font, attrs: attrs)
+  }
+
+  private func drawString(
+    _ string: NSString,
+    baselineY: CGFloat,
+    font: NSFont,
+    attrs: [NSAttributedString.Key: Any]
+  ) {
     let size = string.size(withAttributes: attrs)
     let originY = baselineY - font.ascender
     guard originY + size.height > bounds.minY, originY < bounds.maxY else { return }
@@ -188,7 +190,7 @@ final class LineNumberRuler: NSRulerView {
   /// one intersecting the visible rect:
   ///   - a line number if the fragment is the first fragment of a logical
   ///     line (its preceding char is `\n` or it starts the buffer), or
-  ///   - `wrapMarker` if the fragment is a soft-wrap continuation.
+  ///   - nothing if the fragment is a soft-wrap continuation.
   ///
   /// Sticky-label exception: if the first row visible in the gutter is a
   /// continuation whose owning line's head has scrolled above
@@ -197,7 +199,7 @@ final class LineNumberRuler: NSRulerView {
   /// current rows belong to. Once the owning line's head scrolls back
   /// into view (or the user types a new logical line), the sticky label
   /// snaps back to its natural position.
-  private func drawLineNumbersAndWrapMarkers(in ctx: DrawContext, text: NSString) {
+  private func drawLineNumbers(in ctx: DrawContext, text: NSString) {
     let lm = ctx.layoutManager
     let all = NSRange(location: 0, length: lm.numberOfGlyphs)
     var lineNumber = 0
@@ -223,8 +225,6 @@ final class LineNumberRuler: NSRulerView {
           attrs: ctx.attributes
         )
         drewLabel = true
-      } else {
-        self.drawWrapMarker(baselineY: baselineY, font: ctx.labelFont, attrs: ctx.wrapAttributes)
       }
     }
     drawExtraLineFragmentLabel(previousLineNumber: lineNumber, ctx: ctx, text: text)
@@ -233,14 +233,12 @@ final class LineNumberRuler: NSRulerView {
   /// The trailing blank fragment for text ending in `\n` is a fresh
   /// logical line, never a wrap continuation -- always gets a number one
   /// greater than the last fragment's.
-  private func drawExtraLineFragmentLabel(
-    previousLineNumber: Int,
-    ctx: DrawContext,
-    text: NSString
-  ) {
+  private func drawExtraLineFragmentLabel(previousLineNumber: Int, ctx: DrawContext, text: NSString) {
+    guard text.hasSuffix("\n") else { return }
     let extra = ctx.layoutManager.extraLineFragmentRect
-    guard text.hasSuffix("\n"), !extra.isEmpty,
-      extra.maxY > ctx.visibleRect.minY, extra.origin.y < ctx.visibleRect.maxY
+    guard !extra.isEmpty,
+      extra.maxY > ctx.visibleRect.minY,
+      extra.origin.y < ctx.visibleRect.maxY
     else { return }
     let offset = Self.synthesizedBaseline(fragmentHeight: extra.height, font: editorFont)
     let baselineY = extra.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
@@ -251,18 +249,90 @@ final class LineNumberRuler: NSRulerView {
       attrs: ctx.attributes
     )
   }
+}
 
-  private func drawWrapMarker(
-    baselineY: CGFloat,
-    font: NSFont,
-    attrs: [NSAttributedString.Key: Any]
+private struct LineFlashDrawStyle {
+  let font: NSFont
+  let defaultAttrs: [NSAttributedString.Key: Any]
+  let activeAttrs: [NSAttributedString.Key: Any]
+  let buffer: String
+}
+
+extension LineNumberRuler {
+  private func drawLineFlashHints(
+    in ctx: DrawContext,
+    textView: PlaceholderTextView,
+    text: NSString
   ) {
-    let size = Self.wrapMarker.size(withAttributes: attrs)
-    let originY = baselineY - font.ascender
-    guard originY + size.height > bounds.minY, originY < bounds.maxY else { return }
-    Self.wrapMarker.draw(
-      at: NSPoint(x: bounds.width - size.width - 2, y: originY),
-      withAttributes: attrs
+    let visibleHints =
+      textView.flashLabelBuffer.isEmpty
+      ? textView.flashHints
+      : textView.flashHints.filter { $0.label.hasPrefix(textView.flashLabelBuffer) }
+    let labelsByLocation = Dictionary(uniqueKeysWithValues: visibleHints.map { ($0.location, $0.label) })
+    guard !labelsByLocation.isEmpty else { return }
+    let style = lineFlashDrawStyle(buffer: textView.flashLabelBuffer)
+    let lm = ctx.layoutManager
+    let all = NSRange(location: 0, length: lm.numberOfGlyphs)
+    lm.enumerateLineFragments(forGlyphRange: all) { frag, _, _, glyphs, stop in
+      if frag.origin.y >= ctx.visibleRect.maxY {
+        stop.pointee = true
+        return
+      }
+      guard frag.maxY > ctx.visibleRect.minY else { return }
+      let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+      guard let label = labelsByLocation[chars.location] else { return }
+      let offset = lm.location(forGlyphAt: glyphs.location).y
+      let baselineY = frag.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
+      self.drawFlashLabel(label, baselineY: baselineY, style: style)
+    }
+    drawExtraLineFragmentFlashLabel(labelsByLocation: labelsByLocation, ctx: ctx, text: text, style: style)
+  }
+
+  private func drawExtraLineFragmentFlashLabel(
+    labelsByLocation: [Int: String],
+    ctx: DrawContext,
+    text: NSString,
+    style: LineFlashDrawStyle
+  ) {
+    guard let label = labelsByLocation[text.length], text.hasSuffix("\n") else { return }
+    let extra = ctx.layoutManager.extraLineFragmentRect
+    guard !extra.isEmpty,
+      extra.maxY > ctx.visibleRect.minY,
+      extra.origin.y < ctx.visibleRect.maxY
+    else { return }
+    let offset = Self.synthesizedBaseline(fragmentHeight: extra.height, font: editorFont)
+    let baselineY = extra.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
+    drawFlashLabel(label, baselineY: baselineY, style: style)
+  }
+
+  private func lineFlashDrawStyle(buffer: String) -> LineFlashDrawStyle {
+    let font = NSFontManager.shared.convert(editorFont, toHaveTrait: .boldFontMask)
+      .withSize(editorFont.pointSize)
+    return LineFlashDrawStyle(
+      font: font,
+      defaultAttrs: flashLabelAttributes(font: font, active: false),
+      activeAttrs: flashLabelAttributes(font: font, active: true),
+      buffer: buffer
     )
+  }
+
+  private func flashLabelAttributes(
+    font: NSFont,
+    active: Bool
+  ) -> [NSAttributedString.Key: Any] {
+    [
+      .font: font,
+      .foregroundColor: active
+        ? NSColor(red: 0.980, green: 0.702, blue: 0.529, alpha: 1.0)
+        : NSColor(red: 0.651, green: 0.890, blue: 0.631, alpha: 1.0)
+    ]
+  }
+
+  private func attrs(for label: String, style: LineFlashDrawStyle) -> [NSAttributedString.Key: Any] {
+    !style.buffer.isEmpty && label.hasPrefix(style.buffer) ? style.activeAttrs : style.defaultAttrs
+  }
+
+  private func drawFlashLabel(_ label: String, baselineY: CGFloat, style: LineFlashDrawStyle) {
+    drawString(label as NSString, baselineY: baselineY, font: style.font, attrs: attrs(for: label, style: style))
   }
 }

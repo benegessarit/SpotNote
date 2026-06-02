@@ -145,6 +145,49 @@ struct VimEngineTests {
     #expect(second == .moveCursor(.documentStart))
   }
 
+  @Test("s opens a whole-document forward Flash jump prompt")
+  func flashForwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .document))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("S opens a whole-document backward Flash jump prompt")
+  func flashBackwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "S", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .document))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("f opens a same-line forward Flash jump prompt")
+  func flashSameLineForwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "f", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .currentLine))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("F opens a same-line backward Flash jump prompt")
+  func flashSameLineBackwardPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "F", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .currentLine))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("K opens Flash row jump labels")
+  func flashRowJumpPrompt() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "K", hasModifiers: false) == .enterLineFlash(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("count prefixes carry into Flash jump prompts")
+  func countedFlashPrompt() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 3, scope: .document))
+    #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
+  }
+
   // MARK: - Count prefix
 
   @Test("3j moves down 3 lines")

@@ -79,9 +79,8 @@ struct LineNumberRulerTests {
     let font = NSFont.monospacedDigitSystemFont(ofSize: labelSize, weight: .regular)
     let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
     let thickness = LineNumberRuler.thickness(forLineCount: 1, labelSize: labelSize)
-    #expect(thickness >= ceil(digitWidth))
-    // And we add a small breathing-room inset beyond raw digit width.
-    #expect(thickness > ceil(digitWidth))
+    // 2pt right inset + a little left breathing room.
+    #expect(thickness == ceil(digitWidth) + 6)
   }
 
   @Test("thickness tracks label font size -- a bigger font yields a wider gutter")

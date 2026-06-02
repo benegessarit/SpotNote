@@ -26,13 +26,27 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.lineCount(in: "a\n") == 2)
   }
 
-  @Test("panelHeight is monotonically non-decreasing within the clamp range")
-  func panelHeightMonotonic() {
+  @Test("panelHeight stays roomy for short notes before growing")
+  func panelHeightRoomyFloorThenGrows() {
+    let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 10)
+    let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 10)
+    let defaultRows = EditorMetrics.panelHeight(
+      forLines: ThemePreferences.defaultVisibleLines,
+      maxLines: 10
+    )
+    let six = EditorMetrics.panelHeight(forLines: ThemePreferences.defaultVisibleLines + 1, maxLines: 10)
+    #expect(one == defaultRows)
+    #expect(two == defaultRows)
+    #expect(six > defaultRows)
+  }
+
+  @Test("panelHeight honors a smaller user cap")
+  func panelHeightHonorsSmallMax() {
     let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
-    let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
-    #expect(one < two)
-    #expect(two < three)
+    let seven = EditorMetrics.panelHeight(forLines: 7, maxLines: 3)
+    #expect(one == three)
+    #expect(three == seven)
   }
 
   @Test("panelHeight clamps at the supplied maxLines")
@@ -65,5 +79,13 @@ struct EditorMetricsTests {
     let one = EditorMetrics.panelHeight(forLines: 5, maxLines: 1)
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: 0) == one)
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
+  }
+
+  @Test("editor metrics use the larger nvim-style HUD scale")
+  func largerNvimStyleScale() {
+    #expect(EditorMetrics.fontSize >= 20)
+    #expect(EditorMetrics.lineHeight >= 30)
+    #expect(EditorMetrics.panelWidth >= 720)
+    #expect(EditorMetrics.textTrailingGap <= 18)
   }
 }

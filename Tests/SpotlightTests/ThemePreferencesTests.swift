@@ -14,11 +14,11 @@ struct ThemePreferencesTests {
     return defaults
   }
 
-  @Test("default selected theme is Obsidian")
-  func defaultsToObsidian() {
+  @Test("default selected theme is Rosé Pine Moonlight")
+  func defaultsToRosePineMoonlight() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.selectedThemeID == ThemeCatalog.obsidian.id)
-    #expect(prefs.activeTheme.id == ThemeCatalog.obsidian.id)
+    #expect(prefs.selectedThemeID == ThemeCatalog.rosePineMoonlight.id)
+    #expect(prefs.activeTheme.id == ThemeCatalog.rosePineMoonlight.id)
   }
 
   @Test("setting selectedThemeID persists to UserDefaults")
@@ -46,9 +46,54 @@ struct ThemePreferencesTests {
     #expect(prefs.selectedThemeID == ThemeCatalog.ink.id)
   }
 
-  @Test("unknown id falls back to Obsidian")
+  @Test("unknown id falls back to Rosé Pine Moonlight")
   func unknownFallsBack() {
-    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.obsidian.id)
+    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.rosePineMoonlight.id)
+  }
+
+  @Test("Rosé Pine Moonlight is available as a dark theme")
+  func rosePineMoonlightAvailable() {
+    let theme = ThemeCatalog.theme(withID: "rose-pine-moonlight")
+    #expect(theme.id == ThemeCatalog.rosePineMoonlight.id)
+    #expect(theme.name == "Rosé Pine Moonlight")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Catppuccin Mocha is available as a dark theme")
+  func catppuccinMochaAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-mocha")
+    #expect(theme.id == ThemeCatalog.catppuccinMocha.id)
+    #expect(theme.name == "Catppuccin Mocha")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Catppuccin Frappé is available as a dark theme")
+  func catppuccinFrappeAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-frappe")
+    #expect(theme.id == ThemeCatalog.catppuccinFrappe.id)
+    #expect(theme.name == "Catppuccin Frappé")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Catppuccin Latte is available as a light theme")
+  func catppuccinLatteAvailable() {
+    let theme = ThemeCatalog.theme(withID: "catppuccin-latte")
+    #expect(theme.id == ThemeCatalog.catppuccinLatte.id)
+    #expect(theme.name == "Catppuccin Latte")
+    #expect(theme.mode == .light)
+    #expect(ThemeCatalog.lightThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Rosé Pine Dawn is available as a light theme")
+  func rosePineDawnAvailable() {
+    let theme = ThemeCatalog.theme(withID: "rose-pine-dawn")
+    #expect(theme.id == ThemeCatalog.rosePineDawn.id)
+    #expect(theme.name == "Rosé Pine Dawn")
+    #expect(theme.mode == .light)
+    #expect(ThemeCatalog.lightThemes.contains { $0.id == theme.id })
   }
 
   @Test("all dark themes have mode .dark; all light themes have mode .light")
@@ -61,11 +106,11 @@ struct ThemePreferencesTests {
     }
   }
 
-  @Test("catalog has exactly five dark and five light themes")
+  @Test("catalog has exactly eight dark and seven light themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 5)
-    #expect(ThemeCatalog.lightThemes.count == 5)
-    #expect(ThemeCatalog.all.count == 10)
+    #expect(ThemeCatalog.darkThemes.count == 8)
+    #expect(ThemeCatalog.lightThemes.count == 7)
+    #expect(ThemeCatalog.all.count == 15)
   }
 
   @Test("showLineNumbers defaults to true on first launch")
@@ -100,11 +145,11 @@ struct ThemePreferencesTests {
     #expect(rehydrated.showMenuBarIcon == false)
   }
 
-  @Test("maxVisibleLines defaults to 3 on first launch")
+  @Test("maxVisibleLines defaults to 5 on first launch")
   func maxVisibleLinesDefault() {
     let prefs = ThemePreferences(defaults: makeDefaults())
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
-    #expect(prefs.maxVisibleLines == 3)
+    #expect(prefs.maxVisibleLines == 5)
   }
 
   @Test("maxVisibleLines persists and rehydrates")

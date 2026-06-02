@@ -73,6 +73,8 @@ struct MultilineEditor: NSViewRepresentable {
     scroll.drawsBackground = false
     scroll.borderType = .noBorder
     scroll.hasVerticalScroller = true
+    scroll.scrollerStyle = .overlay
+    scroll.verticalScroller?.controlSize = .small
     scroll.autohidesScrollers = true
     scroll.hasHorizontalScroller = false
     scroll.wantsLayer = true
@@ -94,7 +96,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.textContainerInset = NSSize(width: EditorMetrics.textLeadingGap, height: 0)
     textView.textContainer?.lineFragmentPadding = 0
     textView.textContainer?.widthTracksTextView = true
-    textView.copyButtonClearance = EditorMetrics.textTrailingGap
+    textView.copyButtonClearance = 0
     textView.autoresizingMask = [.width]
     textView.isAutomaticQuoteSubstitutionEnabled = false
     textView.isAutomaticDashSubstitutionEnabled = false
@@ -303,6 +305,7 @@ struct MultilineEditor: NSViewRepresentable {
       if textView.normalizeSpecialTokens() {
         normalizedTextAwaitingNotification = textView.string
       }
+      textView.clearFlashHints()
       // Resize first -- synchronous and ahead of the SwiftUI @Binding
       // update that happens on the next runloop. Without this ordering,
       // NSTextView had the new line laid out before the panel had grown,
@@ -372,7 +375,7 @@ struct MultilineEditor: NSViewRepresentable {
     let newPlaceholderColor = NSColor(theme.placeholder)
     if textView.font != font { textView.font = font }
     if textView.textColor != newTextColor { textView.textColor = newTextColor }
-    textView.insertionPointColor = newTextColor
+    textView.insertionPointColor = ghosttyCursorColor
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
@@ -387,6 +390,7 @@ struct MultilineEditor: NSViewRepresentable {
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
       ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
+      ruler.updateRequiredThickness()
     }
   }
 
@@ -395,6 +399,10 @@ struct MultilineEditor: NSViewRepresentable {
     let range = NSRange(location: 0, length: storage.length)
     storage.setAttributes(textAttributes, range: range)
     applyCodeStyling(on: textView)
+  }
+
+  private var ghosttyCursorColor: NSColor {
+    NSColor(red: 0.973, green: 0.973, blue: 0.941, alpha: 1.0)
   }
 
   private func replaceLayoutManager(on textView: NSTextView) {
@@ -498,6 +506,10 @@ final class PlaceholderTextView: NSTextView {
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
+  var flashHints: [VimFlashTarget] = []
+  var flashLabelBuffer: String = ""
+  var isShowingLineFlashHints = false
+  var flashTemporaryAttributeRanges: [NSRange] = []
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -510,6 +522,7 @@ final class PlaceholderTextView: NSTextView {
         if vimEngine == nil { vimEngine = VimEngine() }
       } else {
         vimEngine = nil
+        clearFlashHints()
       }
       notifyVimModeChanged()
       needsDisplay = true
@@ -772,6 +785,7 @@ final class PlaceholderTextView: NSTextView {
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
     drawCheckboxSymbols(in: dirtyRect)
+    drawFlashHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [
@@ -837,7 +851,11 @@ final class PlaceholderTextView: NSTextView {
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
     let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
-      let blockWidth = max(displayRect.width, 8)
+      let caretFont = font ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
+      let blockWidth = max(
+        displayRect.width,
+        ceil(("M" as NSString).size(withAttributes: [.font: caretFont]).width)
+      )
       let blockRect = NSRect(
         x: displayRect.origin.x,
         y: displayRect.origin.y,
@@ -849,7 +867,7 @@ final class PlaceholderTextView: NSTextView {
         return
       }
       lastInsertionPointDisplayRect = blockRect
-      color.withAlphaComponent(0.4).setFill()
+      color.withAlphaComponent(0.82).setFill()
       blockRect.fill()
     } else {
       super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
