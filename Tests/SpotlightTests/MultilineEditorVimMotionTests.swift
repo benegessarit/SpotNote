@@ -1,3 +1,4 @@
+// swiftlint:disable type_body_length
 import AppKit
 import Testing
 
@@ -69,7 +70,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(rect.origin.y == EditorMetrics.lineHeight)
   }
 
-  @Test("Flash jump moves to the next matching character")
+  @Test("Flash jump moves to the first whole-document matching character")
   func flashJumpForward() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")
     textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -77,10 +78,10 @@ struct MultilineEditorVimLogicalLineMotionTests {
     let jumped = textView.performFlashJump(VimFlashRequest(query: "a", direction: .forward, count: 1))
 
     #expect(jumped)
-    #expect(textView.selectedRange.location == ("alph" as NSString).length)
+    #expect(textView.selectedRange.location == 0)
   }
 
-  @Test("Flash jump can search backward from the caret")
+  @Test("Flash jump can search backward from the end of the document")
   func flashJumpBackward() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")
     textView.setSelectedRange(NSRange(location: ("alpha beta gam" as NSString).length, length: 0))
@@ -88,7 +89,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     let jumped = textView.performFlashJump(VimFlashRequest(query: "a", direction: .backward, count: 2))
 
     #expect(jumped)
-    #expect(textView.selectedRange.location == ("alpha bet" as NSString).length)
+    #expect(textView.selectedRange.location == ("alpha beta g" as NSString).length)
   }
 
   @Test("Flash jump reports no match without moving the caret")
@@ -121,16 +122,55 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(composed == ("x " as NSString).length)
   }
 
-  @Test("Flash targets include stable labels for visible hints")
+  @Test("Flash targets include stable labels for whole-document visible hints")
   func flashTargetsHaveLabels() {
     let targets = VimFlash.targets(
       in: "alpha beta gamma",
-      from: 0,
+      from: ("alpha bet" as NSString).length,
       request: VimFlashRequest(query: "a", direction: .forward, count: 1)
     )
 
-    #expect(targets.map(\.location) == [4, 9, 12, 15])
-    #expect(targets.map(\.label) == ["a", "s", "d", "f"])
+    #expect(targets.map(\.location) == [0, 4, 9, 12, 15])
+    #expect(targets.map(\.label) == ["a", "s", "d", "f", "g"])
+  }
+
+  @Test("backward whole-document Flash labels targets from the end of the document")
+  func flashBackwardDocumentTargetsReverseOrder() {
+    let targets = VimFlash.targets(
+      in: "alpha beta gamma",
+      from: 0,
+      request: VimFlashRequest(query: "a", direction: .backward, count: 1)
+    )
+
+    #expect(targets.map(\.location) == [15, 12, 9, 4, 0])
+    #expect(targets.map(\.label) == ["a", "s", "d", "f", "g"])
+  }
+
+  @Test("same-line Flash targets stay on the current line")
+  func flashSameLineTargetsOnlyCurrentLine() {
+    let text = "alpha arc\nbeta alpha\ncarrot alarm"
+    let secondLineStart = ("alpha arc\n" as NSString).length
+    let targets = VimFlash.targets(
+      in: text,
+      from: secondLineStart,
+      request: VimFlashRequest(query: "a", direction: .forward, count: 1, scope: .currentLine)
+    )
+
+    #expect(targets.map(\.location) == [secondLineStart + 3, secondLineStart + 5, secondLineStart + 9])
+  }
+
+  @Test("same-line backward Flash targets stay before the caret on the current line")
+  func flashSameLineBackwardTargetsOnlyCurrentLineBeforeCaret() {
+    let text = "alpha arc\nbeta alpha\ncarrot alarm"
+    let secondLineStart = ("alpha arc\n" as NSString).length
+    let secondLineEnd = secondLineStart + ("beta alpha" as NSString).length
+    let targets = VimFlash.targets(
+      in: text,
+      from: secondLineEnd,
+      request: VimFlashRequest(query: "a", direction: .backward, count: 1, scope: .currentLine)
+    )
+
+    #expect(targets.map(\.location) == [secondLineStart + 9, secondLineStart + 5, secondLineStart + 3])
   }
 
   @Test("Flash row targets label logical line starts")
@@ -150,7 +190,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
       request: VimFlashRequest(query: "a", direction: .forward, count: 1)
     )
 
-    #expect(targets.count == 55)
+    #expect(targets.count == 56)
     #expect(targets.prefix(52).allSatisfy { $0.label.count == 1 })
     #expect(targets[25].label == "m")
     #expect(targets[26].label == "A")
@@ -186,9 +226,78 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.flashHints.map(\.label).prefix(3) == ["a", "s", "d"])
   }
 
-  @Test("s query plus label keyDown jumps and clears Flash")
-  func flashKeyDownQueryAndLabelJumps() {
+  @Test("f keyDown opens same-line Flash labels only on the current line")
+  func fKeyDownOpensSameLineFlash() {
+    let text = "alpha arc\nbeta alpha\ncarrot alarm"
+    let textView = makeVimMotionTextView(text: text)
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    let secondLineStart = ("alpha arc\n" as NSString).length
+    textView.setSelectedRange(NSRange(location: secondLineStart, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
+    textView.keyDown(with: keyEvent(characters: "a", ignoring: "a", keyCode: 0))
+
+    #expect(controller.prompt?.kind == .flash(.forward, count: 1, scope: .currentLine))
+    #expect(textView.flashHints.map(\.location) == [secondLineStart + 3, secondLineStart + 5, secondLineStart + 9])
+  }
+
+  @Test("s keyDown starts a dimmed Flash prompt without entering s into the query")
+  func flashTriggerStartsEmptyDimmedPrompt() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+
+    #expect(controller.prompt?.buffer.isEmpty == true)
+    #expect(textView.flashHints.isEmpty)
+    #expect(temporaryForegroundColor(at: 0, in: textView) != nil)
+  }
+
+  @Test("regular Flash colors typed query characters before showing labels")
+  func flashQueryColorsMatchesBeforeLabels() {
+    let textView = makeVimMotionTextView(text: "x not now notion")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
+
+    let firstTargetLocation = ("x " as NSString).length
+    #expect(textView.flashHints.first?.location == firstTargetLocation)
+    #expect(
+      colorComponents(temporaryForegroundColor(at: firstTargetLocation, in: textView))
+        != colorComponents(temporaryForegroundColor(at: 0, in: textView))
+    )
+    #expect((temporaryForegroundColor(at: firstTargetLocation + 1, in: textView)?.alphaComponent ?? 1) > 0.01)
+  }
+
+  @Test("regular Flash labels replace the next target word characters in place")
+  func flashLabelsHideReplacementCharactersInPlace() {
+    let textView = makeVimMotionTextView(text: "x not now notion")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
+    textView.keyDown(with: keyEvent(characters: "o", ignoring: "o", keyCode: 31))
+
+    let firstTargetLocation = ("x " as NSString).length
+    let replacementLocation = firstTargetLocation + ("no" as NSString).length
+    #expect(textView.flashHints.first?.label == "a")
+    #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
+  }
+
+  @Test("s query plus visible label keyDown jumps and clears Flash")
+  func flashKeyDownQueryAndLabelJumps() {
+    let textView = makeVimMotionTextView(text: "zero alpha beta alpha")
     let controller = VimController()
     textView.attachVimController(controller)
     textView.vimModeEnabled = true
@@ -196,12 +305,14 @@ struct MultilineEditorVimLogicalLineMotionTests {
 
     textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
     textView.keyDown(with: keyEvent(characters: "a", ignoring: "a", keyCode: 0))
+    textView.keyDown(with: keyEvent(characters: "l", ignoring: "l", keyCode: 37))
     let firstTarget = textView.flashHints[0]
     textView.keyDown(with: keyEvent(characters: firstTarget.label, ignoring: firstTarget.label, keyCode: 0))
 
     #expect(controller.prompt == nil)
     #expect(textView.flashHints.isEmpty)
     #expect(textView.selectedRange.location == firstTarget.location)
+    #expect(temporaryForegroundColor(at: firstTarget.location, in: textView) == nil)
   }
 
   @Test("ciw deletes the word under the caret and leaves insert point at the word start")
@@ -259,6 +370,18 @@ struct MultilineEditorVimLogicalLineMotionTests {
     fixed.addTextContainer(container)
     CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
     return textView
+  }
+
+  private func temporaryForegroundColor(at location: Int, in textView: PlaceholderTextView) -> NSColor? {
+    textView.layoutManager?.temporaryAttributes(
+      atCharacterIndex: location,
+      effectiveRange: nil
+    )[.foregroundColor] as? NSColor
+  }
+
+  private func colorComponents(_ color: NSColor?) -> [CGFloat] {
+    guard let color = color?.usingColorSpace(.deviceRGB) else { return [] }
+    return [color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent]
   }
 
   private func keyEvent(

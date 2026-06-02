@@ -13,7 +13,7 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let placeholder: Color
 }
 
-/// Eleven curated themes -- six dark, five light.
+/// Twelve curated themes -- seven dark, five light.
 enum ThemeCatalog {
   // MARK: Dark
 
@@ -65,6 +65,16 @@ enum ThemeCatalog {
     border: Color.white.opacity(0.08),
     text: Color(red: 0.922, green: 0.922, blue: 0.941),
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
+  )
+
+  static let rosePineMoonlight = Theme(
+    id: "rose-pine-moonlight",
+    name: "Rosé Pine Moonlight",
+    mode: .dark,
+    background: Color(red: 0.137, green: 0.129, blue: 0.212),
+    border: Color(red: 0.267, green: 0.255, blue: 0.353),
+    text: Color(red: 0.878, green: 0.839, blue: 0.808),
+    placeholder: Color(red: 0.431, green: 0.408, blue: 0.506)
   )
 
   static let catppuccinMocha = Theme(
@@ -129,15 +139,23 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
   )
 
-  static let darkThemes: [Theme] = [obsidian, ink, graphite, midnight, charcoal, catppuccinMocha]
+  static let darkThemes: [Theme] = [
+    obsidian,
+    ink,
+    graphite,
+    midnight,
+    charcoal,
+    rosePineMoonlight,
+    catppuccinMocha
+  ]
   static let lightThemes: [Theme] = [parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes
 
   /// Default theme applied on first launch.
-  static let defaultID = obsidian.id
+  static let defaultID = rosePineMoonlight.id
 
   /// Looks up a theme by id, falling back to the default.
   static func theme(withID id: String) -> Theme {
-    all.first { $0.id == id } ?? obsidian
+    all.first { $0.id == id } ?? rosePineMoonlight
   }
 }

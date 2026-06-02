@@ -50,7 +50,7 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
-  case enterFlash(VimFlashDirection, count: Int)
+  case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
   case gotoLine(Int)
   case enterVisualLine
@@ -300,8 +300,10 @@ final class VimEngine {
 
   private func flashAction(for key: String, count: Int) -> VimAction? {
     switch key {
-    case "s": return .enterFlash(.forward, count: count)
-    case "S": return .enterFlash(.backward, count: count)
+    case "s": return .enterFlash(.forward, count: count, scope: .document)
+    case "S": return .enterFlash(.backward, count: count, scope: .document)
+    case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
+    case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
     case "K": return .enterLineFlash(count: count)
     default: return nil
     }

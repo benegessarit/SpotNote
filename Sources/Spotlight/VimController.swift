@@ -7,7 +7,7 @@ final class VimController: ObservableObject {
   enum PromptKind: Equatable {
     case command
     case search
-    case flash(VimFlashDirection, count: Int)
+    case flash(VimFlashDirection, count: Int, scope: VimFlashScope)
     case lineFlash(count: Int)
   }
 
@@ -127,11 +127,11 @@ final class VimController: ObservableObject {
 
   func submitFlash(_ query: String) {
     guard let current = prompt,
-      case .flash(let direction, let count) = current.kind
+      case .flash(let direction, let count, let scope) = current.kind
     else { return }
     prompt = nil
     guard !query.isEmpty else { return }
-    let request = VimFlashRequest(query: query, direction: direction, count: count)
+    let request = VimFlashRequest(query: query, direction: direction, count: count, scope: scope)
     if flashHandler?(request) == true {
       message = nil
     } else {

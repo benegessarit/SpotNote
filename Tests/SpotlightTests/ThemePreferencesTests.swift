@@ -14,11 +14,11 @@ struct ThemePreferencesTests {
     return defaults
   }
 
-  @Test("default selected theme is Obsidian")
-  func defaultsToObsidian() {
+  @Test("default selected theme is Rosé Pine Moonlight")
+  func defaultsToRosePineMoonlight() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.selectedThemeID == ThemeCatalog.obsidian.id)
-    #expect(prefs.activeTheme.id == ThemeCatalog.obsidian.id)
+    #expect(prefs.selectedThemeID == ThemeCatalog.rosePineMoonlight.id)
+    #expect(prefs.activeTheme.id == ThemeCatalog.rosePineMoonlight.id)
   }
 
   @Test("setting selectedThemeID persists to UserDefaults")
@@ -46,9 +46,18 @@ struct ThemePreferencesTests {
     #expect(prefs.selectedThemeID == ThemeCatalog.ink.id)
   }
 
-  @Test("unknown id falls back to Obsidian")
+  @Test("unknown id falls back to Rosé Pine Moonlight")
   func unknownFallsBack() {
-    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.obsidian.id)
+    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.rosePineMoonlight.id)
+  }
+
+  @Test("Rosé Pine Moonlight is available as a dark theme")
+  func rosePineMoonlightAvailable() {
+    let theme = ThemeCatalog.theme(withID: "rose-pine-moonlight")
+    #expect(theme.id == ThemeCatalog.rosePineMoonlight.id)
+    #expect(theme.name == "Rosé Pine Moonlight")
+    #expect(theme.mode == .dark)
+    #expect(ThemeCatalog.darkThemes.contains { $0.id == theme.id })
   }
 
   @Test("Catppuccin Mocha is available as a dark theme")
@@ -70,11 +79,11 @@ struct ThemePreferencesTests {
     }
   }
 
-  @Test("catalog has exactly six dark and five light themes")
+  @Test("catalog has exactly seven dark and five light themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 6)
+    #expect(ThemeCatalog.darkThemes.count == 7)
     #expect(ThemeCatalog.lightThemes.count == 5)
-    #expect(ThemeCatalog.all.count == 11)
+    #expect(ThemeCatalog.all.count == 12)
   }
 
   @Test("showLineNumbers defaults to true on first launch")

@@ -426,7 +426,8 @@ enum VimActionDispatcher {
     switch action {
     case .enterCommand: view.vimController?.enterPrompt(.command)
     case .enterSearch: view.vimController?.enterPrompt(.search)
-    case .enterFlash(let direction, let count): view.vimController?.enterPrompt(.flash(direction, count: count))
+    case .enterFlash(let direction, let count, let scope):
+      view.enterFlashPrompt(direction: direction, count: count, scope: scope)
     case .enterLineFlash(let count):
       view.vimController?.enterPrompt(.lineFlash(count: count))
       view.refreshLineFlashHints()

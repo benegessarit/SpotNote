@@ -509,6 +509,7 @@ final class PlaceholderTextView: NSTextView {
   var flashHints: [VimFlashTarget] = []
   var flashLabelBuffer: String = ""
   var isShowingLineFlashHints = false
+  var flashTemporaryAttributeRanges: [NSRange] = []
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?

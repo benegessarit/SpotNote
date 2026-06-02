@@ -24,8 +24,9 @@ struct VimStatusLine: View {
       } else {
         statusModeSegment(label: shortLabel(for: mode), mode: mode)
         Text(noteFileLabel)
-          .font(.system(size: 16, weight: .semibold, design: .monospaced))
-          .foregroundStyle(theme.text.opacity(0.92))
+          .font(.custom("MonoLisa", size: 16).weight(.bold))
+          .tracking(0.4)
+          .foregroundStyle(theme.text.opacity(0.94))
           .lineLimit(1)
           .truncationMode(.middle)
           .padding(.horizontal, 12)
@@ -97,7 +98,7 @@ struct VimStatusLine: View {
     switch kind {
     case .command: return ":"
     case .search: return "/"
-    case .flash: return "S"
+    case .flash(_, _, let scope): return scope == .currentLine ? "F" : "S"
     case .lineFlash: return "K"
     }
   }
@@ -156,6 +157,17 @@ struct VimStatusLine: View {
   }
 }
 
+enum VimPromptDisplay {
+  static func prefix(for kind: VimController.PromptKind) -> String {
+    switch kind {
+    case .command: return ":"
+    case .search: return "/"
+    case .flash(_, let count, _): return count > 1 ? "\(count)⚡ " : "⚡ "
+    case .lineFlash(let count): return count > 1 ? "\(count)K" : "K"
+    }
+  }
+}
+
 private struct VimPromptView: View {
   let prompt: VimController.Prompt
   let theme: Theme
@@ -178,14 +190,6 @@ private struct VimPromptView: View {
   }
 
   private var prefix: String {
-    switch prompt.kind {
-    case .command: return ":"
-    case .search: return "/"
-    case .flash(let direction, let count):
-      let marker = direction == .forward ? "s" : "S"
-      return count > 1 ? "\(count)\(marker)" : marker
-    case .lineFlash(let count):
-      return count > 1 ? "\(count)K" : "K"
-    }
+    VimPromptDisplay.prefix(for: prompt.kind)
   }
 }

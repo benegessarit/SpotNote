@@ -31,6 +31,7 @@ extension PlaceholderTextView {
   private func backspaceFlashPrompt(controller: VimController) {
     if !flashLabelBuffer.isEmpty {
       flashLabelBuffer.removeLast()
+      refreshFlashTextAppearance(controller: controller)
       needsDisplay = true
       return
     }
@@ -45,13 +46,13 @@ extension PlaceholderTextView {
       return
     }
     switch prompt.kind {
-    case .flash(let direction, let count):
+    case .flash(let direction, let count, let scope):
       guard !prompt.buffer.isEmpty else {
         controller.cancelPrompt()
         clearFlashHints()
         return
       }
-      let request = VimFlashRequest(query: prompt.buffer, direction: direction, count: count)
+      let request = VimFlashRequest(query: prompt.buffer, direction: direction, count: count, scope: scope)
       if performFlashJump(request) {
         controller.cancelPrompt()
         clearFlashHints()
@@ -83,13 +84,18 @@ extension PlaceholderTextView {
     else { return }
 
     let labelProbe = flashLabelBuffer + char
-    let acceptsLabelInput = isLineFlashPrompt(prompt.kind) || !prompt.buffer.isEmpty
-    if acceptsLabelInput, jumpIfFlashLabelMatches(labelProbe, controller: controller) {
+    if shouldReadFlashLabel(char, prompt: prompt), jumpIfFlashLabelMatches(labelProbe, controller: controller) {
       return
     }
-    if acceptsLabelInput, flashHints.contains(where: { $0.label.hasPrefix(labelProbe) }) {
+    if shouldReadFlashLabel(char, prompt: prompt), flashHints.contains(where: { $0.label.hasPrefix(labelProbe) }) {
       flashLabelBuffer = labelProbe
+      refreshFlashTextAppearance(controller: controller)
       needsDisplay = true
+      return
+    }
+    if !flashLabelBuffer.isEmpty {
+      flashLabelBuffer = ""
+      refreshFlashTextAppearance(controller: controller)
       return
     }
 
@@ -114,6 +120,21 @@ extension PlaceholderTextView {
     return false
   }
 
+  private func shouldReadFlashLabel(_ char: String, prompt: VimController.Prompt) -> Bool {
+    if isLineFlashPrompt(prompt.kind) { return true }
+    guard case .flash(let direction, let count, let scope) = prompt.kind,
+      regularFlashLabelsAreVisible(query: prompt.buffer)
+    else { return false }
+    if !flashLabelBuffer.isEmpty { return true }
+    let extendedQuery = prompt.buffer + char
+    let request = VimFlashRequest(query: extendedQuery, direction: direction, count: count, scope: scope)
+    return VimFlash.targets(in: string, from: selectedRange.location, request: request, limit: 1).isEmpty
+  }
+
+  func regularFlashLabelsAreVisible(query: String) -> Bool {
+    (query as NSString).length >= 2 && !flashHints.isEmpty
+  }
+
   private func jumpIfFlashLabelMatches(_ label: String, controller: VimController) -> Bool {
     guard let target = flashHints.first(where: { $0.label == label }) else { return false }
     jump(to: target, controller: controller)
@@ -128,6 +149,16 @@ extension PlaceholderTextView {
     clearFlashHints()
   }
 
+  func enterFlashPrompt(direction: VimFlashDirection, count: Int, scope: VimFlashScope) {
+    guard let controller = vimController else { return }
+    controller.enterPrompt(.flash(direction, count: count, scope: scope))
+    refreshFlashPromptDisplay(controller: controller)
+  }
+
+  func refreshFlashPromptDisplay(controller: VimController) {
+    refreshFlashHints(controller: controller)
+  }
+
   private func refreshFlashHints(controller: VimController) {
     guard let prompt = controller.prompt,
       isFlashPrompt(prompt.kind)
@@ -136,15 +167,19 @@ extension PlaceholderTextView {
       return
     }
     switch prompt.kind {
-    case .flash(let direction, let count):
+    case .flash(let direction, let count, let scope):
+      isShowingLineFlashHints = false
+      invalidateLineFlashRuler()
       guard !prompt.buffer.isEmpty else {
-        clearFlashHints()
+        flashHints = []
+        flashLabelBuffer = ""
+        refreshFlashTextAppearance(controller: controller)
+        needsDisplay = true
         return
       }
-      let request = VimFlashRequest(query: prompt.buffer, direction: direction, count: count)
-      isShowingLineFlashHints = false
+      let request = VimFlashRequest(query: prompt.buffer, direction: direction, count: count, scope: scope)
       flashHints = VimFlash.targets(in: string, from: selectedRange.location, request: request, limit: 96)
-      invalidateLineFlashRuler()
+      refreshFlashTextAppearance(controller: controller)
     case .lineFlash:
       refreshLineFlashHints()
       return
@@ -156,6 +191,7 @@ extension PlaceholderTextView {
   }
 
   func refreshLineFlashHints() {
+    clearFlashTextAppearance()
     flashHints = visibleLineFlashTargets(limit: 96)
     flashLabelBuffer = ""
     isShowingLineFlashHints = true
@@ -209,96 +245,20 @@ extension PlaceholderTextView {
   }
 
   func clearFlashHints() {
-    guard !flashHints.isEmpty || !flashLabelBuffer.isEmpty || isShowingLineFlashHints else { return }
+    guard
+      !flashHints.isEmpty || !flashLabelBuffer.isEmpty || isShowingLineFlashHints
+        || !flashTemporaryAttributeRanges.isEmpty
+    else { return }
     flashHints = []
     flashLabelBuffer = ""
     isShowingLineFlashHints = false
+    clearFlashTextAppearance()
     invalidateLineFlashRuler()
     needsDisplay = true
   }
 
   private func invalidateLineFlashRuler() {
     enclosingScrollView?.verticalRulerView?.needsDisplay = true
-  }
-
-  func drawFlashHints(in dirtyRect: NSRect) {
-    guard !isShowingLineFlashHints || enclosingScrollView?.verticalRulerView == nil else { return }
-    guard !flashHints.isEmpty,
-      let layoutManager,
-      let textContainer
-    else { return }
-    layoutManager.ensureLayout(for: textContainer)
-    let visibleHints =
-      flashLabelBuffer.isEmpty
-      ? flashHints
-      : flashHints.filter { $0.label.hasPrefix(flashLabelBuffer) }
-    for hint in visibleHints {
-      drawFlashHint(hint, dirtyRect: dirtyRect, layoutManager: layoutManager, textContainer: textContainer)
-    }
-  }
-
-  private func drawFlashHint(
-    _ hint: VimFlashTarget,
-    dirtyRect: NSRect,
-    layoutManager: NSLayoutManager,
-    textContainer: NSTextContainer
-  ) {
-    let nsString = string as NSString
-    guard hint.location >= 0,
-      hint.location < nsString.length,
-      layoutManager.numberOfGlyphs > 0
-    else { return }
-    let glyphIndex = min(
-      layoutManager.glyphIndexForCharacter(at: hint.location),
-      max(0, layoutManager.numberOfGlyphs - 1)
-    )
-    let line = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-    let glyph = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
-    guard !line.isEmpty, !glyph.isEmpty else { return }
-    let rect = flashHintRect(label: hint.label, glyph: glyph, line: line)
-    guard rect.intersects(dirtyRect) else { return }
-    drawFlashHintLabel(
-      label: hint.label,
-      in: rect,
-      active: !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
-    )
-  }
-
-  private func flashHintRect(label: String, glyph: NSRect, line: NSRect) -> NSRect {
-    let attrs = flashHintTextAttributes(active: true)
-    let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let height = EditorMetrics.lineHeight
-    return NSRect(
-      x: textContainerOrigin.x + glyph.minX,
-      y: textContainerOrigin.y + line.minY,
-      width: max(labelWidth + 2, glyph.width),
-      height: height
-    )
-  }
-
-  private func drawFlashHintLabel(label: String, in rect: NSRect, active: Bool) {
-    let attrs = flashHintTextAttributes(active: active)
-    let effectiveFont =
-      attrs[.font] as? NSFont ?? font
-      ?? .monospacedSystemFont(
-        ofSize: EditorMetrics.fontSize,
-        weight: .bold
-      )
-    let baseline = LineNumberRuler.synthesizedBaseline(fragmentHeight: rect.height, font: effectiveFont)
-    let point = NSPoint(x: rect.minX, y: rect.minY + baseline - effectiveFont.ascender)
-    (label as NSString).draw(at: point, withAttributes: attrs)
-  }
-
-  private func flashHintTextAttributes(active: Bool) -> [NSAttributedString.Key: Any] {
-    let baseFont = font ?? NSFont.monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .bold)
-    let labelFont = NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
-      .withSize(baseFont.pointSize)
-    return [
-      .font: labelFont,
-      .foregroundColor: active
-        ? NSColor(red: 0.980, green: 0.702, blue: 0.529, alpha: 1.0)
-        : NSColor(red: 0.651, green: 0.890, blue: 0.631, alpha: 1.0)
-    ]
   }
 }
 

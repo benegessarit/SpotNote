@@ -6,16 +6,24 @@ enum VimFlashDirection: Equatable, Sendable {
   case backward
 }
 
+/// Scope searched by a Flash prompt.
+enum VimFlashScope: Equatable, Sendable {
+  case document
+  case currentLine
+}
+
 /// Search request emitted by the vim controller while Flash is active.
 struct VimFlashRequest: Equatable, Sendable {
   let query: String
   let direction: VimFlashDirection
   let count: Int
+  let scope: VimFlashScope
 
-  init(query: String, direction: VimFlashDirection, count: Int) {
+  init(query: String, direction: VimFlashDirection, count: Int, scope: VimFlashScope = .document) {
     self.query = query
     self.direction = direction
     self.count = max(1, count)
+    self.scope = scope
   }
 }
 
@@ -78,12 +86,14 @@ enum VimFlash {
   ) -> [Int] {
     guard !request.query.isEmpty, !text.isEmpty, limit > 0 else { return [] }
     let clampedLocation = min(max(0, location), text.utf16.count)
+    let candidateRange = candidateRange(in: text, from: clampedLocation, scope: request.scope)
     let indices = request.direction == .forward ? Array(text.indices) : Array(text.indices.reversed())
     var matches: [Int] = []
     matches.reserveCapacity(min(limit, 96))
     for index in indices {
       let offset = utf16Offset(of: index, in: text)
-      guard isCandidate(offset, relativeTo: clampedLocation, direction: request.direction),
+      guard candidateRange.contains(offset),
+        isCandidate(offset, relativeTo: clampedLocation, request: request),
         text[index...].hasPrefix(request.query)
       else { continue }
       matches.append(offset)
@@ -92,12 +102,35 @@ enum VimFlash {
     return matches
   }
 
+  private static func candidateRange(in text: String, from location: Int, scope: VimFlashScope) -> Range<Int> {
+    let nsString = text as NSString
+    switch scope {
+    case .document:
+      return 0..<nsString.length
+    case .currentLine:
+      let line = nsString.lineRange(for: NSRange(location: min(location, nsString.length), length: 0))
+      let upper = line.location + trimmedLineLength(line, in: nsString)
+      return line.location..<upper
+    }
+  }
+
+  private static func trimmedLineLength(_ line: NSRange, in text: NSString) -> Int {
+    var length = line.length
+    while length > 0 {
+      let char = text.character(at: line.location + length - 1)
+      guard char == 10 || char == 13 else { break }
+      length -= 1
+    }
+    return length
+  }
+
   private static func isCandidate(
     _ offset: Int,
     relativeTo location: Int,
-    direction: VimFlashDirection
+    request: VimFlashRequest
   ) -> Bool {
-    switch direction {
+    guard request.scope == .currentLine else { return true }
+    switch request.direction {
     case .forward: return offset > location
     case .backward: return offset < location
     }
