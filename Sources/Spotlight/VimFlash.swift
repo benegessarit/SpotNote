@@ -19,51 +19,34 @@ struct VimFlashRequest: Equatable, Sendable {
 
 enum VimFlash {
   static func targetLocation(in text: String, from location: Int, request: VimFlashRequest) -> Int? {
-    guard !request.query.isEmpty else { return nil }
-    let nsString = text as NSString
-    guard nsString.length > 0 else { return nil }
-    let clampedLocation = min(max(0, location), nsString.length)
+    guard !request.query.isEmpty, !text.isEmpty else { return nil }
+    let clampedLocation = min(max(0, location), text.utf16.count)
     switch request.direction {
     case .forward:
-      return forwardTarget(in: nsString, from: clampedLocation, request: request)
+      return target(in: text, from: clampedLocation, request: request) { $0 > $1 }
     case .backward:
-      return backwardTarget(in: nsString, from: clampedLocation, request: request)
+      return target(in: text, from: clampedLocation, request: request) { $0 < $1 }
     }
   }
 
-  private static func forwardTarget(
-    in text: NSString,
+  private static func target(
+    in text: String,
     from location: Int,
-    request: VimFlashRequest
+    request: VimFlashRequest,
+    isCandidate: (Int, Int) -> Bool
   ) -> Int? {
     var remaining = request.count
-    var searchStart = min(location + 1, text.length)
-    while searchStart < text.length {
-      let range = NSRange(location: searchStart, length: text.length - searchStart)
-      let match = text.range(of: request.query, options: [], range: range)
-      guard match.location != NSNotFound else { return nil }
+    let indices = request.direction == .forward ? Array(text.indices) : Array(text.indices.reversed())
+    for index in indices {
+      let offset = utf16Offset(of: index, in: text)
+      guard isCandidate(offset, location), text[index...].hasPrefix(request.query) else { continue }
       remaining -= 1
-      if remaining == 0 { return match.location }
-      searchStart = match.location + max(1, match.length)
+      if remaining == 0 { return offset }
     }
     return nil
   }
 
-  private static func backwardTarget(
-    in text: NSString,
-    from location: Int,
-    request: VimFlashRequest
-  ) -> Int? {
-    var remaining = request.count
-    var searchEnd = min(location, text.length)
-    while searchEnd > 0 {
-      let range = NSRange(location: 0, length: searchEnd)
-      let match = text.range(of: request.query, options: .backwards, range: range)
-      guard match.location != NSNotFound else { return nil }
-      remaining -= 1
-      if remaining == 0 { return match.location }
-      searchEnd = match.location
-    }
-    return nil
+  private static func utf16Offset(of index: String.Index, in text: String) -> Int {
+    text.utf16.distance(from: text.utf16.startIndex, to: index.samePosition(in: text.utf16) ?? text.utf16.endIndex)
   }
 }

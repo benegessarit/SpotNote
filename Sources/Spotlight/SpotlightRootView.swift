@@ -307,7 +307,9 @@ private struct VimPromptView: View {
     switch prompt.kind {
     case .command: return ":"
     case .search: return "/"
-    case .flash(let direction, _): return direction == .forward ? "s" : "S"
+    case .flash(let direction, let count):
+      let marker = direction == .forward ? "s" : "S"
+      return count > 1 ? "\(count)\(marker)" : marker
     }
   }
 }

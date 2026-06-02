@@ -102,6 +102,25 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.selectedRange.location == 3)
   }
 
+  @Test("Flash jump matches only composed-character boundaries")
+  func flashJumpUsesComposedCharacterBoundaries() {
+    let text = "x e\u{301} y"
+
+    let accentOnly = VimFlash.targetLocation(
+      in: text,
+      from: 0,
+      request: VimFlashRequest(query: "\u{301}", direction: .forward, count: 1)
+    )
+    let composed = VimFlash.targetLocation(
+      in: text,
+      from: 0,
+      request: VimFlashRequest(query: "é", direction: .forward, count: 1)
+    )
+
+    #expect(accentOnly == nil)
+    #expect(composed == ("x " as NSString).length)
+  }
+
   private func makeVimMotionTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 240))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
