@@ -154,46 +154,46 @@ struct ThemeFlashPalette: Equatable, Sendable {
   static let catppuccinLatte = ThemeFlashPalette(
     backdropText: Color(red: 0.612, green: 0.627, blue: 0.690),
     matchText: Color(red: 0.447, green: 0.529, blue: 0.992),
-    labelText: Color(red: 0.937, green: 0.945, blue: 0.961),
-    labelFill: Color(red: 0.251, green: 0.627, blue: 0.169),
-    activeLabelText: Color(red: 0.937, green: 0.945, blue: 0.961),
-    activeLabelFill: Color(red: 1.000, green: 0.392, blue: 0.043)
+    labelText: Color(red: 0.251, green: 0.627, blue: 0.169),
+    labelFill: Color(red: 0.937, green: 0.945, blue: 0.961),
+    activeLabelText: Color(red: 0.996, green: 0.392, blue: 0.043),
+    activeLabelFill: Color(red: 0.937, green: 0.945, blue: 0.961)
   )
 
   static let catppuccinFrappe = ThemeFlashPalette(
     backdropText: Color(red: 0.451, green: 0.475, blue: 0.580),
     matchText: Color(red: 0.729, green: 0.733, blue: 0.945),
-    labelText: Color(red: 0.188, green: 0.204, blue: 0.275),
-    labelFill: Color(red: 0.651, green: 0.820, blue: 0.537),
-    activeLabelText: Color(red: 0.188, green: 0.204, blue: 0.275),
-    activeLabelFill: Color(red: 0.937, green: 0.624, blue: 0.463)
+    labelText: Color(red: 0.651, green: 0.820, blue: 0.537),
+    labelFill: Color(red: 0.188, green: 0.204, blue: 0.275),
+    activeLabelText: Color(red: 0.937, green: 0.624, blue: 0.463),
+    activeLabelFill: Color(red: 0.188, green: 0.204, blue: 0.275)
   )
 
   static let catppuccinMocha = ThemeFlashPalette(
     backdropText: Color(red: 0.424, green: 0.439, blue: 0.525),
     matchText: Color(red: 0.706, green: 0.745, blue: 0.996),
-    labelText: Color(red: 0.118, green: 0.118, blue: 0.180),
-    labelFill: Color(red: 0.651, green: 0.890, blue: 0.631),
-    activeLabelText: Color(red: 0.118, green: 0.118, blue: 0.180),
-    activeLabelFill: Color(red: 0.980, green: 0.702, blue: 0.529)
+    labelText: Color(red: 0.651, green: 0.890, blue: 0.631),
+    labelFill: Color(red: 0.118, green: 0.118, blue: 0.180),
+    activeLabelText: Color(red: 0.980, green: 0.702, blue: 0.529),
+    activeLabelFill: Color(red: 0.118, green: 0.118, blue: 0.180)
   )
 
   static let rosePineDawn = ThemeFlashPalette(
     backdropText: Color(red: 0.596, green: 0.576, blue: 0.647),
     matchText: Color(red: 0.565, green: 0.478, blue: 0.663),
-    labelText: Color(red: 0.980, green: 0.957, blue: 0.929),
-    labelFill: Color(red: 0.706, green: 0.388, blue: 0.478),
-    activeLabelText: Color(red: 0.980, green: 0.957, blue: 0.929),
-    activeLabelFill: Color(red: 0.918, green: 0.616, blue: 0.204)
+    labelText: Color(red: 0.427, green: 0.561, blue: 0.537),
+    labelFill: Color(red: 0.980, green: 0.957, blue: 0.929),
+    activeLabelText: Color(red: 0.918, green: 0.616, blue: 0.204),
+    activeLabelFill: Color(red: 0.980, green: 0.957, blue: 0.929)
   )
 
   static let rosePineMoon = ThemeFlashPalette(
     backdropText: Color(red: 0.431, green: 0.408, blue: 0.506),
     matchText: Color(red: 0.769, green: 0.655, blue: 0.906),
-    labelText: Color(red: 0.137, green: 0.129, blue: 0.212),
-    labelFill: Color(red: 0.922, green: 0.435, blue: 0.573),
-    activeLabelText: Color(red: 0.137, green: 0.129, blue: 0.212),
-    activeLabelFill: Color(red: 0.965, green: 0.757, blue: 0.467)
+    labelText: Color(red: 0.584, green: 0.694, blue: 0.675),
+    labelFill: Color(red: 0.137, green: 0.129, blue: 0.212),
+    activeLabelText: Color(red: 0.965, green: 0.757, blue: 0.467),
+    activeLabelFill: Color(red: 0.137, green: 0.129, blue: 0.212)
   )
 
   static func palette(for theme: Theme) -> ThemeFlashPalette {
@@ -222,12 +222,12 @@ struct ThemeFlashPalette: Equatable, Sendable {
     ThemeFlashPalette(
       backdropText: placeholder,
       matchText: mode == .dark ? Color(red: 0.804, green: 0.839, blue: 1.000) : text,
-      labelText: background,
-      labelFill: mode == .dark
+      labelText: mode == .dark
         ? Color(red: 0.651, green: 0.890, blue: 0.631) : Color(red: 0.251, green: 0.627, blue: 0.169),
-      activeLabelText: background,
-      activeLabelFill: mode == .dark
-        ? Color(red: 0.980, green: 0.702, blue: 0.529) : Color(red: 1.000, green: 0.392, blue: 0.043)
+      labelFill: background,
+      activeLabelText: mode == .dark
+        ? Color(red: 0.980, green: 0.702, blue: 0.529) : Color(red: 0.996, green: 0.392, blue: 0.043),
+      activeLabelFill: background
     )
   }
 }

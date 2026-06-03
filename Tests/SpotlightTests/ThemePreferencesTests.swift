@@ -142,24 +142,31 @@ struct ThemePreferencesTests {
     #expect(ThemeCatalog.bone.cursor == Color(red: 0.165, green: 0.165, blue: 0.165))
   }
 
-  @Test("Catppuccin Latte Flash labels use visible filled accents")
-  func catppuccinLatteFlashLabelsUseVisibleFilledAccents() {
+  @Test("Catppuccin Latte Flash labels follow flash.nvim inline highlight colors")
+  func catppuccinLatteFlashLabelsUseNvimInlineColors() {
     let flash = ThemeCatalog.catppuccinLatte.flash
     #expect(flash.backdropText == Color(red: 0.612, green: 0.627, blue: 0.690))
     #expect(flash.matchText == Color(red: 0.447, green: 0.529, blue: 0.992))
-    #expect(flash.labelFill == Color(red: 0.251, green: 0.627, blue: 0.169))
-    #expect(flash.labelText == Color(red: 0.937, green: 0.945, blue: 0.961))
-    #expect(flash.activeLabelFill == Color(red: 1.000, green: 0.392, blue: 0.043))
+    #expect(flash.labelText == Color(red: 0.251, green: 0.627, blue: 0.169))
+    #expect(flash.activeLabelText == Color(red: 0.996, green: 0.392, blue: 0.043))
   }
 
-  @Test("Rosé Pine Dawn Flash labels use visible filled accents")
-  func rosePineDawnFlashLabelsUseVisibleFilledAccents() {
+  @Test("Catppuccin Frappé Flash labels are bright on dark themes")
+  func catppuccinFrappeFlashLabelsAreBrightOnDarkThemes() {
+    let flash = ThemeCatalog.catppuccinFrappe.flash
+    #expect(flash.backdropText == Color(red: 0.451, green: 0.475, blue: 0.580))
+    #expect(flash.matchText == Color(red: 0.729, green: 0.733, blue: 0.945))
+    #expect(flash.labelText == Color(red: 0.651, green: 0.820, blue: 0.537))
+    #expect(flash.activeLabelText == Color(red: 0.937, green: 0.624, blue: 0.463))
+  }
+
+  @Test("Rosé Pine Dawn Flash labels use visible inline accent text")
+  func rosePineDawnFlashLabelsUseVisibleInlineAccentText() {
     let flash = ThemeCatalog.rosePineDawn.flash
     #expect(flash.backdropText == Color(red: 0.596, green: 0.576, blue: 0.647))
     #expect(flash.matchText == Color(red: 0.565, green: 0.478, blue: 0.663))
-    #expect(flash.labelFill == Color(red: 0.706, green: 0.388, blue: 0.478))
-    #expect(flash.labelText == Color(red: 0.980, green: 0.957, blue: 0.929))
-    #expect(flash.activeLabelFill == Color(red: 0.918, green: 0.616, blue: 0.204))
+    #expect(flash.labelText == Color(red: 0.427, green: 0.561, blue: 0.537))
+    #expect(flash.activeLabelText == Color(red: 0.918, green: 0.616, blue: 0.204))
   }
 
   @Test("all dark themes have mode .dark; all light themes have mode .light")

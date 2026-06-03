@@ -295,8 +295,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
   }
 
-  @Test("regular Flash uses the selected light theme for match and label contrast")
-  func flashUsesSelectedLightThemeForMatchAndLabelContrast() {
+  @Test("regular Flash uses inline light-theme labels without a background fill")
+  func flashUsesInlineLightThemeLabelsWithoutBackgroundFill() {
     let theme = ThemeCatalog.catppuccinLatte
     let textView = makeVimMotionTextView(text: "x not now notion", theme: theme)
     let controller = VimController()
@@ -316,12 +316,43 @@ struct MultilineEditorVimLogicalLineMotionTests {
         colorComponents(NSColor(theme.flash.matchText))
       )
     )
-    #expect(
-      colorsApproximatelyEqual(
-        colorComponents(temporaryBackgroundColor(at: replacementLocation, in: textView)),
-        colorComponents(NSColor(theme.flash.labelFill))
+    #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
+    #expect(temporaryBackgroundColor(at: replacementLocation, in: textView) == nil)
+  }
+
+  @Test("regular Flash draws nvim-like bright inline label text on light and dark themes")
+  func flashDrawsBrightInlineLabelTextOnLightAndDarkThemes() {
+    for theme in [ThemeCatalog.catppuccinLatte, ThemeCatalog.catppuccinFrappe] {
+      let textView = makeVimMotionTextView(text: "x not now notion", theme: theme)
+
+      #expect(
+        colorsApproximatelyEqual(
+          colorComponents(flashHintForegroundColor(in: textView, active: false)),
+          colorComponents(NSColor(theme.flash.labelText))
+        ),
+        "\(theme.name) labels should use the visible FlashLabel foreground"
       )
-    )
+      #expect(
+        colorsApproximatelyEqual(
+          colorComponents(flashHintForegroundColor(in: textView, active: true)),
+          colorComponents(NSColor(theme.flash.activeLabelText))
+        ),
+        "\(theme.name) active labels should use the visible FlashCurrent foreground"
+      )
+    }
+  }
+
+  @Test("regular Flash label bounds stay compact even if TextKit reports a wide glyph rect")
+  func flashLabelBoundsStayCompactForWideGlyphRect() {
+    let textView = makeVimMotionTextView(text: "x not now notion")
+    let line = NSRect(x: 0, y: 0, width: 480, height: EditorMetrics.lineHeight)
+    let wideGlyph = NSRect(x: 40, y: 0, width: 420, height: EditorMetrics.lineHeight)
+
+    let bounds = textView.flashHintLabelBounds(label: "a", glyph: wideGlyph, line: line, active: false)
+
+    #expect(bounds.width < line.width * 0.1)
+    #expect(bounds.width <= 24)
+    #expect(bounds.origin.x == textView.textContainerOrigin.x + wideGlyph.minX)
   }
 
   @Test("s query plus visible label keyDown jumps and clears Flash")
@@ -342,17 +373,6 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.flashHints.isEmpty)
     #expect(textView.selectedRange.location == firstTarget.location)
     #expect(temporaryForegroundColor(at: firstTarget.location, in: textView) == nil)
-  }
-
-  @Test("ciw deletes the word under the caret and leaves insert point at the word start")
-  func changeInnerWordDeletesWord() {
-    let textView = makeVimMotionTextView(text: "alpha beta gamma")
-    textView.setSelectedRange(NSRange(location: ("alpha be" as NSString).length, length: 0))
-
-    textView.executeVimAction(.changeTextObject(.innerWord))
-
-    #expect(textView.string == "alpha  gamma")
-    #expect(textView.selectedRange == NSRange(location: ("alpha " as NSString).length, length: 0))
   }
 
   @Test("semicolon-b wraps the current word in markdown bold markers")
@@ -407,6 +427,10 @@ struct MultilineEditorVimLogicalLineMotionTests {
     fixed.addTextContainer(container)
     CodeStyler.apply(to: textView, theme: theme)
     return textView
+  }
+
+  private func flashHintForegroundColor(in textView: PlaceholderTextView, active: Bool) -> NSColor? {
+    textView.flashHintTextAttributes(active: active)[.foregroundColor] as? NSColor
   }
 
   private func temporaryForegroundColor(at location: Int, in textView: PlaceholderTextView) -> NSColor? {

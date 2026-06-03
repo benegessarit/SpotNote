@@ -40,12 +40,8 @@ extension PlaceholderTextView {
       guard regularFlashLabelsAreVisible(query: prompt.buffer),
         let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer)
       else { continue }
-      let active = !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
       addFlashTemporaryAttributes(
-        [
-          .foregroundColor: NSColor.clear,
-          .backgroundColor: flashLabelFillColor(active: active)
-        ],
+        [.foregroundColor: NSColor.clear],
         range: labelRange,
         layoutManager: layoutManager
       )
@@ -84,10 +80,6 @@ extension PlaceholderTextView {
 
   private func flashLabelTextColor(active: Bool) -> NSColor {
     NSColor(active ? editorTheme.flash.activeLabelText : editorTheme.flash.labelText)
-  }
-
-  private func flashLabelFillColor(active: Bool) -> NSColor {
-    NSColor(active ? editorTheme.flash.activeLabelFill : editorTheme.flash.labelFill)
   }
 
   private func visibleRegularFlashTargets() -> [VimFlashTarget] {
@@ -154,33 +146,29 @@ extension PlaceholderTextView {
     let line = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
     let glyph = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
     guard !line.isEmpty, !glyph.isEmpty else { return }
-    let rect = flashHintRect(label: hint.label, glyph: glyph, line: line)
+    let active = !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
+    let rect = flashHintLabelBounds(label: hint.label, glyph: glyph, line: line, active: active)
     guard rect.intersects(dirtyRect) else { return }
     drawFlashHintLabel(
       label: hint.label,
       in: rect,
-      active: !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
+      active: active
     )
   }
 
-  private func flashHintRect(label: String, glyph: NSRect, line: NSRect) -> NSRect {
-    let attrs = flashHintTextAttributes(active: true)
+  func flashHintLabelBounds(label: String, glyph: NSRect, line: NSRect, active: Bool) -> NSRect {
+    let attrs = flashHintTextAttributes(active: active)
     let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let height = EditorMetrics.lineHeight - 2
     return NSRect(
-      x: textContainerOrigin.x + glyph.minX - 3,
+      x: textContainerOrigin.x + glyph.minX,
       y: textContainerOrigin.y + line.minY + 1,
-      width: max(labelWidth + 8, glyph.width + 4),
-      height: height
+      width: labelWidth,
+      height: EditorMetrics.lineHeight - 2
     )
   }
 
   private func drawFlashHintLabel(label: String, in rect: NSRect, active: Bool) {
     let attrs = flashHintTextAttributes(active: active)
-    let fill = flashLabelFillColor(active: active)
-    let path = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
-    fill.setFill()
-    path.fill()
     let effectiveFont =
       attrs[.font] as? NSFont ?? font
       ?? .monospacedSystemFont(
@@ -196,7 +184,7 @@ extension PlaceholderTextView {
     (label as NSString).draw(at: point, withAttributes: attrs)
   }
 
-  private func flashHintTextAttributes(active: Bool) -> [NSAttributedString.Key: Any] {
+  func flashHintTextAttributes(active: Bool) -> [NSAttributedString.Key: Any] {
     let baseFont = font ?? NSFont.monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .bold)
     let labelFont = NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
       .withSize(baseFont.pointSize)
