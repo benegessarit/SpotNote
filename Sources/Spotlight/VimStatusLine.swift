@@ -26,7 +26,7 @@ struct VimStatusLine: View {
         Text(noteFileLabel)
           .font(.custom("MonoLisa", size: 16).weight(.bold))
           .tracking(0.4)
-          .foregroundStyle(theme.text.opacity(0.94))
+          .foregroundStyle(theme.statusLine.fileText)
           .lineLimit(1)
           .truncationMode(.middle)
           .padding(.horizontal, 12)
@@ -73,7 +73,7 @@ struct VimStatusLine: View {
     } else if let searchStatus {
       Text(searchStatus)
         .font(.system(size: 13, weight: .medium, design: .monospaced))
-        .foregroundStyle(theme.text.opacity(0.58))
+        .foregroundStyle(theme.statusLine.trailingText)
         .lineLimit(1)
     }
   }
@@ -121,36 +121,24 @@ struct VimStatusLine: View {
   }
 
   private var statusFileFill: Color {
-    theme.mode == .dark
-      ? Color(red: 0.26, green: 0.28, blue: 0.38).opacity(0.90)
-      : Color.black.opacity(0.10)
+    theme.statusLine.fileFill
   }
 
   private var statusTrailingFill: Color {
-    theme.mode == .dark
-      ? Color(red: 0.33, green: 0.36, blue: 0.47).opacity(0.88)
-      : Color.black.opacity(0.07)
+    theme.statusLine.trailingFill
   }
 
   private func statusModeFill(for mode: VimMode) -> Color {
-    switch mode {
-    case .normal: return Color(red: 0.55, green: 0.69, blue: 0.98)
-    case .insert: return Color(red: 0.65, green: 0.89, blue: 0.63)
-    case .visualLine: return Color(red: 0.80, green: 0.67, blue: 0.94)
-    }
+    theme.statusLine.modeFill(for: mode)
   }
 
   private func statusModeText(for mode: VimMode) -> Color {
-    switch mode {
-    case .normal: return Color(red: 0.07, green: 0.10, blue: 0.18)
-    case .insert: return Color(red: 0.06, green: 0.13, blue: 0.08)
-    case .visualLine: return Color(red: 0.13, green: 0.08, blue: 0.18)
-    }
+    theme.statusLine.modeText(for: mode)
   }
 
   private func messageColor(for kind: VimController.MessageKind) -> Color {
     switch kind {
-    case .info: return theme.text.opacity(0.7)
+    case .info: return theme.statusLine.trailingText
     case .success: return Color(red: 0.40, green: 0.78, blue: 0.50)
     case .error: return Color(red: 0.95, green: 0.45, blue: 0.45)
     }
@@ -175,13 +163,13 @@ private struct VimPromptView: View {
   var body: some View {
     HStack(spacing: 0) {
       Text(prefix)
-        .foregroundStyle(theme.text.opacity(0.85))
+        .foregroundStyle(theme.statusLine.trailingText)
       Text(prompt.buffer)
-        .foregroundStyle(theme.text)
+        .foregroundStyle(theme.statusLine.fileText)
       TimelineView(.periodic(from: .now, by: 0.55)) { context in
         let visible = Int(context.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
         Text("▏")
-          .foregroundStyle(theme.text.opacity(visible ? 0.95 : 0))
+          .foregroundStyle(theme.statusLine.fileText.opacity(visible ? 0.95 : 0))
       }
     }
     .font(.system(size: 13, weight: .regular, design: .monospaced))

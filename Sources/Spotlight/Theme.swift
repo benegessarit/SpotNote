@@ -11,6 +11,117 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let border: Color
   let text: Color
   let placeholder: Color
+  let statusLine: ThemeStatusLine
+}
+
+/// Status-line palette tokens, mirroring Neovim theme highlight groups.
+struct ThemeStatusLine: Equatable, Sendable {
+  let fileFill: Color
+  let trailingFill: Color
+  let fileText: Color
+  let trailingText: Color
+  let normalFill: Color
+  let normalText: Color
+  let insertFill: Color
+  let insertText: Color
+  let visualLineFill: Color
+  let visualLineText: Color
+
+  func modeFill(for mode: VimMode) -> Color {
+    switch mode {
+    case .normal: return normalFill
+    case .insert: return insertFill
+    case .visualLine: return visualLineFill
+    }
+  }
+
+  func modeText(for mode: VimMode) -> Color {
+    switch mode {
+    case .normal: return normalText
+    case .insert: return insertText
+    case .visualLine: return visualLineText
+    }
+  }
+
+  static let rosePineMoon = ThemeStatusLine(
+    fileFill: Color(red: 0.224, green: 0.208, blue: 0.322),
+    trailingFill: Color(red: 0.165, green: 0.153, blue: 0.247),
+    fileText: Color(red: 0.878, green: 0.871, blue: 0.957),
+    trailingText: Color(red: 0.565, green: 0.549, blue: 0.667),
+    normalFill: Color(red: 0.612, green: 0.812, blue: 0.847),
+    normalText: Color(red: 0.137, green: 0.129, blue: 0.212),
+    insertFill: Color(red: 0.243, green: 0.561, blue: 0.690),
+    insertText: Color(red: 0.137, green: 0.129, blue: 0.212),
+    visualLineFill: Color(red: 0.769, green: 0.655, blue: 0.906),
+    visualLineText: Color(red: 0.137, green: 0.129, blue: 0.212)
+  )
+
+  static let rosePineDawn = ThemeStatusLine(
+    fileFill: Color(red: 0.949, green: 0.914, blue: 0.882),
+    trailingFill: Color(red: 1.000, green: 0.980, blue: 0.953),
+    fileText: Color(red: 0.275, green: 0.259, blue: 0.380),
+    trailingText: Color(red: 0.475, green: 0.459, blue: 0.576),
+    normalFill: Color(red: 0.337, green: 0.580, blue: 0.624),
+    normalText: Color(red: 0.980, green: 0.957, blue: 0.929),
+    insertFill: Color(red: 0.157, green: 0.412, blue: 0.514),
+    insertText: Color(red: 0.980, green: 0.957, blue: 0.929),
+    visualLineFill: Color(red: 0.565, green: 0.478, blue: 0.663),
+    visualLineText: Color(red: 0.980, green: 0.957, blue: 0.929)
+  )
+
+  static let catppuccinLatte = ThemeStatusLine(
+    fileFill: Color(red: 0.863, green: 0.878, blue: 0.910),
+    trailingFill: Color(red: 0.902, green: 0.914, blue: 0.937),
+    fileText: Color(red: 0.298, green: 0.310, blue: 0.412),
+    trailingText: Color(red: 0.361, green: 0.373, blue: 0.467),
+    normalFill: Color(red: 0.118, green: 0.400, blue: 0.961),
+    normalText: Color(red: 0.937, green: 0.945, blue: 0.961),
+    insertFill: Color(red: 0.251, green: 0.627, blue: 0.169),
+    insertText: Color(red: 0.937, green: 0.945, blue: 0.961),
+    visualLineFill: Color(red: 0.533, green: 0.224, blue: 0.937),
+    visualLineText: Color(red: 0.937, green: 0.945, blue: 0.961)
+  )
+
+  static let catppuccinFrappe = ThemeStatusLine(
+    fileFill: Color(red: 0.137, green: 0.149, blue: 0.204),
+    trailingFill: Color(red: 0.161, green: 0.173, blue: 0.235),
+    fileText: Color(red: 0.776, green: 0.816, blue: 0.961),
+    trailingText: Color(red: 0.710, green: 0.749, blue: 0.886),
+    normalFill: Color(red: 0.549, green: 0.667, blue: 0.933),
+    normalText: Color(red: 0.188, green: 0.204, blue: 0.275),
+    insertFill: Color(red: 0.651, green: 0.820, blue: 0.537),
+    insertText: Color(red: 0.188, green: 0.204, blue: 0.275),
+    visualLineFill: Color(red: 0.792, green: 0.620, blue: 0.902),
+    visualLineText: Color(red: 0.188, green: 0.204, blue: 0.275)
+  )
+
+  static let catppuccinMocha = ThemeStatusLine(
+    fileFill: Color(red: 0.067, green: 0.067, blue: 0.106),
+    trailingFill: Color(red: 0.094, green: 0.094, blue: 0.145),
+    fileText: Color(red: 0.804, green: 0.839, blue: 0.957),
+    trailingText: Color(red: 0.729, green: 0.761, blue: 0.871),
+    normalFill: Color(red: 0.537, green: 0.706, blue: 0.980),
+    normalText: Color(red: 0.118, green: 0.118, blue: 0.180),
+    insertFill: Color(red: 0.651, green: 0.890, blue: 0.631),
+    insertText: Color(red: 0.118, green: 0.118, blue: 0.180),
+    visualLineFill: Color(red: 0.796, green: 0.651, blue: 0.969),
+    visualLineText: Color(red: 0.118, green: 0.118, blue: 0.180)
+  )
+
+  static func fallback(for mode: Theme.Mode, text: Color) -> ThemeStatusLine {
+    ThemeStatusLine(
+      fileFill: mode == .dark ? Color(red: 0.26, green: 0.28, blue: 0.38).opacity(0.90) : Color.black.opacity(0.10),
+      trailingFill: mode == .dark ? Color(red: 0.33, green: 0.36, blue: 0.47).opacity(0.88) : Color.black.opacity(0.07),
+      fileText: text.opacity(0.94),
+      trailingText: text.opacity(0.58),
+      normalFill: Color(red: 0.55, green: 0.69, blue: 0.98),
+      normalText: Color(red: 0.07, green: 0.10, blue: 0.18),
+      insertFill: Color(red: 0.65, green: 0.89, blue: 0.63),
+      insertText: Color(red: 0.06, green: 0.13, blue: 0.08),
+      visualLineFill: Color(red: 0.80, green: 0.67, blue: 0.94),
+      visualLineText: Color(red: 0.13, green: 0.08, blue: 0.18)
+    )
+  }
 }
 
 /// Fifteen curated themes -- eight dark, seven light.
@@ -24,7 +135,8 @@ enum ThemeCatalog {
     background: Color(red: 0.055, green: 0.055, blue: 0.065),
     border: Color.white.opacity(0.06),
     text: Color(red: 0.910, green: 0.910, blue: 0.929),
-    placeholder: Color(red: 0.604, green: 0.604, blue: 0.627)
+    placeholder: Color(red: 0.604, green: 0.604, blue: 0.627),
+    statusLine: .fallback(for: .dark, text: Color(red: 0.910, green: 0.910, blue: 0.929))
   )
 
   static let ink = Theme(
@@ -34,7 +146,8 @@ enum ThemeCatalog {
     background: Color(red: 0.071, green: 0.078, blue: 0.102),
     border: Color(red: 0.290, green: 0.333, blue: 0.408).opacity(0.25),
     text: Color(red: 0.886, green: 0.910, blue: 0.941),
-    placeholder: Color(red: 0.443, green: 0.502, blue: 0.588)
+    placeholder: Color(red: 0.443, green: 0.502, blue: 0.588),
+    statusLine: .fallback(for: .dark, text: Color(red: 0.886, green: 0.910, blue: 0.941))
   )
 
   static let graphite = Theme(
@@ -44,7 +157,8 @@ enum ThemeCatalog {
     background: Color(red: 0.102, green: 0.102, blue: 0.102),
     border: Color.white.opacity(0.10),
     text: Color(red: 0.831, green: 0.831, blue: 0.831),
-    placeholder: Color(red: 0.502, green: 0.502, blue: 0.502)
+    placeholder: Color(red: 0.502, green: 0.502, blue: 0.502),
+    statusLine: .fallback(for: .dark, text: Color(red: 0.831, green: 0.831, blue: 0.831))
   )
 
   static let midnight = Theme(
@@ -54,7 +168,8 @@ enum ThemeCatalog {
     background: Color(red: 0.059, green: 0.078, blue: 0.098),
     border: Color(red: 0.118, green: 0.165, blue: 0.220).opacity(0.80),
     text: Color(red: 0.839, green: 0.871, blue: 0.922),
-    placeholder: Color(red: 0.373, green: 0.494, blue: 0.592)
+    placeholder: Color(red: 0.373, green: 0.494, blue: 0.592),
+    statusLine: .fallback(for: .dark, text: Color(red: 0.839, green: 0.871, blue: 0.922))
   )
 
   static let charcoal = Theme(
@@ -64,7 +179,8 @@ enum ThemeCatalog {
     background: Color(red: 0.110, green: 0.110, blue: 0.118),
     border: Color.white.opacity(0.08),
     text: Color(red: 0.922, green: 0.922, blue: 0.941),
-    placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
+    placeholder: Color(red: 0.557, green: 0.557, blue: 0.576),
+    statusLine: .fallback(for: .dark, text: Color(red: 0.922, green: 0.922, blue: 0.941))
   )
 
   static let rosePineMoonlight = Theme(
@@ -74,7 +190,8 @@ enum ThemeCatalog {
     background: Color(red: 0.137, green: 0.129, blue: 0.212),
     border: Color(red: 0.267, green: 0.255, blue: 0.353),
     text: Color(red: 0.878, green: 0.839, blue: 0.808),
-    placeholder: Color(red: 0.431, green: 0.408, blue: 0.506)
+    placeholder: Color(red: 0.431, green: 0.408, blue: 0.506),
+    statusLine: .rosePineMoon
   )
 
   static let catppuccinFrappe = Theme(
@@ -84,7 +201,8 @@ enum ThemeCatalog {
     background: Color(red: 0.188, green: 0.204, blue: 0.275),
     border: Color(red: 0.255, green: 0.271, blue: 0.349),
     text: Color(red: 0.776, green: 0.816, blue: 0.961),
-    placeholder: Color(red: 0.451, green: 0.475, blue: 0.580)
+    placeholder: Color(red: 0.451, green: 0.475, blue: 0.580),
+    statusLine: .catppuccinFrappe
   )
 
   static let catppuccinMocha = Theme(
@@ -94,7 +212,8 @@ enum ThemeCatalog {
     background: Color(red: 0.118, green: 0.118, blue: 0.180),
     border: Color(red: 0.192, green: 0.196, blue: 0.267),
     text: Color(red: 0.804, green: 0.839, blue: 0.957),
-    placeholder: Color(red: 0.424, green: 0.439, blue: 0.525)
+    placeholder: Color(red: 0.424, green: 0.439, blue: 0.525),
+    statusLine: .catppuccinMocha
   )
 
   // MARK: Light
@@ -106,7 +225,8 @@ enum ThemeCatalog {
     background: Color(red: 0.980, green: 0.957, blue: 0.929),
     border: Color(red: 0.875, green: 0.855, blue: 0.851),
     text: Color(red: 0.275, green: 0.259, blue: 0.380),
-    placeholder: Color(red: 0.596, green: 0.576, blue: 0.647)
+    placeholder: Color(red: 0.596, green: 0.576, blue: 0.647),
+    statusLine: .rosePineDawn
   )
 
   static let catppuccinLatte = Theme(
@@ -116,7 +236,8 @@ enum ThemeCatalog {
     background: Color(red: 0.937, green: 0.945, blue: 0.961),
     border: Color(red: 0.800, green: 0.816, blue: 0.855),
     text: Color(red: 0.298, green: 0.310, blue: 0.412),
-    placeholder: Color(red: 0.612, green: 0.627, blue: 0.690)
+    placeholder: Color(red: 0.612, green: 0.627, blue: 0.690),
+    statusLine: .catppuccinLatte
   )
 
   static let parchment = Theme(
@@ -126,7 +247,8 @@ enum ThemeCatalog {
     background: Color(red: 0.969, green: 0.961, blue: 0.937),
     border: Color.black.opacity(0.08),
     text: Color(red: 0.165, green: 0.165, blue: 0.165),
-    placeholder: Color(red: 0.557, green: 0.541, blue: 0.510)
+    placeholder: Color(red: 0.557, green: 0.541, blue: 0.510),
+    statusLine: .fallback(for: .light, text: Color(red: 0.165, green: 0.165, blue: 0.165))
   )
 
   static let mist = Theme(
@@ -136,7 +258,8 @@ enum ThemeCatalog {
     background: Color(red: 0.965, green: 0.969, blue: 0.976),
     border: Color.black.opacity(0.06),
     text: Color(red: 0.122, green: 0.161, blue: 0.216),
-    placeholder: Color(red: 0.612, green: 0.639, blue: 0.686)
+    placeholder: Color(red: 0.612, green: 0.639, blue: 0.686),
+    statusLine: .fallback(for: .light, text: Color(red: 0.122, green: 0.161, blue: 0.216))
   )
 
   static let bone = Theme(
@@ -146,7 +269,8 @@ enum ThemeCatalog {
     background: Color(red: 0.980, green: 0.980, blue: 0.973),
     border: Color.black.opacity(0.05),
     text: Color(red: 0.149, green: 0.149, blue: 0.149),
-    placeholder: Color(red: 0.549, green: 0.549, blue: 0.549)
+    placeholder: Color(red: 0.549, green: 0.549, blue: 0.549),
+    statusLine: .fallback(for: .light, text: Color(red: 0.149, green: 0.149, blue: 0.149))
   )
 
   static let linen = Theme(
@@ -156,7 +280,8 @@ enum ThemeCatalog {
     background: Color(red: 0.961, green: 0.941, blue: 0.910),
     border: Color.black.opacity(0.07),
     text: Color(red: 0.239, green: 0.184, blue: 0.122),
-    placeholder: Color(red: 0.612, green: 0.557, blue: 0.478)
+    placeholder: Color(red: 0.612, green: 0.557, blue: 0.478),
+    statusLine: .fallback(for: .light, text: Color(red: 0.239, green: 0.184, blue: 0.122))
   )
 
   static let porcelain = Theme(
@@ -166,7 +291,8 @@ enum ThemeCatalog {
     background: Color.white,
     border: Color.black.opacity(0.07),
     text: Color(red: 0.102, green: 0.102, blue: 0.102),
-    placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
+    placeholder: Color(red: 0.557, green: 0.557, blue: 0.576),
+    statusLine: .fallback(for: .light, text: Color(red: 0.102, green: 0.102, blue: 0.102))
   )
 
   static let darkThemes: [Theme] = [

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Spotlight
@@ -94,6 +95,26 @@ struct ThemePreferencesTests {
     #expect(theme.name == "Rosé Pine Dawn")
     #expect(theme.mode == .light)
     #expect(ThemeCatalog.lightThemes.contains { $0.id == theme.id })
+  }
+
+  @Test("Catppuccin Latte status line follows Catppuccin nvim StatusLine palette")
+  func catppuccinLatteStatusLineUsesPalette() {
+    let status = ThemeCatalog.catppuccinLatte.statusLine
+    #expect(status.trailingFill == Color(red: 0.902, green: 0.914, blue: 0.937))
+    #expect(status.fileFill == Color(red: 0.863, green: 0.878, blue: 0.910))
+    #expect(status.trailingText == Color(red: 0.361, green: 0.373, blue: 0.467))
+    #expect(status.modeFill(for: .normal) == Color(red: 0.118, green: 0.400, blue: 0.961))
+    #expect(status.modeText(for: .normal) == Color(red: 0.937, green: 0.945, blue: 0.961))
+  }
+
+  @Test("Rosé Pine Dawn status line follows rose-pine.nvim StatusLine palette")
+  func rosePineDawnStatusLineUsesPalette() {
+    let status = ThemeCatalog.rosePineDawn.statusLine
+    #expect(status.trailingFill == Color(red: 1.000, green: 0.980, blue: 0.953))
+    #expect(status.fileFill == Color(red: 0.949, green: 0.914, blue: 0.882))
+    #expect(status.trailingText == Color(red: 0.475, green: 0.459, blue: 0.576))
+    #expect(status.modeFill(for: .normal) == Color(red: 0.337, green: 0.580, blue: 0.624))
+    #expect(status.modeText(for: .normal) == Color(red: 0.980, green: 0.957, blue: 0.929))
   }
 
   @Test("all dark themes have mode .dark; all light themes have mode .light")
