@@ -849,24 +849,13 @@ final class PlaceholderTextView: NSTextView {
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
     let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
-      let caretFont = font ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
-      let blockWidth = max(
-        displayRect.width,
-        ceil(("M" as NSString).size(withAttributes: [.font: caretFont]).width)
-      )
-      let blockRect = NSRect(
-        x: displayRect.origin.x,
-        y: displayRect.origin.y,
-        width: blockWidth,
-        height: displayRect.height
-      )
       guard flag else {
-        invalidateInsertionPointRect(blockRect)
+        invalidateInsertionPointRect(displayRect)
         return
       }
-      lastInsertionPointDisplayRect = blockRect
+      lastInsertionPointDisplayRect = displayRect
       color.withAlphaComponent(0.82).setFill()
-      blockRect.fill()
+      displayRect.fill()
     } else {
       super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
       if flag {
@@ -881,8 +870,25 @@ final class PlaceholderTextView: NSTextView {
     if !flag, let lastInsertionPointDisplayRect {
       return lastInsertionPointDisplayRect
     }
-    let baseRect = flag ? normalizedInsertionPointRect(rect) : rect
-    return shrinkInsertionPointRectToFont(baseRect)
+    let normalMode = vimEngine?.mode == .normal
+    let baseRect = flag || normalMode ? normalizedInsertionPointRect(rect) : rect
+    let displayRect = shrinkInsertionPointRectToFont(baseRect)
+    return normalMode ? normalModeBlockInsertionPointRect(displayRect) : displayRect
+  }
+
+  func normalModeInsertionPointWidth() -> CGFloat {
+    let caretFont = font ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
+    return ceil(("M" as NSString).size(withAttributes: [.font: caretFont]).width)
+  }
+
+  private func normalModeBlockInsertionPointRect(_ rect: NSRect) -> NSRect {
+    let blockWidth = max(rect.width, normalModeInsertionPointWidth())
+    return NSRect(
+      x: rect.origin.x,
+      y: rect.origin.y,
+      width: blockWidth,
+      height: rect.height
+    )
   }
 
   private func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
@@ -925,7 +931,10 @@ final class PlaceholderTextView: NSTextView {
         originY = textContainerOrigin.y + extra.origin.y
       } else {
         let lastGlyphIndex = max(0, layoutManager.numberOfGlyphs - 1)
-        let fragment = layoutManager.lineFragmentRect(forGlyphAt: lastGlyphIndex, effectiveRange: nil)
+        let fragment = layoutManager.lineFragmentRect(
+          forGlyphAt: lastGlyphIndex,
+          effectiveRange: nil
+        )
         originY = textContainerOrigin.y + fragment.maxY
       }
       return NSRect(
@@ -957,7 +966,8 @@ final class PlaceholderTextView: NSTextView {
 
   private func insertionPointX(cursor: Int, glyphIndex: Int, in nsString: NSString) -> CGFloat {
     guard cursor > 0, nsString.character(at: cursor - 1) != 0x0A, let textContainer else {
-      let fragment = layoutManager?.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil) ?? .zero
+      let fragment =
+        layoutManager?.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil) ?? .zero
       return textContainerOrigin.x + fragment.minX
     }
     let priorGlyph = layoutManager?.glyphIndexForCharacter(at: cursor - 1) ?? glyphIndex
@@ -969,11 +979,23 @@ final class PlaceholderTextView: NSTextView {
     return textContainerOrigin.x + priorRect.maxX
   }
 
+  func insertionPointInvalidationRect(for rect: NSRect) -> NSRect {
+    let horizontalOutset = vimEngine?.mode == .normal ? -(normalModeInsertionPointWidth() + 2) : 0
+    return rect.insetBy(dx: horizontalOutset, dy: -2)
+  }
+
   override func setNeedsDisplay(_ invalidRect: NSRect) {
-    let dx: CGFloat = vimEngine?.mode == .normal ? -10 : 0
-    super.setNeedsDisplay(invalidRect.insetBy(dx: dx, dy: -2))
+    setNeedsDisplay(invalidRect, avoidAdditionalLayout: false)
+  }
+
+  override func setNeedsDisplay(_ invalidRect: NSRect, avoidAdditionalLayout flag: Bool) {
+    let invalidation = insertionPointInvalidationRect(for: invalidRect)
+    super.setNeedsDisplay(invalidation, avoidAdditionalLayout: flag)
     if let lastInsertionPointDisplayRect {
-      super.setNeedsDisplay(lastInsertionPointDisplayRect.insetBy(dx: dx, dy: -2))
+      super.setNeedsDisplay(
+        insertionPointInvalidationRect(for: lastInsertionPointDisplayRect),
+        avoidAdditionalLayout: flag
+      )
     }
   }
 
@@ -1018,7 +1040,10 @@ final class PlaceholderTextView: NSTextView {
           renderedText: date,
           renderedRange: NSRange(location: tokenRange.location, length: (date as NSString).length)
         )
-        targetSelection = NSRange(location: tokenRange.location + (date as NSString).length, length: 0)
+        targetSelection = NSRange(
+          location: tokenRange.location + (date as NSString).length,
+          length: 0
+        )
       } else if let tokenRange = originalNS.trailingTokenRange("@cl", endingAt: caret),
         !isSuppressed(literal: "@cl", range: tokenRange, in: originalNS),
         !originalNS.lineContainsCheckbox(at: tokenRange.location)
@@ -1156,11 +1181,16 @@ final class PlaceholderTextView: NSTextView {
   private func toggleChecklist(in lineRange: NSRange, targetOffset: Int) -> Bool {
     let nsString = string as NSString
     let lineText = nsString.substring(with: lineRange)
-    guard let markerRange = checklistMarkerRange(in: lineText, near: targetOffset) else { return false }
+    guard let markerRange = checklistMarkerRange(in: lineText, near: targetOffset) else {
+      return false
+    }
     let nsLine = lineText as NSString
     let marker = nsLine.substring(with: markerRange)
     let replacement = marker == "☐" ? "☑" : "☐"
-    let absoluteRange = NSRange(location: lineRange.location + markerRange.location, length: markerRange.length)
+    let absoluteRange = NSRange(
+      location: lineRange.location + markerRange.location,
+      length: markerRange.length
+    )
     if shouldChangeText(in: absoluteRange, replacementString: replacement) {
       replaceCharacters(in: absoluteRange, with: replacement)
       didChangeText()
