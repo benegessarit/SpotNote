@@ -119,12 +119,27 @@ struct ThemePreferencesTests {
 
   @Test("Catppuccin Latte cursor uses a peach accent")
   func catppuccinLatteCursorUsesPeachAccent() {
-    #expect(ThemeCatalog.catppuccinLatte.cursor == Color(red: 1.000, green: 0.392, blue: 0.043))
+    #expect(ThemeCatalog.catppuccinLatte.cursor == Color(red: 0.996, green: 0.392, blue: 0.043))
   }
 
   @Test("Rosé Pine Dawn cursor uses a rose accent")
   func rosePineDawnCursorUsesRoseAccent() {
     #expect(ThemeCatalog.rosePineDawn.cursor == Color(red: 0.843, green: 0.510, blue: 0.494))
+  }
+
+  @Test("dark themes keep the original Ghostty-style off-white cursor")
+  func darkThemesKeepOriginalCursor() {
+    let originalCursor = Color(red: 0.973, green: 0.973, blue: 0.941)
+    for theme in ThemeCatalog.darkThemes {
+      #expect(theme.cursor == originalCursor, "\(theme.name) should keep the dark-theme cursor")
+    }
+  }
+
+  @Test("light themes use visible dark or accent cursors")
+  func lightThemesUseVisibleCursors() {
+    #expect(ThemeCatalog.catppuccinLatte.cursor == Color(red: 0.996, green: 0.392, blue: 0.043))
+    #expect(ThemeCatalog.rosePineDawn.cursor == Color(red: 0.843, green: 0.510, blue: 0.494))
+    #expect(ThemeCatalog.bone.cursor == Color(red: 0.165, green: 0.165, blue: 0.165))
   }
 
   @Test("Catppuccin Latte Flash labels use visible filled accents")

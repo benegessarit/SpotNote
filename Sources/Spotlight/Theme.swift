@@ -15,11 +15,8 @@ public struct Theme: Equatable, Identifiable, Sendable {
 
   var cursor: Color {
     switch id {
-    case ThemeCatalog.catppuccinLatte.id: Color(red: 1.000, green: 0.392, blue: 0.043)
-    case ThemeCatalog.catppuccinFrappe.id: Color(red: 0.937, green: 0.624, blue: 0.463)
-    case ThemeCatalog.catppuccinMocha.id: Color(red: 0.980, green: 0.702, blue: 0.529)
+    case ThemeCatalog.catppuccinLatte.id: Color(red: 0.996, green: 0.392, blue: 0.043)
     case ThemeCatalog.rosePineDawn.id: Color(red: 0.843, green: 0.510, blue: 0.494)
-    case ThemeCatalog.rosePineMoonlight.id: Color(red: 0.918, green: 0.604, blue: 0.592)
     default: Self.defaultCursor(for: mode)
     }
   }

@@ -23,6 +23,11 @@ enum Motion: Equatable, Sendable {
 
 enum TextObject: Equatable, Sendable {
   case innerWord
+  case aroundWord
+  case innerSentence
+  case aroundSentence
+  case innerParagraph
+  case aroundParagraph
 }
 
 enum MarkdownWrapStyle: Equatable, Sendable {
@@ -121,8 +126,10 @@ final class VimEngine {
     switch buffered {
     case "d": return pendingDeleteAction(key: key, count: count)
     case "c": return pendingChangeAction(key: key, count: count)
-    case "di": return pendingInnerDeleteAction(key: key)
-    case "ci": return pendingInnerChangeAction(key: key)
+    case "di": return pendingTextObjectAction(key: key, operation: .delete, scope: .inner)
+    case "da": return pendingTextObjectAction(key: key, operation: .delete, scope: .around)
+    case "ci": return pendingTextObjectAction(key: key, operation: .change, scope: .inner)
+    case "ca": return pendingTextObjectAction(key: key, operation: .change, scope: .around)
     case "g": return key == "g" ? .moveCursor(.documentStart) : .none
     case ";": return pendingWrapAction(key: key)
     default: return .none
@@ -131,8 +138,8 @@ final class VimEngine {
 
   private func pendingDeleteAction(key: String, count: Int) -> VimAction {
     if key == "d" { return .deleteLine(count: count) }
-    if key == "i" {
-      pendingBuffer = "di"
+    if key == "i" || key == "a" {
+      pendingBuffer = "d\(key)"
       return .none
     }
     guard let motion = motionForKey(key, count: count) else { return .none }
@@ -144,22 +151,12 @@ final class VimEngine {
       mode = .insert
       return .deleteLineInsert(count: count)
     }
-    if key == "i" {
-      pendingBuffer = "ci"
+    if key == "i" || key == "a" {
+      pendingBuffer = "c\(key)"
       return .none
     }
     guard let motion = motionForKey(key, count: count) else { return .none }
     return .delete(motion)
-  }
-
-  private func pendingInnerDeleteAction(key: String) -> VimAction {
-    key == "w" ? .deleteTextObject(.innerWord) : .none
-  }
-
-  private func pendingInnerChangeAction(key: String) -> VimAction {
-    guard key == "w" else { return .none }
-    mode = .insert
-    return .changeTextObject(.innerWord)
   }
 
   private func pendingWrapAction(key: String) -> VimAction {
@@ -350,5 +347,37 @@ final class VimEngine {
 
   private func clearAccumulator() {
     countAccumulator = 0
+  }
+}
+
+private enum TextObjectOperation { case change, delete }
+private enum TextObjectScope { case inner, around }
+
+extension VimEngine {
+  private func pendingTextObjectAction(
+    key: String,
+    operation: TextObjectOperation,
+    scope: TextObjectScope
+  ) -> VimAction {
+    guard let object = textObject(for: key, scope: scope) else { return .none }
+    switch operation {
+    case .change:
+      mode = .insert
+      return .changeTextObject(object)
+    case .delete:
+      return .deleteTextObject(object)
+    }
+  }
+
+  private func textObject(for key: String, scope: TextObjectScope) -> TextObject? {
+    switch (scope, key) {
+    case (.inner, "w"): return .innerWord
+    case (.around, "w"): return .aroundWord
+    case (.inner, "s"): return .innerSentence
+    case (.around, "s"): return .aroundSentence
+    case (.inner, "p"): return .innerParagraph
+    case (.around, "p"): return .aroundParagraph
+    default: return nil
+    }
   }
 }
