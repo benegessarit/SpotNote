@@ -295,6 +295,35 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
   }
 
+  @Test("regular Flash uses the selected light theme for match and label contrast")
+  func flashUsesSelectedLightThemeForMatchAndLabelContrast() {
+    let theme = ThemeCatalog.catppuccinLatte
+    let textView = makeVimMotionTextView(text: "x not now notion", theme: theme)
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
+    textView.keyDown(with: keyEvent(characters: "o", ignoring: "o", keyCode: 31))
+
+    let firstTargetLocation = ("x " as NSString).length
+    let replacementLocation = firstTargetLocation + ("no" as NSString).length
+    #expect(
+      colorsApproximatelyEqual(
+        colorComponents(temporaryForegroundColor(at: firstTargetLocation, in: textView)),
+        colorComponents(NSColor(theme.flash.matchText))
+      )
+    )
+    #expect(
+      colorsApproximatelyEqual(
+        colorComponents(temporaryBackgroundColor(at: replacementLocation, in: textView)),
+        colorComponents(NSColor(theme.flash.labelFill))
+      )
+    )
+  }
+
   @Test("s query plus visible label keyDown jumps and clears Flash")
   func flashKeyDownQueryAndLabelJumps() {
     let textView = makeVimMotionTextView(text: "zero alpha beta alpha")
@@ -350,13 +379,21 @@ struct MultilineEditorVimLogicalLineMotionTests {
 
   private func makeVimMotionTextView(
     text: String,
-    width: CGFloat = EditorMetrics.panelWidth
+    width: CGFloat = EditorMetrics.panelWidth,
+    theme: Theme = ThemeCatalog.obsidian
   ) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
     textView.string = text
+    textView.textColor = NSColor(theme.text)
+    textView.editorTheme = theme
     textView.textContainer?.lineFragmentPadding = 0
     textView.textContainer?.widthTracksTextView = true
+    textView.editorTextAttributes = [
+      .font: textView.font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize),
+      .foregroundColor: NSColor(theme.text)
+    ]
+    textView.typingAttributes = textView.editorTextAttributes
     guard let storage = textView.textStorage,
       let container = textView.textContainer
     else { return textView }
@@ -368,7 +405,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     }
     storage.addLayoutManager(fixed)
     fixed.addTextContainer(container)
-    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
+    CodeStyler.apply(to: textView, theme: theme)
     return textView
   }
 
@@ -379,9 +416,21 @@ struct MultilineEditorVimLogicalLineMotionTests {
     )[.foregroundColor] as? NSColor
   }
 
+  private func temporaryBackgroundColor(at location: Int, in textView: PlaceholderTextView) -> NSColor? {
+    textView.layoutManager?.temporaryAttributes(
+      atCharacterIndex: location,
+      effectiveRange: nil
+    )[.backgroundColor] as? NSColor
+  }
+
   private func colorComponents(_ color: NSColor?) -> [CGFloat] {
     guard let color = color?.usingColorSpace(.deviceRGB) else { return [] }
     return [color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent]
+  }
+
+  private func colorsApproximatelyEqual(_ lhs: [CGFloat], _ rhs: [CGFloat], tolerance: CGFloat = 0.002) -> Bool {
+    guard lhs.count == rhs.count else { return false }
+    return zip(lhs, rhs).allSatisfy { abs($0 - $1) <= tolerance }
   }
 
   private func keyEvent(

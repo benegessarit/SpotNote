@@ -17,7 +17,11 @@ extension PlaceholderTextView {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
     let fullRange = NSRange(location: 0, length: nsString.length)
-    addFlashTemporaryForeground(flashDimmedTextColor, range: fullRange, layoutManager: layoutManager)
+    addFlashTemporaryAttributes(
+      [.foregroundColor: flashDimmedTextColor],
+      range: fullRange,
+      layoutManager: layoutManager
+    )
     let queryLength = (prompt.buffer as NSString).length
     guard queryLength > 0 else { return }
     let visibleHints = visibleRegularFlashTargets()
@@ -27,12 +31,24 @@ extension PlaceholderTextView {
         length: min(queryLength, max(0, nsString.length - hint.location))
       )
       if queryRange.length > 0 {
-        addFlashTemporaryForeground(flashQueryTextColor, range: queryRange, layoutManager: layoutManager)
+        addFlashTemporaryAttributes(
+          [.foregroundColor: flashQueryTextColor],
+          range: queryRange,
+          layoutManager: layoutManager
+        )
       }
       guard regularFlashLabelsAreVisible(query: prompt.buffer),
         let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer)
       else { continue }
-      addFlashTemporaryForeground(.clear, range: labelRange, layoutManager: layoutManager)
+      let active = !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
+      addFlashTemporaryAttributes(
+        [
+          .foregroundColor: NSColor.clear,
+          .backgroundColor: flashLabelFillColor(active: active)
+        ],
+        range: labelRange,
+        layoutManager: layoutManager
+      )
     }
   }
 
@@ -43,35 +59,35 @@ extension PlaceholderTextView {
     }
     for range in flashTemporaryAttributeRanges where range.length > 0 {
       layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: range)
+      layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
     }
     flashTemporaryAttributeRanges = []
   }
 
-  private func addFlashTemporaryForeground(
-    _ color: NSColor,
+  private func addFlashTemporaryAttributes(
+    _ attributes: [NSAttributedString.Key: Any],
     range: NSRange,
     layoutManager: NSLayoutManager
   ) {
     guard range.location >= 0, range.length > 0 else { return }
-    layoutManager.addTemporaryAttributes([.foregroundColor: color], forCharacterRange: range)
+    layoutManager.addTemporaryAttributes(attributes, forCharacterRange: range)
     flashTemporaryAttributeRanges.append(range)
   }
 
   private var flashDimmedTextColor: NSColor {
-    let base = editorTextAttributes[.foregroundColor] as? NSColor ?? textColor ?? .labelColor
-    return base.withAlphaComponent(0.42)
+    NSColor(editorTheme.flash.backdropText)
   }
 
   private var flashQueryTextColor: NSColor {
-    NSColor(red: 0.804, green: 0.839, blue: 1.000, alpha: 1.0)
+    NSColor(editorTheme.flash.matchText)
   }
 
-  private var flashLabelTextColor: NSColor {
-    NSColor(red: 0.651, green: 0.890, blue: 0.631, alpha: 1.0)
+  private func flashLabelTextColor(active: Bool) -> NSColor {
+    NSColor(active ? editorTheme.flash.activeLabelText : editorTheme.flash.labelText)
   }
 
-  private var flashActiveLabelTextColor: NSColor {
-    NSColor(red: 0.980, green: 0.702, blue: 0.529, alpha: 1.0)
+  private func flashLabelFillColor(active: Bool) -> NSColor {
+    NSColor(active ? editorTheme.flash.activeLabelFill : editorTheme.flash.labelFill)
   }
 
   private func visibleRegularFlashTargets() -> [VimFlashTarget] {
@@ -150,25 +166,33 @@ extension PlaceholderTextView {
   private func flashHintRect(label: String, glyph: NSRect, line: NSRect) -> NSRect {
     let attrs = flashHintTextAttributes(active: true)
     let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let height = EditorMetrics.lineHeight
+    let height = EditorMetrics.lineHeight - 2
     return NSRect(
-      x: textContainerOrigin.x + glyph.minX,
-      y: textContainerOrigin.y + line.minY,
-      width: max(labelWidth + 2, glyph.width),
+      x: textContainerOrigin.x + glyph.minX - 3,
+      y: textContainerOrigin.y + line.minY + 1,
+      width: max(labelWidth + 8, glyph.width + 4),
       height: height
     )
   }
 
   private func drawFlashHintLabel(label: String, in rect: NSRect, active: Bool) {
     let attrs = flashHintTextAttributes(active: active)
+    let fill = flashLabelFillColor(active: active)
+    let path = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
+    fill.setFill()
+    path.fill()
     let effectiveFont =
       attrs[.font] as? NSFont ?? font
       ?? .monospacedSystemFont(
         ofSize: EditorMetrics.fontSize,
         weight: .bold
       )
+    let labelSize = (label as NSString).size(withAttributes: attrs)
     let baseline = LineNumberRuler.synthesizedBaseline(fragmentHeight: rect.height, font: effectiveFont)
-    let point = NSPoint(x: rect.minX, y: rect.minY + baseline - effectiveFont.ascender)
+    let point = NSPoint(
+      x: rect.midX - labelSize.width / 2,
+      y: rect.minY + baseline - effectiveFont.ascender
+    )
     (label as NSString).draw(at: point, withAttributes: attrs)
   }
 
@@ -178,7 +202,7 @@ extension PlaceholderTextView {
       .withSize(baseFont.pointSize)
     return [
       .font: labelFont,
-      .foregroundColor: active ? flashActiveLabelTextColor : flashLabelTextColor
+      .foregroundColor: flashLabelTextColor(active: active)
     ]
   }
 }

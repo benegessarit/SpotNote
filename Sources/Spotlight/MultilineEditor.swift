@@ -375,7 +375,8 @@ struct MultilineEditor: NSViewRepresentable {
     let newPlaceholderColor = NSColor(theme.placeholder)
     if textView.font != font { textView.font = font }
     if textView.textColor != newTextColor { textView.textColor = newTextColor }
-    textView.insertionPointColor = ghosttyCursorColor
+    textView.insertionPointColor = NSColor(theme.cursor)
+    textView.editorTheme = theme
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
@@ -399,10 +400,6 @@ struct MultilineEditor: NSViewRepresentable {
     let range = NSRange(location: 0, length: storage.length)
     storage.setAttributes(textAttributes, range: range)
     applyCodeStyling(on: textView)
-  }
-
-  private var ghosttyCursorColor: NSColor {
-    NSColor(red: 0.973, green: 0.973, blue: 0.941, alpha: 1.0)
   }
 
   private func replaceLayoutManager(on textView: NSTextView) {
@@ -489,6 +486,7 @@ final class PlaceholderTextView: NSTextView {
   weak var suggestionField: SuggestionView?
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
+  var editorTheme: Theme = ThemeCatalog.rosePineMoonlight
   var checkboxCheckedColor: NSColor = .systemGreen.withAlphaComponent(0.95)
   var checkboxUncheckedColor: NSColor = .secondaryLabelColor.withAlphaComponent(0.6)
 

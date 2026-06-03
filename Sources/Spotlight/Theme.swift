@@ -12,6 +12,27 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let text: Color
   let placeholder: Color
   let statusLine: ThemeStatusLine
+
+  var cursor: Color {
+    switch id {
+    case ThemeCatalog.catppuccinLatte.id: Color(red: 1.000, green: 0.392, blue: 0.043)
+    case ThemeCatalog.catppuccinFrappe.id: Color(red: 0.937, green: 0.624, blue: 0.463)
+    case ThemeCatalog.catppuccinMocha.id: Color(red: 0.980, green: 0.702, blue: 0.529)
+    case ThemeCatalog.rosePineDawn.id: Color(red: 0.843, green: 0.510, blue: 0.494)
+    case ThemeCatalog.rosePineMoonlight.id: Color(red: 0.918, green: 0.604, blue: 0.592)
+    default: Self.defaultCursor(for: mode)
+    }
+  }
+
+  var flash: ThemeFlashPalette {
+    ThemeFlashPalette.palette(for: self)
+  }
+
+  private static func defaultCursor(for mode: Mode) -> Color {
+    mode == .dark
+      ? Color(red: 0.973, green: 0.973, blue: 0.941)
+      : Color(red: 0.165, green: 0.165, blue: 0.165)
+  }
 }
 
 /// Status-line palette tokens, mirroring Neovim theme highlight groups.
@@ -120,6 +141,96 @@ struct ThemeStatusLine: Equatable, Sendable {
       insertText: Color(red: 0.06, green: 0.13, blue: 0.08),
       visualLineFill: Color(red: 0.80, green: 0.67, blue: 0.94),
       visualLineText: Color(red: 0.13, green: 0.08, blue: 0.18)
+    )
+  }
+}
+
+/// Flash jump palette tokens, based on folke/flash.nvim highlight groups.
+struct ThemeFlashPalette: Equatable, Sendable {
+  let backdropText: Color
+  let matchText: Color
+  let labelText: Color
+  let labelFill: Color
+  let activeLabelText: Color
+  let activeLabelFill: Color
+
+  static let catppuccinLatte = ThemeFlashPalette(
+    backdropText: Color(red: 0.612, green: 0.627, blue: 0.690),
+    matchText: Color(red: 0.447, green: 0.529, blue: 0.992),
+    labelText: Color(red: 0.937, green: 0.945, blue: 0.961),
+    labelFill: Color(red: 0.251, green: 0.627, blue: 0.169),
+    activeLabelText: Color(red: 0.937, green: 0.945, blue: 0.961),
+    activeLabelFill: Color(red: 1.000, green: 0.392, blue: 0.043)
+  )
+
+  static let catppuccinFrappe = ThemeFlashPalette(
+    backdropText: Color(red: 0.451, green: 0.475, blue: 0.580),
+    matchText: Color(red: 0.729, green: 0.733, blue: 0.945),
+    labelText: Color(red: 0.188, green: 0.204, blue: 0.275),
+    labelFill: Color(red: 0.651, green: 0.820, blue: 0.537),
+    activeLabelText: Color(red: 0.188, green: 0.204, blue: 0.275),
+    activeLabelFill: Color(red: 0.937, green: 0.624, blue: 0.463)
+  )
+
+  static let catppuccinMocha = ThemeFlashPalette(
+    backdropText: Color(red: 0.424, green: 0.439, blue: 0.525),
+    matchText: Color(red: 0.706, green: 0.745, blue: 0.996),
+    labelText: Color(red: 0.118, green: 0.118, blue: 0.180),
+    labelFill: Color(red: 0.651, green: 0.890, blue: 0.631),
+    activeLabelText: Color(red: 0.118, green: 0.118, blue: 0.180),
+    activeLabelFill: Color(red: 0.980, green: 0.702, blue: 0.529)
+  )
+
+  static let rosePineDawn = ThemeFlashPalette(
+    backdropText: Color(red: 0.596, green: 0.576, blue: 0.647),
+    matchText: Color(red: 0.565, green: 0.478, blue: 0.663),
+    labelText: Color(red: 0.980, green: 0.957, blue: 0.929),
+    labelFill: Color(red: 0.706, green: 0.388, blue: 0.478),
+    activeLabelText: Color(red: 0.980, green: 0.957, blue: 0.929),
+    activeLabelFill: Color(red: 0.918, green: 0.616, blue: 0.204)
+  )
+
+  static let rosePineMoon = ThemeFlashPalette(
+    backdropText: Color(red: 0.431, green: 0.408, blue: 0.506),
+    matchText: Color(red: 0.769, green: 0.655, blue: 0.906),
+    labelText: Color(red: 0.137, green: 0.129, blue: 0.212),
+    labelFill: Color(red: 0.922, green: 0.435, blue: 0.573),
+    activeLabelText: Color(red: 0.137, green: 0.129, blue: 0.212),
+    activeLabelFill: Color(red: 0.965, green: 0.757, blue: 0.467)
+  )
+
+  static func palette(for theme: Theme) -> ThemeFlashPalette {
+    switch theme.id {
+    case ThemeCatalog.catppuccinLatte.id: .catppuccinLatte
+    case ThemeCatalog.catppuccinFrappe.id: .catppuccinFrappe
+    case ThemeCatalog.catppuccinMocha.id: .catppuccinMocha
+    case ThemeCatalog.rosePineDawn.id: .rosePineDawn
+    case ThemeCatalog.rosePineMoonlight.id: .rosePineMoon
+    default:
+      .fallback(
+        for: theme.mode,
+        text: theme.text,
+        placeholder: theme.placeholder,
+        background: theme.background
+      )
+    }
+  }
+
+  static func fallback(
+    for mode: Theme.Mode,
+    text: Color,
+    placeholder: Color,
+    background: Color
+  ) -> ThemeFlashPalette {
+    ThemeFlashPalette(
+      backdropText: placeholder,
+      matchText: mode == .dark ? Color(red: 0.804, green: 0.839, blue: 1.000) : text,
+      labelText: background,
+      labelFill: mode == .dark
+        ? Color(red: 0.651, green: 0.890, blue: 0.631) : Color(red: 0.251, green: 0.627, blue: 0.169),
+      activeLabelText: background,
+      activeLabelFill: mode == .dark
+        ? Color(red: 0.980, green: 0.702, blue: 0.529) : Color(red: 1.000, green: 0.392, blue: 0.043)
     )
   }
 }

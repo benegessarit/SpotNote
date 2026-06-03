@@ -255,6 +255,8 @@ private struct LineFlashDrawStyle {
   let font: NSFont
   let defaultAttrs: [NSAttributedString.Key: Any]
   let activeAttrs: [NSAttributedString.Key: Any]
+  let defaultFill: NSColor
+  let activeFill: NSColor
   let buffer: String
 }
 
@@ -270,7 +272,7 @@ extension LineNumberRuler {
       : textView.flashHints.filter { $0.label.hasPrefix(textView.flashLabelBuffer) }
     let labelsByLocation = Dictionary(uniqueKeysWithValues: visibleHints.map { ($0.location, $0.label) })
     guard !labelsByLocation.isEmpty else { return }
-    let style = lineFlashDrawStyle(buffer: textView.flashLabelBuffer)
+    let style = lineFlashDrawStyle(textView: textView)
     let lm = ctx.layoutManager
     let all = NSRange(location: 0, length: lm.numberOfGlyphs)
     lm.enumerateLineFragments(forGlyphRange: all) { frag, _, _, glyphs, stop in
@@ -305,26 +307,27 @@ extension LineNumberRuler {
     drawFlashLabel(label, baselineY: baselineY, style: style)
   }
 
-  private func lineFlashDrawStyle(buffer: String) -> LineFlashDrawStyle {
+  private func lineFlashDrawStyle(textView: PlaceholderTextView) -> LineFlashDrawStyle {
     let font = NSFontManager.shared.convert(editorFont, toHaveTrait: .boldFontMask)
       .withSize(editorFont.pointSize)
+    let flash = textView.editorTheme.flash
     return LineFlashDrawStyle(
       font: font,
-      defaultAttrs: flashLabelAttributes(font: font, active: false),
-      activeAttrs: flashLabelAttributes(font: font, active: true),
-      buffer: buffer
+      defaultAttrs: flashLabelAttributes(font: font, textColor: NSColor(flash.labelText)),
+      activeAttrs: flashLabelAttributes(font: font, textColor: NSColor(flash.activeLabelText)),
+      defaultFill: NSColor(flash.labelFill),
+      activeFill: NSColor(flash.activeLabelFill),
+      buffer: textView.flashLabelBuffer
     )
   }
 
   private func flashLabelAttributes(
     font: NSFont,
-    active: Bool
+    textColor: NSColor
   ) -> [NSAttributedString.Key: Any] {
     [
       .font: font,
-      .foregroundColor: active
-        ? NSColor(red: 0.980, green: 0.702, blue: 0.529, alpha: 1.0)
-        : NSColor(red: 0.651, green: 0.890, blue: 0.631, alpha: 1.0)
+      .foregroundColor: textColor
     ]
   }
 
@@ -333,6 +336,23 @@ extension LineNumberRuler {
   }
 
   private func drawFlashLabel(_ label: String, baselineY: CGFloat, style: LineFlashDrawStyle) {
-    drawString(label as NSString, baselineY: baselineY, font: style.font, attrs: attrs(for: label, style: style))
+    let attrs = attrs(for: label, style: style)
+    let fill = fillColor(for: label, style: style)
+    let labelString = label as NSString
+    let labelSize = labelString.size(withAttributes: attrs)
+    let rect = NSRect(
+      x: bounds.width - labelSize.width - 6,
+      y: baselineY - style.font.ascender - 1,
+      width: labelSize.width + 6,
+      height: style.font.ascender - style.font.descender + 2
+    )
+    fill.setFill()
+    NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+    let point = NSPoint(x: rect.midX - labelSize.width / 2, y: baselineY - style.font.ascender)
+    labelString.draw(at: point, withAttributes: attrs)
+  }
+
+  private func fillColor(for label: String, style: LineFlashDrawStyle) -> NSColor {
+    !style.buffer.isEmpty && label.hasPrefix(style.buffer) ? style.activeFill : style.defaultFill
   }
 }

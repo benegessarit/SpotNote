@@ -117,6 +117,36 @@ struct ThemePreferencesTests {
     #expect(status.modeText(for: .normal) == Color(red: 0.980, green: 0.957, blue: 0.929))
   }
 
+  @Test("Catppuccin Latte cursor uses a peach accent")
+  func catppuccinLatteCursorUsesPeachAccent() {
+    #expect(ThemeCatalog.catppuccinLatte.cursor == Color(red: 1.000, green: 0.392, blue: 0.043))
+  }
+
+  @Test("Rosé Pine Dawn cursor uses a rose accent")
+  func rosePineDawnCursorUsesRoseAccent() {
+    #expect(ThemeCatalog.rosePineDawn.cursor == Color(red: 0.843, green: 0.510, blue: 0.494))
+  }
+
+  @Test("Catppuccin Latte Flash labels use visible filled accents")
+  func catppuccinLatteFlashLabelsUseVisibleFilledAccents() {
+    let flash = ThemeCatalog.catppuccinLatte.flash
+    #expect(flash.backdropText == Color(red: 0.612, green: 0.627, blue: 0.690))
+    #expect(flash.matchText == Color(red: 0.447, green: 0.529, blue: 0.992))
+    #expect(flash.labelFill == Color(red: 0.251, green: 0.627, blue: 0.169))
+    #expect(flash.labelText == Color(red: 0.937, green: 0.945, blue: 0.961))
+    #expect(flash.activeLabelFill == Color(red: 1.000, green: 0.392, blue: 0.043))
+  }
+
+  @Test("Rosé Pine Dawn Flash labels use visible filled accents")
+  func rosePineDawnFlashLabelsUseVisibleFilledAccents() {
+    let flash = ThemeCatalog.rosePineDawn.flash
+    #expect(flash.backdropText == Color(red: 0.596, green: 0.576, blue: 0.647))
+    #expect(flash.matchText == Color(red: 0.565, green: 0.478, blue: 0.663))
+    #expect(flash.labelFill == Color(red: 0.706, green: 0.388, blue: 0.478))
+    #expect(flash.labelText == Color(red: 0.980, green: 0.957, blue: 0.929))
+    #expect(flash.activeLabelFill == Color(red: 0.918, green: 0.616, blue: 0.204))
+  }
+
   @Test("all dark themes have mode .dark; all light themes have mode .light")
   func themeModesAreConsistent() {
     for theme in ThemeCatalog.darkThemes {
