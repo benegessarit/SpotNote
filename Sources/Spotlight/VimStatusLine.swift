@@ -90,7 +90,7 @@ struct VimStatusLine: View {
     switch mode {
     case .normal: return "N"
     case .insert: return "I"
-    case .visualLine: return "V"
+    case .visualCharacter, .visualLine: return "V"
     }
   }
 

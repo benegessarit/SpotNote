@@ -23,6 +23,8 @@ extension PlaceholderTextView {
     let range = selectedRange
     guard range.length > 0 else { return }
     wrap(range: range, style: style, trimEdgeWhitespace: true)
+    visualCharacterAnchor = nil
+    visualCharacterCaret = nil
     visualLineAnchor = nil
     visualLineCaret = nil
     notifyVimModeChanged()

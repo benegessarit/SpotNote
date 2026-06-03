@@ -49,7 +49,7 @@ struct ThemeStatusLine: Equatable, Sendable {
     switch mode {
     case .normal: return normalFill
     case .insert: return insertFill
-    case .visualLine: return visualLineFill
+    case .visualCharacter, .visualLine: return visualLineFill
     }
   }
 
@@ -57,7 +57,7 @@ struct ThemeStatusLine: Equatable, Sendable {
     switch mode {
     case .normal: return normalText
     case .insert: return insertText
-    case .visualLine: return visualLineText
+    case .visualCharacter, .visualLine: return visualLineText
     }
   }
 

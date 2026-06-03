@@ -3,6 +3,7 @@ import Foundation
 enum VimMode: Equatable, Sendable {
   case normal
   case insert
+  case visualCharacter
   case visualLine
 }
 
@@ -58,6 +59,11 @@ enum VimAction: Equatable, Sendable {
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
   case gotoLine(Int)
+  case enterVisualCharacter
+  case extendVisualCharacter(Motion)
+  case yankVisualCharacter
+  case deleteVisualCharacterSelection
+  case changeVisualCharacterSelection
   case enterVisualLine
   case extendVisualLine(Motion)
   case yankVisualLine
@@ -82,6 +88,8 @@ final class VimEngine {
       return handleInsert(key: key)
     case .normal:
       return handleNormal(key: key)
+    case .visualCharacter:
+      return handleVisualCharacter(key: key)
     case .visualLine:
       return handleVisualLine(key: key)
     }
@@ -91,6 +99,10 @@ final class VimEngine {
     mode = .normal
     pendingBuffer = ""
     countAccumulator = 0
+  }
+
+  func setMode(_ newMode: VimMode) {
+    mode = newMode
   }
 
   private func handleInsert(key: String) -> VimAction {
@@ -186,15 +198,176 @@ final class VimEngine {
     }
 
     if let action = enterInsertAction(for: key) { return action }
+    if let action = visualModeAction(for: key) { return action }
     if let action = flashAction(for: key, count: count) { return action }
     switch key {
     case "x": return .deleteChar(count: count)
     case "D": return .deleteToEndOfLine
     case "u": return .undo(count: count)
+    default: return promptOrSearchAction(for: key)
+    }
+  }
+
+  private func enterInsertAction(for key: String) -> VimAction? {
+    switch key {
+    case "i":
+      mode = .insert
+      return .switchToInsert
+    case "a":
+      mode = .insert
+      return .composite([.moveCursor(.right(1)), .switchToInsert])
+    case "I":
+      mode = .insert
+      return .composite([.moveCursor(.firstNonBlank), .switchToInsert])
+    case "A":
+      mode = .insert
+      return .insertAtEndOfLine
+    case "o":
+      mode = .insert
+      return .openLineBelow
+    case "O":
+      mode = .insert
+      return .openLineAbove
+    default:
+      return nil
+    }
+  }
+
+  private func visualModeAction(for key: String) -> VimAction? {
+    switch key {
+    case "v":
+      mode = .visualCharacter
+      return .enterVisualCharacter
     case "V":
       mode = .visualLine
       return .enterVisualLine
-    default: return promptOrSearchAction(for: key)
+    default:
+      return nil
+    }
+  }
+
+  private func flashAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "s": return .enterFlash(.forward, count: count, scope: .document)
+    case "S": return .enterFlash(.backward, count: count, scope: .document)
+    case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
+    case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
+    case "K": return .enterLineFlash(count: count)
+    default: return nil
+    }
+  }
+
+  private func wrapStyle(for key: String) -> MarkdownWrapStyle? {
+    switch key {
+    case "b": return .bold
+    case "i": return .italic
+    default: return nil
+    }
+  }
+
+  private func promptOrSearchAction(for key: String) -> VimAction {
+    switch key {
+    case ":": return .enterCommand
+    case "/": return .enterSearch
+    case "n": return .findNext
+    case "N": return .findPrevious
+    default: return .none
+    }
+  }
+
+  // swiftlint:disable:next cyclomatic_complexity
+  private func motionForKey(_ key: String, count: Int) -> Motion? {
+    // #lizard forgives
+    switch key {
+    case "h": return .left(count)
+    case "l": return .right(count)
+    case "j": return .down(count)
+    case "k": return .up(count)
+    case "w": return .wordForward(count)
+    case "b": return .wordBackward(count)
+    case "e": return .wordEnd(count)
+    case "0": return .lineStart
+    case "$": return .lineEnd
+    case "^": return .firstNonBlank
+    case "G": return .documentEnd
+    default: return nil
+    }
+  }
+
+  private func accumulateCount(from key: String) -> Bool {
+    guard key.count == 1, let ch = key.first, ch.isNumber else { return false }
+    let digit = ch.wholeNumberValue ?? 0
+    guard digit > 0 || countAccumulator > 0 else { return false }
+    countAccumulator = countAccumulator * 10 + digit
+    return true
+  }
+
+  private var resolvedCount: Int { max(1, countAccumulator) }
+
+  private func clearAccumulator() {
+    countAccumulator = 0
+  }
+}
+
+extension VimEngine {
+  // MARK: - Visual character mode
+
+  private func handleVisualCharacter(key: String) -> VimAction {
+    if !pendingBuffer.isEmpty {
+      return handleVisualCharacterPending(key: key)
+    }
+    if accumulateCount(from: key) { return .none }
+    if key == "g" {
+      pendingBuffer = "g"
+      return .none
+    }
+
+    let count = resolvedCount
+    defer { clearAccumulator() }
+
+    if let motion = motionForKey(key, count: count) {
+      return .extendVisualCharacter(motion)
+    }
+    return visualCharacterCommand(for: key)
+  }
+
+  private func handleVisualCharacterPending(key: String) -> VimAction {
+    let buffered = pendingBuffer
+    pendingBuffer = ""
+    if buffered == "g", key == "g" {
+      clearAccumulator()
+      return .extendVisualCharacter(.documentStart)
+    }
+    if buffered == ";", let style = wrapStyle(for: key) {
+      clearAccumulator()
+      mode = .normal
+      return .wrapVisualLine(style)
+    }
+    return .none
+  }
+
+  private func visualCharacterCommand(for key: String) -> VimAction {
+    switch key {
+    case "v", "\u{1B}", "escape":
+      mode = .normal
+      return .switchToNormal
+    case "V":
+      mode = .visualLine
+      return .enterVisualLine
+    case ";":
+      pendingBuffer = ";"
+      return .none
+    case "y":
+      mode = .normal
+      return .yankVisualCharacter
+    case "d", "x":
+      mode = .normal
+      return .deleteVisualCharacterSelection
+    case "c", "s":
+      mode = .insert
+      return .changeVisualCharacterSelection
+    default:
+      return .none
     }
   }
 
@@ -270,114 +443,4 @@ final class VimEngine {
     }
   }
 
-  private func enterInsertAction(for key: String) -> VimAction? {
-    switch key {
-    case "i":
-      mode = .insert
-      return .switchToInsert
-    case "a":
-      mode = .insert
-      return .composite([.moveCursor(.right(1)), .switchToInsert])
-    case "I":
-      mode = .insert
-      return .composite([.moveCursor(.firstNonBlank), .switchToInsert])
-    case "A":
-      mode = .insert
-      return .insertAtEndOfLine
-    case "o":
-      mode = .insert
-      return .openLineBelow
-    case "O":
-      mode = .insert
-      return .openLineAbove
-    default:
-      return nil
-    }
-  }
-
-  private func flashAction(for key: String, count: Int) -> VimAction? {
-    switch key {
-    case "s": return .enterFlash(.forward, count: count, scope: .document)
-    case "S": return .enterFlash(.backward, count: count, scope: .document)
-    case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
-    case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
-    case "K": return .enterLineFlash(count: count)
-    default: return nil
-    }
-  }
-
-  private func wrapStyle(for key: String) -> MarkdownWrapStyle? {
-    switch key {
-    case "b": return .bold
-    case "i": return .italic
-    default: return nil
-    }
-  }
-
-  private func promptOrSearchAction(for key: String) -> VimAction {
-    switch key {
-    case ":": return .enterCommand
-    case "/": return .enterSearch
-    case "n": return .findNext
-    case "N": return .findPrevious
-    default: return .none
-    }
-  }
-
-  // swiftlint:disable:next cyclomatic_complexity
-  private func motionForKey(_ key: String, count: Int) -> Motion? {
-    // #lizard forgives
-    switch key {
-    case "h": return .left(count)
-    case "l": return .right(count)
-    case "j": return .down(count)
-    case "k": return .up(count)
-    case "w": return .wordForward(count)
-    case "b": return .wordBackward(count)
-    case "e": return .wordEnd(count)
-    case "0": return .lineStart
-    case "$": return .lineEnd
-    case "^": return .firstNonBlank
-    case "G": return .documentEnd
-    default: return nil
-    }
-  }
-
-  private var resolvedCount: Int { max(1, countAccumulator) }
-
-  private func clearAccumulator() {
-    countAccumulator = 0
-  }
-}
-
-private enum TextObjectOperation { case change, delete }
-private enum TextObjectScope { case inner, around }
-
-extension VimEngine {
-  private func pendingTextObjectAction(
-    key: String,
-    operation: TextObjectOperation,
-    scope: TextObjectScope
-  ) -> VimAction {
-    guard let object = textObject(for: key, scope: scope) else { return .none }
-    switch operation {
-    case .change:
-      mode = .insert
-      return .changeTextObject(object)
-    case .delete:
-      return .deleteTextObject(object)
-    }
-  }
-
-  private func textObject(for key: String, scope: TextObjectScope) -> TextObject? {
-    switch (scope, key) {
-    case (.inner, "w"): return .innerWord
-    case (.around, "w"): return .aroundWord
-    case (.inner, "s"): return .innerSentence
-    case (.around, "s"): return .aroundSentence
-    case (.inner, "p"): return .innerParagraph
-    case (.around, "p"): return .aroundParagraph
-    default: return nil
-    }
-  }
 }

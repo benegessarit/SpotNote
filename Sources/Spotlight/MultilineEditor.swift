@@ -2,6 +2,12 @@
 import AppKit
 import SwiftUI
 
+private enum VimWordKind {
+  case keyword
+  case punctuation
+  case whitespace
+}
+
 /// The HUD's text surface -- `NSTextView` in an `NSScrollView` with a
 /// custom `NSRulerView` line-number gutter.
 ///
@@ -491,6 +497,14 @@ final class PlaceholderTextView: NSTextView {
   var checkboxUncheckedColor: NSColor = .secondaryLabelColor.withAlphaComponent(0.6)
 
   var copyButtonClearance: CGFloat = 0
+  /// Caret position captured when entering characterwise visual mode.
+  /// The rendered selection spans this anchor through the moving visual
+  /// caret, including the character under that caret like Vim's default
+  /// inclusive visual selection.
+  var visualCharacterAnchor: Int?
+  /// Live moving end for characterwise visual mode. AppKit selections are
+  /// unordered ranges, so this preserves which side motions should extend.
+  var visualCharacterCaret: Int?
   /// Caret position captured when entering visual line mode. The
   /// rendered selection always spans full lines from this anchor to
   /// wherever the caret currently sits, so motions just move the
@@ -523,6 +537,10 @@ final class PlaceholderTextView: NSTextView {
         if vimEngine == nil { vimEngine = VimEngine() }
       } else {
         vimEngine = nil
+        visualCharacterAnchor = nil
+        visualCharacterCaret = nil
+        visualLineAnchor = nil
+        visualLineCaret = nil
         clearFlashHints()
       }
       notifyVimModeChanged()
@@ -669,6 +687,7 @@ final class PlaceholderTextView: NSTextView {
       return
     }
     switch motion {
+    case .wordEnd(let count): moveToWordEnd(count)
     case .lineStart: moveToBeginningOfLine(self)
     case .lineEnd: moveToEndOfLine(self)
     case .firstNonBlank: moveToFirstNonBlank()
@@ -685,11 +704,54 @@ final class PlaceholderTextView: NSTextView {
     switch motion {
     case .left(let count): return (moveBackward(_:), count)
     case .right(let count): return (moveForward(_:), count)
-    case .wordForward(let count), .wordEnd(let count):
-      return (moveWordForward(_:), count)
+    case .wordForward(let count): return (moveWordForward(_:), count)
     case .wordBackward(let count): return (moveWordBackward(_:), count)
     default: return nil
     }
+  }
+
+  private func moveToWordEnd(_ count: Int) {
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    var cursor = min(selectedRange.location, nsString.length - 1)
+    for _ in 0..<max(1, count) {
+      cursor = wordEndLocation(from: cursor, in: nsString)
+    }
+    setInsertionPoint(cursor)
+  }
+
+  private func wordEndLocation(from location: Int, in nsString: NSString) -> Int {
+    var cursor = min(location, nsString.length - 1)
+    if cursor < nsString.length - 1, isAtEndOfWordRun(cursor, in: nsString) {
+      cursor += 1
+    }
+    while cursor < nsString.length - 1, isVimWhitespace(nsString.character(at: cursor)) {
+      cursor += 1
+    }
+    let kind = vimWordKind(nsString.character(at: cursor))
+    while cursor < nsString.length - 1, vimWordKind(nsString.character(at: cursor + 1)) == kind {
+      cursor += 1
+    }
+    return cursor
+  }
+
+  private func isAtEndOfWordRun(_ location: Int, in nsString: NSString) -> Bool {
+    let kind = vimWordKind(nsString.character(at: location))
+    guard kind != .whitespace else { return false }
+    guard location < nsString.length - 1 else { return true }
+    return vimWordKind(nsString.character(at: location + 1)) != kind
+  }
+
+  private func vimWordKind(_ ch: unichar) -> VimWordKind {
+    if isVimWhitespace(ch) { return .whitespace }
+    if ch == 0x5F { return .keyword }
+    guard let scalar = UnicodeScalar(ch) else { return .punctuation }
+    return CharacterSet.alphanumerics.contains(scalar) ? .keyword : .punctuation
+  }
+
+  private func isVimWhitespace(_ ch: unichar) -> Bool {
+    guard let scalar = UnicodeScalar(ch) else { return false }
+    return CharacterSet.whitespacesAndNewlines.contains(scalar)
   }
 
   private func logicalLineDelta(for motion: Motion) -> Int? {
@@ -754,10 +816,16 @@ final class PlaceholderTextView: NSTextView {
     executeMotion(motion)
     let after = selectedRange.location
     let start = min(before, after)
-    let length = abs(after - before)
+    let length = deleteMotionLength(from: before, to: after, motion: motion)
     guard length > 0 else { return }
     setSelectedRange(NSRange(location: start, length: 0))
     insertText("", replacementRange: NSRange(location: start, length: length))
+  }
+
+  private func deleteMotionLength(from before: Int, to after: Int, motion: Motion) -> Int {
+    let baseLength = abs(after - before)
+    if case .wordEnd = motion, after >= before { return baseLength + 1 }
+    return baseLength
   }
 
   func executeDeleteLines(_ count: Int) {
