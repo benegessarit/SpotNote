@@ -30,6 +30,22 @@ struct MultilineEditorCaretTests {
     #expect(invalidation.width >= textView.normalModeInsertionPointWidth() * 2)
   }
 
+  @Test("normal mode selection changes turn the block cursor back on before the next blink")
+  func normalModeSelectionChangesTurnBlockCursorBackOnBeforeBlink() {
+    let textView = makeCaretTextView(text: "Scan prenup and send\nPay Emanuel dues")
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    let currentRect = textView.insertionPointDisplayRect(
+      for: NSRect(x: 0, y: 0, width: 1, height: EditorMetrics.lineHeight),
+      turnedOn: true
+    )
+    textView.drawInsertionPoint(in: currentRect, color: .labelColor, turnedOn: false)
+
+    textView.setSelectedRange(NSRange(location: 24, length: 0))
+
+    #expect(normalModeInsertionPointVisible(in: textView))
+  }
+
   private func makeCaretTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(
       frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 160)
@@ -50,5 +66,11 @@ struct MultilineEditorCaretTests {
     storage.addLayoutManager(fixed)
     fixed.addTextContainer(container)
     return textView
+  }
+
+  private func normalModeInsertionPointVisible(in textView: PlaceholderTextView) -> Bool {
+    Mirror(reflecting: textView).children.first {
+      $0.label == "normalModeInsertionPointVisible"
+    }?.value as? Bool ?? false
   }
 }

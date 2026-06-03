@@ -511,6 +511,9 @@ final class PlaceholderTextView: NSTextView {
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
+  private var normalModeInsertionPointVisible = true
+  private var normalModeCaretDrawnThisPass = false
+  private var isRefreshingNormalModeInsertionPoint = false
   private var isPasting = false
   private var suppressedOccurrences: [SuppressedTokenOccurrence] = []
 
@@ -525,6 +528,26 @@ final class PlaceholderTextView: NSTextView {
       notifyVimModeChanged()
       needsDisplay = true
     }
+  }
+
+  override func setSelectedRange(_ charRange: NSRange) {
+    let previousRect = currentNormalModeInsertionPointDisplayRect()
+    super.setSelectedRange(charRange)
+    refreshNormalModeInsertionPointDisplay(previousRect: previousRect)
+  }
+
+  override func setSelectedRange(
+    _ charRange: NSRange,
+    affinity selectionAffinity: NSSelectionAffinity,
+    stillSelecting stillSelectingFlag: Bool
+  ) {
+    let previousRect = currentNormalModeInsertionPointDisplayRect()
+    super.setSelectedRange(
+      charRange,
+      affinity: selectionAffinity,
+      stillSelecting: stillSelectingFlag
+    )
+    refreshNormalModeInsertionPointDisplay(previousRect: previousRect)
   }
 
   override func layout() {
@@ -781,9 +804,11 @@ final class PlaceholderTextView: NSTextView {
   }
 
   override func draw(_ dirtyRect: NSRect) {
+    normalModeCaretDrawnThisPass = false
     super.draw(dirtyRect)
     drawCheckboxSymbols(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
+    drawNormalModeInsertionPointOverlay(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [
@@ -842,6 +867,65 @@ final class PlaceholderTextView: NSTextView {
     }
   }
 
+  private func currentNormalModeInsertionPointDisplayRect() -> NSRect? {
+    guard vimEngine?.mode == .normal, selectedRange.length == 0 else { return nil }
+    let thinRect = NSRect(
+      x: textContainerOrigin.x,
+      y: textContainerOrigin.y,
+      width: 1,
+      height: EditorMetrics.lineHeight
+    )
+    return insertionPointDisplayRect(for: thinRect, turnedOn: true)
+  }
+
+  private func refreshNormalModeInsertionPointDisplay(previousRect: NSRect?) {
+    guard !isRefreshingNormalModeInsertionPoint,
+      vimEngine?.mode == .normal,
+      selectedRange.length == 0
+    else { return }
+    isRefreshingNormalModeInsertionPoint = true
+    defer { isRefreshingNormalModeInsertionPoint = false }
+
+    normalModeInsertionPointVisible = true
+    if let previousRect {
+      super.setNeedsDisplay(insertionPointInvalidationRect(for: previousRect), avoidAdditionalLayout: false)
+    }
+    if let lastInsertionPointDisplayRect {
+      super.setNeedsDisplay(
+        insertionPointInvalidationRect(for: lastInsertionPointDisplayRect),
+        avoidAdditionalLayout: false
+      )
+    }
+    guard let currentRect = currentNormalModeInsertionPointDisplayRect() else { return }
+    super.setNeedsDisplay(insertionPointInvalidationRect(for: currentRect), avoidAdditionalLayout: false)
+    if window != nil {
+      displayIfNeeded()
+    }
+  }
+
+  private func drawNormalModeInsertionPointOverlay(in dirtyRect: NSRect) {
+    guard normalModeInsertionPointVisible,
+      !normalModeCaretDrawnThisPass,
+      shouldDrawInsertionPoint,
+      let displayRect = currentNormalModeInsertionPointDisplayRect(),
+      dirtyRect.intersects(displayRect)
+    else { return }
+    drawNormalModeInsertionPoint(in: displayRect, color: insertionPointColor)
+  }
+
+  private func drawNormalModeInsertionPoint(
+    in rect: NSRect,
+    color: NSColor,
+    recordAsLast: Bool = true
+  ) {
+    if recordAsLast {
+      lastInsertionPointDisplayRect = rect
+    }
+    normalModeCaretDrawnThisPass = true
+    color.withAlphaComponent(0.82).setFill()
+    rect.fill()
+  }
+
   /// Shrink the blinking caret to the font's ascender-to-descender height
   /// rather than the full 22pt forced-line-height fragment. The fixed
   /// layout manager centers glyphs inside that fragment, so the caret uses
@@ -849,13 +933,12 @@ final class PlaceholderTextView: NSTextView {
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
     let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
+      normalModeInsertionPointVisible = flag
       guard flag else {
         invalidateInsertionPointRect(displayRect)
         return
       }
-      lastInsertionPointDisplayRect = displayRect
-      color.withAlphaComponent(0.82).setFill()
-      displayRect.fill()
+      drawNormalModeInsertionPoint(in: displayRect, color: color)
     } else {
       super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
       if flag {
