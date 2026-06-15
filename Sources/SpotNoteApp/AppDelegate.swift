@@ -1,9 +1,7 @@
 // swiftlint:disable function_body_length
 import AppKit
-import Carbon.HIToolbox
 import Combine
 import Core
-import CoreServices
 import Spotlight
 
 @MainActor
@@ -120,7 +118,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       .store(in: &cancellables)
 
     let didPresentOnboarding = presentOnboardingIfNeeded()
-    if !didPresentOnboarding && !Self.wasLaunchedAsBackgroundItem {
+    // SpotNote is a HUD-first app: opening the app should always surface the
+    // note window. The previous Apple-event launch-kind check could overfire
+    // under LaunchServices and leave a live menu/background process with no
+    // visible HUD.
+    if !didPresentOnboarding {
       spotlight.openHUD()
     }
   }
@@ -172,17 +174,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       spotlight.openHUD()
     }
     return true
-  }
-
-  private static var wasLaunchedAsBackgroundItem: Bool {
-    guard
-      let event = NSAppleEventManager.shared().currentAppleEvent,
-      event.eventID == kAEOpenApplication,
-      let launchKind = event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue
-    else {
-      return false
-    }
-    return launchKind == keyAELaunchedAsLogInItem || launchKind == keyAELaunchedAsServiceItem
   }
 
   func applicationWillTerminate(_ notification: Notification) {
