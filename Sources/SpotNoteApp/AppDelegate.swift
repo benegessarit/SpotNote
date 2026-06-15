@@ -40,7 +40,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var cancellables: Set<AnyCancellable> = []
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    DockIconSwitcher.applyVisibility(preferences.showDockIcon)
     MainMenu.install(onOpenSettings: { [weak self] in self?.showSettings() })
 
     enableLaunchAtLoginIfFirstRun()
@@ -125,6 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     if !didPresentOnboarding {
       spotlight.openHUD()
     }
+    // Hide from the Dock only after the initial HUD/onboarding window has had
+    // a chance to become visible. Setting `.accessory` before `openHUD()` makes
+    // LaunchServices treat a normal app open like a background status-item
+    // launch, which prevents the panel from appearing.
+    DockIconSwitcher.applyVisibility(preferences.showDockIcon)
   }
 
   private func presentOnboardingIfNeeded() -> Bool {
