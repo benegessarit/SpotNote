@@ -107,4 +107,10 @@ struct ShortcutStoreTests {
     )
     #expect(chord.displayString == "⌃⌥⇧⌘Space")
   }
+
+  @Test("checklist shortcut help describes visible Markdown syntax")
+  func checklistShortcutHelpDescribesMarkdownSyntax() {
+    #expect(ShortcutAction.insertChecklist.subtitle.contains("[ ]"))
+    #expect(!ShortcutAction.insertChecklist.subtitle.contains("@cl"))
+  }
 }

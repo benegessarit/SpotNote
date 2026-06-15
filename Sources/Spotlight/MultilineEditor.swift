@@ -383,13 +383,6 @@ struct MultilineEditor: NSViewRepresentable {
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
     textView.editorTextAttributes = textAttributes
-    textView.checkboxCheckedColor = .systemGreen.withAlphaComponent(0.95)
-    // Derive the unchecked border from the text colour rather than the placeholder.
-    // Dark themes (e.g. Obsidian): text is near-white → 0.50 opacity = visible light border.
-    // Light themes: text is near-black → 0.65 opacity = a dark, legible stroke.
-    textView.checkboxUncheckedColor =
-      newTextColor
-      .withAlphaComponent(theme.mode == .dark ? 0.50 : 0.65)
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
       ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
@@ -410,7 +403,6 @@ struct MultilineEditor: NSViewRepresentable {
     let fixed = FixedLineHeightLayoutManager()
     fixed.fixedLineHeight = EditorMetrics.lineHeight
     fixed.editorFont = font
-    fixed.delegate = fixed  // self-delegate for glyph-advance normalisation
     if let existing = storage.layoutManagers.first {
       storage.removeLayoutManager(existing)
     }
@@ -487,8 +479,6 @@ final class PlaceholderTextView: NSTextView {
   weak var suggestionField: SuggestionView?
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
-  var checkboxCheckedColor: NSColor = .systemGreen.withAlphaComponent(0.95)
-  var checkboxUncheckedColor: NSColor = .secondaryLabelColor.withAlphaComponent(0.6)
 
   var copyButtonClearance: CGFloat = 0
   /// Caret position captured when entering visual line mode. The
@@ -835,7 +825,6 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
-    drawCheckboxSymbols(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [
@@ -852,46 +841,6 @@ final class PlaceholderTextView: NSTextView {
       y: drawY
     )
     (placeholderString as NSString).draw(at: origin, withAttributes: attrs)
-  }
-
-  // round(22 × 0.64) = 14 pt — (22 − 14) / 2 = 4 pt headroom each side, no clipping.
-  private var checkboxSymbolSize: CGFloat { round(EditorMetrics.lineHeight * 0.64) }
-
-  /// Draws an SF Symbol in place of each ☐/☑ glyph (which CodeStyler
-  /// hides with `.foregroundColor = .clear`). Called from `draw(_:)` so
-  /// it happens in the same graphics context as the rest of the text view.
-  private func drawCheckboxSymbols(in dirtyRect: NSRect) {
-    guard let lm = layoutManager, let tc = textContainer else { return }
-    let nsString = string as NSString
-    guard nsString.length > 0 else { return }
-    lm.ensureLayout(for: tc)
-    let size = checkboxSymbolSize
-    for charIdx in 0..<nsString.length {
-      let ch = nsString.character(at: charIdx)
-      guard ch == 0x2610 || ch == 0x2611 else { continue }
-      let glyphIdx = lm.glyphIndexForCharacter(at: charIdx)
-      let frag = lm.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: nil)
-      guard !frag.isEmpty else { continue }
-      let fragTopInView = textContainerOrigin.y + frag.origin.y
-      guard fragTopInView + frag.height > dirtyRect.minY,
-        fragTopInView < dirtyRect.maxY
-      else { continue }
-      let isChecked = ch == 0x2611
-      // checkmark.square = outline square + checkmark, no fill.
-      // Single palette colour renders both the square border and the checkmark.
-      let symbolName = isChecked ? "checkmark.square" : "square"
-      let color = isChecked ? checkboxCheckedColor : checkboxUncheckedColor
-      let cfg = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
-        .applying(.init(paletteColors: [color]))
-      guard
-        let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-          .withSymbolConfiguration(cfg)
-      else { continue }
-      let glyphLoc = lm.location(forGlyphAt: glyphIdx)
-      let drawX = textContainerOrigin.x + frag.origin.x + glyphLoc.x
-      let drawY = fragTopInView + (frag.height - size) / 2
-      img.draw(in: NSRect(x: drawX, y: drawY, width: size, height: size))
-    }
   }
 
   /// Shrink the blinking caret to the font's ascender-to-descender height
@@ -1071,12 +1020,12 @@ final class PlaceholderTextView: NSTextView {
         !isSuppressed(literal: "@cl", range: tokenRange, in: originalNS),
         !originalNS.lineContainsCheckbox(at: tokenRange.location)
       {
-        let replacementText = "☐"
+        let replacementText = ChecklistMarker.unchecked
         updated = originalNS.replacingCharacters(in: tokenRange, with: replacementText)
         renderedToken = RenderedToken(
           kind: .checklist,
           tokenLiteral: "@cl",
-          reversionText: "[ ]",
+          reversionText: ChecklistMarker.unchecked,
           renderedText: replacementText,
           renderedRange: NSRange(
             location: tokenRange.location,
@@ -1168,8 +1117,7 @@ final class PlaceholderTextView: NSTextView {
   }
 
   /// Toggles the checkbox only when `containerPoint` lands within the
-  /// SF Symbol's drawn rect ± `hitPadding` horizontally (full line height
-  /// vertically — the user doesn't need sub-pixel vertical precision).
+  /// visible Markdown marker's glyph rect ± `hitPadding` horizontally.
   /// Clicking anywhere else on the line falls through to normal cursor
   /// placement via `super.mouseDown`.
   private func toggleChecklistAtPoint(_ containerPoint: NSPoint) -> Bool {
@@ -1177,62 +1125,38 @@ final class PlaceholderTextView: NSTextView {
     let nsString = string as NSString
     guard nsString.length > 0 else { return false }
     lm.ensureLayout(for: tc)
-    let size = checkboxSymbolSize
     let hitPadding: CGFloat = 6
-    for charIdx in 0..<nsString.length {
-      let ch = nsString.character(at: charIdx)
-      guard ch == 0x2610 || ch == 0x2611 else { continue }
-      let glyphIdx = lm.glyphIndexForCharacter(at: charIdx)
-      let frag = lm.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: nil)
-      guard !frag.isEmpty else { continue }
-      let glyphLoc = lm.location(forGlyphAt: glyphIdx)
-      let symX = frag.origin.x + glyphLoc.x
+    for match in ChecklistMarker.matches(in: string) {
+      let glyphRange = lm.glyphRange(forCharacterRange: match.range, actualCharacterRange: nil)
+      guard glyphRange.length > 0 else { continue }
+      let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
+      guard !rect.isEmpty else { continue }
       let hitRect = NSRect(
-        x: symX - hitPadding,
-        y: frag.origin.y,
-        width: size + hitPadding * 2,
-        height: frag.height
+        x: rect.minX - hitPadding,
+        y: rect.minY,
+        width: rect.width + hitPadding * 2,
+        height: max(rect.height, EditorMetrics.lineHeight)
       )
       guard hitRect.contains(containerPoint) else { continue }
-      let line = nsString.lineRange(for: NSRange(location: charIdx, length: 0))
-      return toggleChecklist(in: line, targetOffset: charIdx - line.location)
+      let line = nsString.lineRange(for: NSRange(location: match.range.location, length: 0))
+      return toggleChecklist(in: line, targetOffset: match.range.location - line.location, cycle: false)
     }
     return false
   }
 
   @discardableResult
-  private func toggleChecklist(in lineRange: NSRange, targetOffset: Int) -> Bool {
+  private func toggleChecklist(in lineRange: NSRange, targetOffset: Int, cycle: Bool = true) -> Bool {
     let nsString = string as NSString
     let lineText = nsString.substring(with: lineRange)
-    guard let markerRange = checklistMarkerRange(in: lineText, near: targetOffset) else { return false }
-    let nsLine = lineText as NSString
-    let marker = nsLine.substring(with: markerRange)
-    let replacement = marker == "☐" ? "☑" : "☐"
-    let absoluteRange = NSRange(location: lineRange.location + markerRange.location, length: markerRange.length)
-    if shouldChangeText(in: absoluteRange, replacementString: replacement) {
-      replaceCharacters(in: absoluteRange, with: replacement)
+    guard let match = ChecklistMarker.match(in: lineText, near: targetOffset) else { return false }
+    let edit = cycle ? ChecklistMarker.cycleEdit(for: match, in: lineText) : ChecklistMarker.toggleEdit(for: match)
+    let absoluteRange = NSRange(location: lineRange.location + edit.range.location, length: edit.range.length)
+    if shouldChangeText(in: absoluteRange, replacementString: edit.replacement) {
+      replaceCharacters(in: absoluteRange, with: edit.replacement)
       didChangeText()
       return true
     }
     return false
-  }
-
-  private func checklistMarkerRange(in lineText: String, near targetOffset: Int) -> NSRange? {
-    let nsLine = lineText as NSString
-    var matches: [NSRange] = []
-    for index in 0..<nsLine.length {
-      let character = nsLine.character(at: index)
-      if character == 0x2610 || character == 0x2611 {
-        matches.append(NSRange(location: index, length: 1))
-      }
-    }
-    if matches.isEmpty { return nil }
-    if let containing = matches.first(where: { NSLocationInRange(targetOffset, $0) }) {
-      return containing
-    }
-    return matches.min { lhs, rhs in
-      abs(lhs.location - targetOffset) < abs(rhs.location - targetOffset)
-    }
   }
 
   private func stabilizeTypingAttributes() {
@@ -1247,16 +1171,8 @@ final class PlaceholderTextView: NSTextView {
     }
     let nsString = string as NSString
     let raw = nsString.substring(with: selectedRange)
-    let lines = raw.components(separatedBy: "\n").map { line -> String in
-      if line.hasPrefix("☑ ") { return "[x] " + String(line.dropFirst(2)) }
-      if line == "☑" { return "[x]" }
-      if line.hasPrefix("☐") { return "[ ]" + String(line.dropFirst(2)) }
-      if line == "☐" { return "[ ]" }
-      return line
-    }
-    let mapped = lines.joined(separator: "\n")
     NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(mapped, forType: .string)
+    NSPasteboard.general.setString(raw, forType: .string)
   }
 
   private func isSuppressed(literal: String, range: NSRange, in nsString: NSString) -> Bool {
@@ -1302,6 +1218,59 @@ extension String {
   }
 }
 
+private enum ChecklistMarker {
+  static let unchecked = "[ ]"
+  static let checked = "[x]"
+
+  struct Match {
+    let range: NSRange
+    let isChecked: Bool
+  }
+
+  struct Edit {
+    let range: NSRange
+    let replacement: String
+  }
+
+  private static let regex = try? NSRegularExpression(pattern: #"\[( |x)\]"#)
+
+  static func matches(in text: String) -> [Match] {
+    let nsText = text as NSString
+    let fullRange = NSRange(location: 0, length: nsText.length)
+    return regex?.matches(in: text, range: fullRange).compactMap { result in
+      guard result.numberOfRanges > 1 else { return nil }
+      let marker = nsText.substring(with: result.range)
+      return Match(range: result.range, isChecked: marker == checked)
+    } ?? []
+  }
+
+  static func match(in lineText: String, near targetOffset: Int) -> Match? {
+    let found = matches(in: lineText)
+    guard !found.isEmpty else { return nil }
+    if let containing = found.first(where: { NSLocationInRange(targetOffset, $0.range) }) {
+      return containing
+    }
+    return found.min { lhs, rhs in
+      abs(lhs.range.location - targetOffset) < abs(rhs.range.location - targetOffset)
+    }
+  }
+
+  static func toggleEdit(for match: Match) -> Edit {
+    Edit(range: match.range, replacement: match.isChecked ? unchecked : checked)
+  }
+
+  static func cycleEdit(for match: Match, in lineText: String) -> Edit {
+    guard match.isChecked else { return toggleEdit(for: match) }
+    let nsLine = lineText as NSString
+    var deleteRange = match.range
+    let after = match.range.location + match.range.length
+    if after < nsLine.length, nsLine.substring(with: NSRange(location: after, length: 1)) == " " {
+      deleteRange.length += 1
+    }
+    return Edit(range: deleteRange, replacement: "")
+  }
+}
+
 extension NSString {
   func trailingTokenRange(_ token: String, endingAt caret: Int) -> NSRange? {
     let tokenLen = (token as NSString).length
@@ -1314,11 +1283,8 @@ extension NSString {
 
   func lineContainsCheckbox(at position: Int) -> Bool {
     let line = lineRange(for: NSRange(location: position, length: 0))
-    for i in 0..<line.length {
-      let ch = character(at: line.location + i)
-      if ch == 0x2610 || ch == 0x2611 { return true }
-    }
-    return false
+    let lineText = substring(with: line)
+    return ChecklistMarker.match(in: lineText, near: 0) != nil
   }
 }
 
@@ -1363,8 +1329,8 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
   var fixedLineHeight: CGFloat = EditorMetrics.lineHeight
   /// Cached editor font used for baseline centering. Avoids looking up
   /// `at: 0` from storage on every glyph placement, which is fragile
-  /// when position 0 holds a Unicode character (e.g. ☐) that triggers
-  /// system font substitution and produces wrong ascender metrics.
+  /// when position 0 falls back to a different font metric than the
+  /// editor font.
   var editorFont: NSFont = .systemFont(ofSize: EditorMetrics.fontSize)
 
   override func setLineFragmentRect(
@@ -1376,7 +1342,7 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
     // Derive origin.y from the previously stored rect so the typesetter's
     // internal Y-tracker (which advances by the glyph's *natural* height,
     // not our overridden height) cannot push subsequent lines off-grid.
-    // Without this, a substituted-font glyph on line N (e.g. ☐) causes
+    // Without this, a substituted-font glyph on line N can cause
     // line N+1 to land at natural_height instead of fixedLineHeight, and
     // the next partial re-layout corrects it — producing the visible shift.
     if glyphRange.location == 0 {
@@ -1425,72 +1391,4 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
     )
   }
 
-}
-
-// MARK: - FixedLineHeightLayoutManager + NSLayoutManagerDelegate
-
-/// Uses self-delegation to normalise the glyph advance of ☑ (U+2611) to
-/// match ☐ (U+2610). Both characters are rendered invisible by CodeStyler
-/// (`.foregroundColor = .clear`) and replaced visually with SF Symbols, so
-/// the actual glyph drawn is irrelevant. What matters is that both share
-/// the same advance width so toggling a checkbox never shifts text to its right.
-extension FixedLineHeightLayoutManager: NSLayoutManagerDelegate {
-  // swiftlint:disable:next function_parameter_count
-  func layoutManager(
-    _ layoutManager: NSLayoutManager,
-    shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
-    properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
-    characterIndexes charIndexes: UnsafePointer<Int>,
-    font aFont: NSFont,
-    forGlyphRange glyphRange: NSRange
-  ) -> Int {
-    guard let storage = textStorage else { return 0 }
-    let nsString = storage.string as NSString
-
-    // Fast-path: no ☑ in range → nothing to substitute
-    var hasChecked = false
-    for i in 0..<glyphRange.length where charIndexes[i] < nsString.length {
-      if nsString.character(at: charIndexes[i]) == 0x2611 {
-        hasChecked = true
-        break
-      }
-    }
-    guard hasChecked else { return 0 }
-
-    // Resolve ☐'s glyph in the current font so we can reuse it for ☑
-    var uncheckedChar: UniChar = 0x2610
-    var uncheckedGlyph: CGGlyph = 0
-    guard CTFontGetGlyphsForCharacters(aFont as CTFont, &uncheckedChar, &uncheckedGlyph, 1),
-      uncheckedGlyph != 0
-    else { return 0 }
-
-    var newGlyphs = Array(UnsafeBufferPointer(start: glyphs, count: glyphRange.length))
-    for i in 0..<glyphRange.length {
-      guard charIndexes[i] < nsString.length,
-        nsString.character(at: charIndexes[i]) == 0x2611
-      else { continue }
-      newGlyphs[i] = uncheckedGlyph
-    }
-
-    let propsArr = Array(UnsafeBufferPointer(start: props, count: glyphRange.length))
-    let charArr = Array(UnsafeBufferPointer(start: charIndexes, count: glyphRange.length))
-    newGlyphs.withUnsafeBufferPointer { gp in
-      propsArr.withUnsafeBufferPointer { pp in
-        charArr.withUnsafeBufferPointer { cp in
-          guard let glyphBase = gp.baseAddress,
-            let propertyBase = pp.baseAddress,
-            let characterBase = cp.baseAddress
-          else { return }
-          setGlyphs(
-            glyphBase,
-            properties: propertyBase,
-            characterIndexes: characterBase,
-            font: aFont,
-            forGlyphRange: glyphRange
-          )
-        }
-      }
-    }
-    return glyphRange.length
-  }
 }

@@ -63,12 +63,12 @@ struct MultilineEditorTokenTests {
 
     insert("@cl", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
-    #expect(boundText == "☐")
+    #expect(boundText == "[ ]")
 
     insert("\n", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
 
-    #expect(boundText == "☐\n")
+    #expect(boundText == "[ ]\n")
     #expect(heights.last == EditorMetrics.panelHeight(forLines: 2, maxLines: 4))
   }
 
@@ -321,24 +321,38 @@ private func pressBackspace(in textView: PlaceholderTextView) {
 @MainActor
 @Suite("Multiline editor embedded checklist toggles")
 struct MultilineEditorChecklistToggleTests {
-  @Test("shortcut toggles checklist marker in the middle of a line")
-  func shortcutTogglesEmbeddedChecklistMarker() {
-    let textView = makeChecklistTextView(text: "prefix ☐ cursor placement")
-    textView.setSelectedRange(NSRange(location: ("prefix ☐" as NSString).length, length: 0))
+  @Test("shortcut cycles Markdown checklist marker in the middle of a line")
+  func shortcutCyclesEmbeddedMarkdownChecklistMarker() {
+    let textView = makeChecklistTextView(text: "prefix [ ] cursor placement")
+    textView.setSelectedRange(NSRange(location: ("prefix [ ]" as NSString).length, length: 0))
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "prefix ☑ cursor placement")
+    #expect(textView.string == "prefix [x] cursor placement")
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "prefix cursor placement")
   }
 
-  @Test("click toggles checklist marker in the middle of a line")
-  func clickTogglesEmbeddedChecklistMarker() throws {
-    let textView = makeChecklistTextView(text: "prefix ☐ cursor placement")
+  @Test("click toggles Markdown checklist marker in the middle of a line")
+  func clickTogglesEmbeddedMarkdownChecklistMarker() throws {
+    let textView = makeChecklistTextView(text: "prefix [ ] cursor placement")
     let markerLocation = ("prefix " as NSString).length
 
     try clickCharacter(at: markerLocation, in: textView)
 
-    #expect(textView.string == "prefix ☑ cursor placement")
+    #expect(textView.string == "prefix [x] cursor placement")
+  }
+
+  @Test("copy preserves literal Markdown checklist markers")
+  func copyPreservesMarkdownChecklistMarkers() {
+    let textView = makeChecklistTextView(text: "[ ] one\n[x] two")
+    textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
+
+    textView.copy(nil)
+
+    #expect(NSPasteboard.general.string(forType: .string) == "[ ] one\n[x] two")
   }
 
   @Test("caret erase uses previously painted rect after selection moves")

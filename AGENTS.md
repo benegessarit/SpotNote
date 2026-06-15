@@ -15,7 +15,7 @@ The local David build intentionally differs from upstream SpotNote:
 - Catppuccin and Rosé Pine themes are present in `Sources/Spotlight/Theme.swift`.
 - Linear handoff is routed through `Sources/Spotlight/ScratchpadHandoff.swift` to the local Hermes ingress endpoint.
 - Hermes feedback uses `Sources/Spotlight/HermesToastView.swift` plus `Sources/Spotlight/Resources/HermesLogo.png`.
-- The old Vim statusline is removed: `SpotlightRootView.vimBarHeight == 0`, and no `VimStatusLine.swift` source file should exist.
+- The old Vim statusline is removed entirely: no `vimBarHeight` constant and no `VimStatusLine.swift` source file should exist.
 - The HUD opens 30% of the available rightward travel from center, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsThirtyPercentRightOfCenter`.
 
 ## Safe edit flow

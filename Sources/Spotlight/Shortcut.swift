@@ -121,7 +121,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .appendToLastNote:
       return "Summon the HUD on the most recently edited note with the caret already at the end."
     case .insertTodayBadge: return "Insert @today token at the caret."
-    case .insertChecklist: return "Insert @cl token at the caret."
+    case .insertChecklist: return "Insert a visible [ ] checklist marker at the caret."
     case .toggleChecklist: return "Toggle the current checklist item between empty and checked."
     case .sendToLinear: return "Create one Linear Triage task from the current line, then delete it after handoff."
     case .newChat: return "Start a fresh blank note."

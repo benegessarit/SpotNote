@@ -46,7 +46,9 @@ require_file "Tests/SpotlightTests/ScratchpadHandoffTests.swift"
 require_file "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 
 [[ ! -e "$ROOT/Sources/Spotlight/VimStatusLine.swift" ]] || fail "statusline source still exists"
-require_grep "static let vimBarHeight: CGFloat = 0" "Sources/Spotlight/SpotlightRootView.swift"
+if /usr/bin/grep -R -F -- "vimBarHeight" "$ROOT/Sources" "$ROOT/Tests" >/dev/null; then
+  fail "statusline height constant still referenced"
+fi
 require_grep "catppuccin-frappe" "Sources/Spotlight/Theme.swift"
 require_grep "rose-pine-moonlight" "Sources/Spotlight/Theme.swift"
 require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swift"

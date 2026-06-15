@@ -5,12 +5,6 @@ import Testing
 
 @Suite("HUDFrameSolver -- anchoring policy for the resizing HUD panel")
 struct HUDFrameSolverTests {
-  @Test("vim mode does not reserve statusline chrome")
-  @MainActor
-  func vimModeStatuslineChromeIsRemoved() {
-    #expect(SpotlightRootView.vimBarHeight == 0)
-  }
-
   // The user-reported bug: pressing ⌃N/⌃P to cycle through saved
   // notes shifted the bottom of the HUD up and down (the nav overlay
   // sits at the bottom of the panel). The required behavior is the

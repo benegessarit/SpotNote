@@ -118,10 +118,10 @@ struct FuzzyControllerTests {
 
   @Test("rank highlights literal query terms before fuzzy fragments")
   func rankPrefersLiteralHighlight() throws {
-    let chat = makeChat("☐ this is some item\n☐ another item")
+    let chat = makeChat("[ ] this is some item\n[ ] another item")
     let ranked = FuzzyController.rank(query: "this", in: [chat], limit: 10)
     let result = try #require(ranked.first)
-    #expect(result.matchRanges == [TextRange(location: 2, length: 4)])
+    #expect(result.matchRanges == [TextRange(location: 4, length: 4)])
   }
 
   @Test("preview excerpt clamps large notes around the highlighted match")

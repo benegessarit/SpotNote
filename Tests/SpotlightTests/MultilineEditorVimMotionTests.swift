@@ -8,14 +8,14 @@ import Testing
 struct MultilineEditorVimLogicalLineMotionTests {
   @Test("j steps one logical line at a time over checklist markers")
   func downOverChecklistMarkers() {
-    let textView = makeVimMotionTextView(text: "plain\n☐ one\n☐ two\n☑ three\nafter")
+    let textView = makeVimMotionTextView(text: "plain\n[ ] one\n[ ] two\n[x] three\nafter")
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
     textView.executeMotion(.down(1))
     #expect(textView.selectedRange.location == ("plain\n" as NSString).length)
 
     textView.executeMotion(.down(1))
-    #expect(textView.selectedRange.location == ("plain\n☐ one\n" as NSString).length)
+    #expect(textView.selectedRange.location == ("plain\n[ ] one\n" as NSString).length)
   }
 
   @Test("j and k step through fenced code block lines")

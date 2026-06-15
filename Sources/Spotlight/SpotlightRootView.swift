@@ -57,8 +57,6 @@ struct SpotlightRootView: View {
     )
   }
 
-  static let vimBarHeight: CGFloat = 0
-
   private var extraChromeHeight: CGFloat {
     var total: CGFloat = 0
     if find.isVisible { total += EditorMetrics.findBarHeight }
