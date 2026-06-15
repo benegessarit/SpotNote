@@ -4,7 +4,7 @@ import CoreGraphics
 enum EditorMetrics {
   /// Line height used by both the panel-sizing code and the editor's
   /// paragraph style, so rendered text and the panel cap agree exactly.
-  static let lineHeight: CGFloat = 32
+  static let lineHeight: CGFloat = 36
   /// Vertical padding between the content area and the rounded-card edge.
   static let verticalInset: CGFloat = 16
   /// Padding between the rounded card and the panel edge (shadow gutter).
@@ -20,7 +20,10 @@ enum EditorMetrics {
   /// Right-side breathing room now that the in-editor copy button is gone.
   static let textTrailingGap: CGFloat = 12
   /// Font size used for the editor text.
-  static let fontSize: CGFloat = 21
+  static let fontSize: CGFloat = 23
+  /// Vim-normal-mode block cursor width. This intentionally reads like a
+  /// real block cursor instead of AppKit's default one-pixel insertion bar.
+  static let normalModeCursorWidth: CGFloat = 13
   /// Panel width.
   static let panelWidth: CGFloat = 760
   /// Fixed height of the optional tutorial bar drawn above the editor

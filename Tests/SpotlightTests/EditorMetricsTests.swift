@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 
 @testable import Spotlight
@@ -78,9 +79,19 @@ struct EditorMetricsTests {
 
   @Test("editor metrics use the larger nvim-style HUD scale")
   func largerNvimStyleScale() {
-    #expect(EditorMetrics.fontSize >= 20)
-    #expect(EditorMetrics.lineHeight >= 30)
+    #expect(EditorMetrics.fontSize >= 23)
+    #expect(EditorMetrics.lineHeight >= 34)
     #expect(EditorMetrics.panelWidth >= 720)
     #expect(EditorMetrics.textTrailingGap <= 18)
+  }
+
+  @Test("normal-mode cursor matches nvim-style peach block metrics")
+  @MainActor
+  func normalModeCursorMatchesNvimPeachBlock() throws {
+    #expect(EditorMetrics.normalModeCursorWidth >= 12)
+    let color = try #require(PlaceholderTextView.normalModeCursorColor.usingColorSpace(NSColorSpace.sRGB))
+    #expect(abs(color.redComponent - 0.9608) < 0.01)
+    #expect(abs(color.greenComponent - 0.8784) < 0.01)
+    #expect(abs(color.blueComponent - 0.8627) < 0.01)
   }
 }

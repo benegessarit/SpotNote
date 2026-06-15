@@ -85,9 +85,22 @@ enum ScratchpadHandoffError: Error, Equatable {
   case notAccepted
 }
 
-private struct LocalIngressResponse: Codable {
+private struct LocalIngressResponse: Decodable {
   let accepted: Bool
   let captureID: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case accepted
+    case captureID
+    case captureIDSnake = "capture_id"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    accepted = try container.decode(Bool.self, forKey: .accepted)
+    captureID = try container.decodeIfPresent(String.self, forKey: .captureID)
+      ?? container.decodeIfPresent(String.self, forKey: .captureIDSnake)
+  }
 }
 
 enum LinearTaskTitleNormalizer {

@@ -319,20 +319,42 @@ private func pressBackspace(in textView: PlaceholderTextView) {
 }
 
 @MainActor
-@Suite("Multiline editor embedded checklist toggles")
+@Suite("Multiline editor checklist toggles")
 struct MultilineEditorChecklistToggleTests {
-  @Test("shortcut cycles Markdown checklist marker in the middle of a line")
-  func shortcutCyclesEmbeddedMarkdownChecklistMarker() {
+  @Test("shortcut marks the current line start even when the caret is mid-line")
+  func shortcutMarksCurrentLineStart() {
+    let textView = makeChecklistTextView(text: "alpha\ncall Elliot")
+    let originalCaret = ("alpha\ncall" as NSString).length
+    textView.setSelectedRange(NSRange(location: originalCaret, length: 0))
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "alpha\n[ ] call Elliot")
+    #expect(textView.selectedRange.location == originalCaret + ("[ ] " as NSString).length)
+  }
+
+  @Test("shortcut cycles only a line-start Markdown checklist marker")
+  func shortcutCyclesLineStartMarkdownChecklistMarker() {
+    let textView = makeChecklistTextView(text: "[ ] cursor placement")
+    textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "[x] cursor placement")
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "cursor placement")
+  }
+
+  @Test("shortcut ignores embedded markers and still marks the line start")
+  func shortcutIgnoresEmbeddedMarker() {
     let textView = makeChecklistTextView(text: "prefix [ ] cursor placement")
     textView.setSelectedRange(NSRange(location: ("prefix [ ]" as NSString).length, length: 0))
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "prefix [x] cursor placement")
-
-    textView.toggleChecklistShortcut(nil)
-
-    #expect(textView.string == "prefix cursor placement")
+    #expect(textView.string == "[ ] prefix [ ] cursor placement")
   }
 
   @Test("click toggles Markdown checklist marker in the middle of a line")

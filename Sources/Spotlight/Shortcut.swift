@@ -186,6 +186,7 @@ public final class ShortcutStore: ObservableObject {
     self.defaults = defaults
     self.storageKey = storageKey
     self.bindings = Self.load(defaults: defaults, key: storageKey)
+    persist()
   }
 
   public func binding(for action: ShortcutAction) -> Shortcut {

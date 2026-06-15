@@ -81,6 +81,23 @@ struct ShortcutStoreTests {
     #expect(store.match(key: "l", modifiers: [.command, .option]) == .sendToLinear)
   }
 
+  @Test("loading an older shortcut map writes missing actions back to defaults")
+  func missingActionsArePersistedBackToDefaults() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where action != .sendToLinear {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    _ = ShortcutStore(defaults: defaults, storageKey: key)
+
+    let storedData = try #require(defaults.data(forKey: key))
+    let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
+    #expect(stored[ShortcutAction.sendToLinear.rawValue] == ShortcutAction.sendToLinear.defaultShortcut)
+  }
+
   @Test("resetAll restores every action to its default")
   func resetAllRestoresDefaults() {
     let store = ShortcutStore(defaults: makeDefaults())

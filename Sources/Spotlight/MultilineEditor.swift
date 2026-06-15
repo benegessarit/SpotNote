@@ -378,7 +378,7 @@ struct MultilineEditor: NSViewRepresentable {
     let newPlaceholderColor = NSColor(theme.placeholder)
     if textView.font != font { textView.font = font }
     if textView.textColor != newTextColor { textView.textColor = newTextColor }
-    textView.insertionPointColor = newTextColor
+    textView.insertionPointColor = PlaceholderTextView.normalModeCursorColor
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
@@ -479,6 +479,12 @@ final class PlaceholderTextView: NSTextView {
   weak var suggestionField: SuggestionView?
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
+  static let normalModeCursorColor = NSColor(
+    srgbRed: 0.9608,
+    green: 0.8784,
+    blue: 0.8627,
+    alpha: 1
+  )
 
   var copyButtonClearance: CGFloat = 0
   /// Caret position captured when entering visual line mode. The
@@ -850,7 +856,7 @@ final class PlaceholderTextView: NSTextView {
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
     let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
-      let blockWidth = max(displayRect.width, 8)
+      let blockWidth = max(displayRect.width, EditorMetrics.normalModeCursorWidth)
       let blockRect = NSRect(
         x: displayRect.origin.x,
         y: displayRect.origin.y,
@@ -862,7 +868,7 @@ final class PlaceholderTextView: NSTextView {
         return
       }
       lastInsertionPointDisplayRect = blockRect
-      color.withAlphaComponent(0.4).setFill()
+      Self.normalModeCursorColor.withAlphaComponent(0.82).setFill()
       blockRect.fill()
     } else {
       super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
@@ -967,7 +973,7 @@ final class PlaceholderTextView: NSTextView {
   }
 
   override func setNeedsDisplay(_ invalidRect: NSRect) {
-    let dx: CGFloat = vimEngine?.mode == .normal ? -10 : 0
+    let dx: CGFloat = vimEngine?.mode == .normal ? -(EditorMetrics.normalModeCursorWidth + 2) : 0
     super.setNeedsDisplay(invalidRect.insetBy(dx: dx, dy: -2))
     if let lastInsertionPointDisplayRect {
       super.setNeedsDisplay(lastInsertionPointDisplayRect.insetBy(dx: dx, dy: -2))
@@ -979,7 +985,7 @@ final class PlaceholderTextView: NSTextView {
   }
 
   @objc func insertChecklistToken(_ sender: Any?) {
-    insertText("@cl", replacementRange: NSRange(location: NSNotFound, length: 0))
+    toggleChecklistAtCurrentLine()
   }
 
   @objc func toggleChecklistShortcut(_ sender: Any?) {
@@ -1057,9 +1063,46 @@ final class PlaceholderTextView: NSTextView {
 
   private func toggleChecklistAtCurrentLine() {
     let nsString = string as NSString
-    let line = nsString.lineRange(for: NSRange(location: selectedRange.location, length: 0))
-    let caretInLine = selectedRange.location - line.location
-    guard toggleChecklist(in: line, targetOffset: caretInLine) else { return }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = nsString.lineRange(for: NSRange(location: cursor, length: 0))
+    _ = cycleChecklistAtLineStart(in: line)
+  }
+
+  @discardableResult
+  private func cycleChecklistAtLineStart(in lineRange: NSRange) -> Bool {
+    let nsString = string as NSString
+    let lineText = nsString.substring(with: lineRange)
+    let edit: ChecklistMarker.Edit
+    if let match = ChecklistMarker.lineStartMatch(in: lineText) {
+      edit = ChecklistMarker.cycleEdit(for: match, in: lineText)
+    } else {
+      edit = ChecklistMarker.Edit(
+        range: NSRange(location: ChecklistMarker.lineStartInsertionOffset(in: lineText), length: 0),
+        replacement: ChecklistMarker.unchecked + " "
+      )
+    }
+    let absoluteRange = NSRange(location: lineRange.location + edit.range.location, length: edit.range.length)
+    let replacementLength = (edit.replacement as NSString).length
+    let nextCaret = caretLocation(
+      afterReplacing: absoluteRange,
+      replacementLength: replacementLength,
+      originalCaret: selectedRange.location
+    )
+    guard shouldChangeText(in: absoluteRange, replacementString: edit.replacement) else { return false }
+    replaceCharacters(in: absoluteRange, with: edit.replacement)
+    didChangeText()
+    setInsertionPoint(min(max(0, nextCaret), (string as NSString).length))
+    return true
+  }
+
+  private func caretLocation(
+    afterReplacing range: NSRange,
+    replacementLength: Int,
+    originalCaret: Int
+  ) -> Int {
+    if originalCaret < range.location { return originalCaret }
+    if originalCaret <= range.location + range.length { return range.location + replacementLength }
+    return originalCaret + replacementLength - range.length
   }
 
   private func revertLastRenderedTokenIfPossible() -> Bool {
@@ -1253,6 +1296,30 @@ private enum ChecklistMarker {
     return found.min { lhs, rhs in
       abs(lhs.range.location - targetOffset) < abs(rhs.range.location - targetOffset)
     }
+  }
+
+  static func lineStartMatch(in lineText: String) -> Match? {
+    let nsLine = lineText as NSString
+    let offset = lineStartInsertionOffset(in: lineText)
+    let markerLength = (unchecked as NSString).length
+    guard offset + markerLength <= nsLine.length else { return nil }
+    let marker = nsLine.substring(with: NSRange(location: offset, length: markerLength))
+    guard marker == unchecked || marker == checked else { return nil }
+    return Match(
+      range: NSRange(location: offset, length: markerLength),
+      isChecked: marker == checked
+    )
+  }
+
+  static func lineStartInsertionOffset(in lineText: String) -> Int {
+    let nsLine = lineText as NSString
+    var offset = 0
+    while offset < nsLine.length {
+      let ch = nsLine.character(at: offset)
+      guard ch == 0x20 || ch == 0x09 else { break }
+      offset += 1
+    }
+    return offset
   }
 
   static func toggleEdit(for match: Match) -> Edit {
