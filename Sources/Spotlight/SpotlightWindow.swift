@@ -16,9 +16,9 @@ public final class SpotlightWindowController {
   /// releases even when the panel joins that Space.
   nonisolated static let panelLevel: NSWindow.Level = .screenSaver
   /// `.canJoinAllApplications` is the cross-app fullscreen guard:
-  /// without it, an LSUIElement HUD can activate while the fullscreen
-  /// app visibly blurs/refocuses, but the panel is not admitted into
-  /// that app's fullscreen Space.
+  /// without it, the HUD can activate while the fullscreen app visibly
+  /// blurs/refocuses, but the panel is not admitted into that app's
+  /// fullscreen Space.
   /// `.canJoinAllSpaces` keeps the panel reachable from every Space,
   /// `.fullScreenAuxiliary` lets it sit alongside fullscreen windows,
   /// `.transient` keeps it in the floating Spaces group. `.stationary`

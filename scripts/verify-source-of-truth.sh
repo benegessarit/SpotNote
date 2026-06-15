@@ -49,6 +49,9 @@ require_file "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 if /usr/bin/grep -R -F -- "vimBarHeight" "$ROOT/Sources" "$ROOT/Tests" >/dev/null; then
   fail "statusline height constant still referenced"
 fi
+if /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$ROOT/App/Info.plist" 2>/dev/null | /usr/bin/grep -F -- "true" >/dev/null; then
+  fail "source Info.plist still sets LSUIElement=true; LaunchServices opens it as an invisible background status item"
+fi
 require_grep "catppuccin-frappe" "Sources/Spotlight/Theme.swift"
 require_grep "rose-pine-moonlight" "Sources/Spotlight/Theme.swift"
 require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swift"
@@ -84,6 +87,9 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
   done
   if /usr/bin/grep -F -- "VimStatusLine" <<<"$STRINGS" >/dev/null; then
     fail "installed binary still contains VimStatusLine"
+  fi
+  if /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$APP/Contents/Info.plist" 2>/dev/null | /usr/bin/grep -F -- "true" >/dev/null; then
+    fail "installed app still sets LSUIElement=true; LaunchServices will open it as an invisible background status item"
   fi
   /usr/bin/codesign --verify --deep --strict "$APP"
   printf 'OK: installed app fingerprints and codesign verified\n'

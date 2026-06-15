@@ -7,16 +7,14 @@ import Testing
 
 @Suite("SpotlightWindowController")
 struct SpotlightWindowControllerTests {
-  /// **Regression guard** -- for an LSUIElement accessory app the
-  /// panel must be a regular activating NSPanel, otherwise
-  /// `makeKeyAndOrderFront` from a background process never produces
-  /// a visible, keyed window. `.nonactivatingPanel` was tried as part
-  /// of an over-fullscreen fix and reproduced exactly that symptom
-  /// (HUD never opens). The over-fullscreen path is handled instead
-  /// by `panelLevel == .screenSaver`, `.canJoinAllApplications`, and
-  /// `.fullScreenAuxiliary` in the collection behavior -- see the
-  /// dedicated tests below.
-  @Test("panel style mask must NOT contain .nonactivatingPanel for an LSUIElement app")
+  /// **Regression guard** -- SpotNote may hide from the Dock at runtime with
+  /// the accessory activation policy, but the panel itself must still be a
+  /// regular activating NSPanel. `.nonactivatingPanel` was tried as part of an
+  /// over-fullscreen fix and reproduced the no-visible-HUD symptom. The
+  /// over-fullscreen path is handled instead by `panelLevel == .screenSaver`,
+  /// `.canJoinAllApplications`, and `.fullScreenAuxiliary` in the collection
+  /// behavior -- see the dedicated tests below.
+  @Test("panel style mask must NOT contain .nonactivatingPanel")
   func panelStyleMaskExcludesNonactivating() {
     #expect(!SpotlightWindowController.panelStyleMask.contains(.nonactivatingPanel))
   }
@@ -45,9 +43,9 @@ struct SpotlightWindowControllerTests {
   }
 
   /// **Regression guard** -- macOS 13+ fullscreen Spaces are scoped to
-  /// application sets. `.canJoinAllSpaces` is not enough for an
-  /// LSUIElement HUD summoned over another app; the panel must also be
-  /// allowed to join other apps' fullscreen sets.
+  /// application sets. `.canJoinAllSpaces` is not enough for a HUD summoned
+  /// over another app; the panel must also be allowed to join other apps'
+  /// fullscreen sets.
   @Test("panel can join all applications -- required for cross-app fullscreen HUD")
   func panelCanJoinAllApplications() {
     let behavior = SpotlightWindowController.panelCollectionBehavior

@@ -36,7 +36,6 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key>      <string>0.4.2</string>
   <key>CFBundleVersion</key>                 <string>13</string>
   <key>LSMinimumSystemVersion</key>          <string>14.0</string>
-  <key>LSUIElement</key>                     <true/>
   <key>CFBundleIconFile</key>                <string>AppIcon</string>
   <key>NSHighResolutionCapable</key>         <true/>
   <key>NSSupportsAutomaticTermination</key>  <false/>
