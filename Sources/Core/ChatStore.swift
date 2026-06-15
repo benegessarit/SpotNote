@@ -18,19 +18,21 @@ public actor ChatStore {
     )
     self.directory = directory
     self.debounce = debounce
-    self.chats = Self.loadAll(from: directory)
+  }
+
+  /// Loads persisted chats into memory. This is intentionally explicit so
+  /// app launch can construct the store cheaply and let the UI appear before
+  /// any disk scan or JSON decoding work happens.
+  public func loadFromDisk() {
+    chats = Self.loadAll(from: directory)
   }
 
   /// Default on-disk location for saved chats.
   ///
-  /// Sandboxed production builds store this under the app container.
-  /// Unsandboxed local debug builds prefer that same container when it
-  /// already exists, so debug and production inspect the same notes.
+  /// Uses the system Application Support location for the current process.
+  /// A sandboxed build resolves this inside its container; the SwiftPM-built
+  /// installed app resolves it under `~/Library/Application Support`.
   public static func defaultDirectory() throws -> URL {
-    let container = productionContainerDirectory()
-    if FileManager.default.fileExists(atPath: container.path) {
-      return container
-    }
     return try standardDirectory()
   }
 
@@ -42,17 +44,6 @@ public actor ChatStore {
       create: true
     )
     return chatsDirectory(in: appSupport)
-  }
-
-  private static func productionContainerDirectory() -> URL {
-    let home = FileManager.default.homeDirectoryForCurrentUser
-    return
-      home
-      .appending(path: "Library/Containers", directoryHint: .isDirectory)
-      .appending(path: AppInfo.bundleIdentifier, directoryHint: .isDirectory)
-      .appending(path: "Data/Library/Application Support", directoryHint: .isDirectory)
-      .appending(path: "SpotNote", directoryHint: .isDirectory)
-      .appending(path: "Chats", directoryHint: .isDirectory)
   }
 
   private static func chatsDirectory(in appSupport: URL) -> URL {
@@ -145,17 +136,12 @@ public actor ChatStore {
 
   // MARK: - Private
 
-  /// Nonisolated so it can run during `init` before `self` is fully
-  /// established on the actor.
   private static func loadAll(from directory: URL) -> [UUID: Chat] {
-    let urls =
-      (try? FileManager.default.contentsOfDirectory(
-        at: directory,
-        includingPropertiesForKeys: nil
-      )) ?? []
+    let filenames = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
     let decoder = JSONDecoder()
     var result: [UUID: Chat] = [:]
-    for url in urls where url.pathExtension == "json" {
+    for filename in filenames where filename.hasSuffix(".json") {
+      let url = directory.appending(path: filename, directoryHint: .notDirectory)
       guard let data = try? Data(contentsOf: url),
         let chat = try? decoder.decode(Chat.self, from: data)
       else { continue }

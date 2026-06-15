@@ -53,6 +53,8 @@ public final class SpotlightWindowController {
   private let handoffClient = ScratchpadHandoffClient()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
+  private let onWillShowHUD: () -> Void
+  private let onDidHideHUD: () -> Void
   private var observers: [NSObjectProtocol] = []
   private weak var previouslyActiveApp: NSRunningApplication?
   /// Screen-space Y of the panel's intended top edge, cached on first
@@ -163,12 +165,16 @@ public final class SpotlightWindowController {
     preferences: ThemePreferences,
     store: ChatStore,
     shortcuts: ShortcutStore,
-    onOpenSettings: @escaping () -> Void
+    onOpenSettings: @escaping () -> Void,
+    onWillShowHUD: @escaping () -> Void = {},
+    onDidHideHUD: @escaping () -> Void = {}
   ) {
     self.preferences = preferences
     self.session = ChatSession(store: store)
     self.shortcuts = shortcuts
     self.onOpenSettings = onOpenSettings
+    self.onWillShowHUD = onWillShowHUD
+    self.onDidHideHUD = onDidHideHUD
     FontLoader.registerBundledFonts()
     observeActiveApp()
     installModifierMonitor()
@@ -345,12 +351,14 @@ public final class SpotlightWindowController {
     let target = previouslyActiveApp
     previouslyActiveApp = nil
     NSApp.hide(nil)
+    onDidHideHUD()
     if let target, target.bundleIdentifier != Bundle.main.bundleIdentifier {
       target.activate()
     }
   }
 
   private func focusOrShow() {
+    onWillShowHUD()
     let panel = panel ?? makePanel()
     self.panel = panel
     if !NSApp.isActive {

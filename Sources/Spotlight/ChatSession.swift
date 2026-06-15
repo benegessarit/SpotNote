@@ -64,7 +64,13 @@ final class ChatSession: ObservableObject {
   /// the store is empty, creates a fresh chat so the user can start
   /// typing immediately.
   func bootstrap() async {
+    await store.loadFromDisk()
     chats = await store.list()
+    if currentID != nil { return }
+    if !currentText.isEmpty {
+      _ = await createBlankChat(initialText: currentText)
+      return
+    }
     if let mostRecent = chats.first {
       currentID = mostRecent.id
       currentText = mostRecent.text
@@ -75,6 +81,7 @@ final class ChatSession: ObservableObject {
 
   func reload() async {
     await store.flush()
+    await store.loadFromDisk()
     chats = await store.list()
     if let id = currentID, let current = chats.first(where: { $0.id == id }) {
       currentText = current.text
@@ -201,20 +208,38 @@ final class ChatSession: ObservableObject {
       previewDismissTask?.cancel()
       previewDismissTask = nil
     }
-    guard let id = currentID else { return }
     let snapshot = currentText
+    guard let id = currentID else {
+      Task { [weak self] in
+        guard let self else { return }
+        await self.createCurrentChatForPendingEdit(snapshot)
+      }
+      return
+    }
     let store = store
     Task { await store.update(id: id, text: snapshot) }
   }
 
   // MARK: - Private
 
-  private func createBlankChat() async -> Bool {
+  private func createBlankChat(initialText: String = "") async -> Bool {
     guard let chat = try? await store.create() else { return false }
     currentID = chat.id
-    currentText = ""
+    currentText = initialText
+    if !initialText.isEmpty {
+      await store.update(id: chat.id, text: initialText)
+    }
     chats = await store.list()
     return true
+  }
+
+  private func createCurrentChatForPendingEdit(_ snapshot: String) async {
+    guard currentID == nil else {
+      persistIfNeeded()
+      return
+    }
+    guard currentText == snapshot else { return }
+    _ = await createBlankChat(initialText: snapshot)
   }
 
   private func announce(

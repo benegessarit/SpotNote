@@ -31,7 +31,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     preferences: preferences,
     store: chatStore,
     shortcuts: shortcutStore,
-    onOpenSettings: { [weak self] in self?.showSettings() }
+    onOpenSettings: { [weak self] in self?.showSettings() },
+    onWillShowHUD: {
+      DockIconSwitcher.applyVisibility(true)
+    },
+    onDidHideHUD: { [weak self] in
+      self?.applyDockVisibilityWhenIdle()
+    }
   )
   private var menuBar: MenuBarController?
   private var hotkey: GlobalHotkey?
@@ -43,11 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     MainMenu.install(onOpenSettings: { [weak self] in self?.showSettings() })
 
     enableLaunchAtLoginIfFirstRun()
-
-    menuBar = MenuBarController(
-      preferences: preferences,
-      onOpenSettings: { [weak self] in self?.showSettings() }
-    )
 
     NotificationCenter.default.addObserver(
       forName: .spotNoteCheckForUpdates,
@@ -100,9 +101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       .dropFirst()
       .sink { [weak self] show in
         MainActor.assumeIsolated {
-          DockIconSwitcher.applyVisibility(show)
           if show {
+            DockIconSwitcher.applyVisibility(true)
             DockIconSwitcher.apply(self?.preferences.dockIconStyle ?? .dark)
+          } else {
+            self?.applyDockVisibilityWhenIdle()
           }
         }
       }
@@ -122,13 +125,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // under LaunchServices and leave a live menu/background process with no
     // visible HUD.
     if !didPresentOnboarding {
-      spotlight.openHUD()
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        self.spotlight.openHUD()
+        self.installMenuBarIfNeeded()
+      }
+    } else {
+      installMenuBarIfNeeded()
     }
-    // Hide from the Dock only after the initial HUD/onboarding window has had
-    // a chance to become visible. Setting `.accessory` before `openHUD()` makes
-    // LaunchServices treat a normal app open like a background status-item
-    // launch, which prevents the panel from appearing.
-    DockIconSwitcher.applyVisibility(preferences.showDockIcon)
+  }
+
+  private func installMenuBarIfNeeded() {
+    guard menuBar == nil else { return }
+    // Build the status item after requesting the first HUD/onboarding window.
+    // Under LaunchServices, letting Control Center host the menu-bar item as
+    // the app's first scene can leave SpotNote running but not visible.
+    menuBar = MenuBarController(
+      preferences: preferences,
+      onOpenSettings: { [weak self] in self?.showSettings() }
+    )
+  }
+
+  private func applyDockVisibilityWhenIdle() {
+    guard !preferences.showDockIcon else {
+      DockIconSwitcher.applyVisibility(true)
+      DockIconSwitcher.apply(preferences.dockIconStyle)
+      return
+    }
+    let hasVisibleWindow = NSApp.windows.contains { window in
+      window.isVisible && (window.canBecomeMain || window.canBecomeKey)
+    }
+    guard !hasVisibleWindow else { return }
+    DockIconSwitcher.applyVisibility(false)
   }
 
   private func presentOnboardingIfNeeded() -> Bool {

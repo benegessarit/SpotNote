@@ -1026,7 +1026,7 @@ final class PlaceholderTextView: NSTextView {
         !isSuppressed(literal: "@cl", range: tokenRange, in: originalNS),
         !originalNS.lineContainsCheckbox(at: tokenRange.location)
       {
-        let replacementText = ChecklistMarker.unchecked
+        let replacementText = ChecklistMarker.uncheckedWithTextGap
         updated = originalNS.replacingCharacters(in: tokenRange, with: replacementText)
         renderedToken = RenderedToken(
           kind: .checklist,
@@ -1192,7 +1192,7 @@ final class PlaceholderTextView: NSTextView {
     let nsString = string as NSString
     let lineText = nsString.substring(with: lineRange)
     guard let match = ChecklistMarker.match(in: lineText, near: targetOffset) else { return false }
-    let edit = cycle ? ChecklistMarker.cycleEdit(for: match, in: lineText) : ChecklistMarker.toggleEdit(for: match)
+    let edit = cycle ? ChecklistMarker.cycleEdit(for: match, in: lineText) : ChecklistMarker.toggleEdit(for: match, in: lineText)
     let absoluteRange = NSRange(location: lineRange.location + edit.range.location, length: edit.range.length)
     if shouldChangeText(in: absoluteRange, replacementString: edit.replacement) {
       replaceCharacters(in: absoluteRange, with: edit.replacement)
@@ -1264,6 +1264,7 @@ extension String {
 private enum ChecklistMarker {
   static let unchecked = "[ ]"
   static let checked = "[x]"
+  static let uncheckedWithTextGap = unchecked + " "
 
   struct Match {
     let range: NSRange
@@ -1322,12 +1323,13 @@ private enum ChecklistMarker {
     return offset
   }
 
-  static func toggleEdit(for match: Match) -> Edit {
-    Edit(range: match.range, replacement: match.isChecked ? unchecked : checked)
+  static func toggleEdit(for match: Match, in lineText: String) -> Edit {
+    let replacement = match.isChecked ? unchecked : checked
+    return markerReplacementEdit(for: match, replacement: replacement, in: lineText)
   }
 
   static func cycleEdit(for match: Match, in lineText: String) -> Edit {
-    guard match.isChecked else { return toggleEdit(for: match) }
+    guard match.isChecked else { return toggleEdit(for: match, in: lineText) }
     let nsLine = lineText as NSString
     var deleteRange = match.range
     let after = match.range.location + match.range.length
@@ -1335,6 +1337,26 @@ private enum ChecklistMarker {
       deleteRange.length += 1
     }
     return Edit(range: deleteRange, replacement: "")
+  }
+
+  private static func markerReplacementEdit(
+    for match: Match,
+    replacement: String,
+    in lineText: String
+  ) -> Edit {
+    let nsLine = lineText as NSString
+    let after = match.range.location + match.range.length
+    guard after < nsLine.length else {
+      return Edit(range: match.range, replacement: replacement)
+    }
+    let next = nsLine.substring(with: NSRange(location: after, length: 1))
+    guard next != "\n", next != "\r" else {
+      return Edit(range: match.range, replacement: replacement)
+    }
+    guard next != " " else {
+      return Edit(range: match.range, replacement: replacement)
+    }
+    return Edit(range: match.range, replacement: replacement + " ")
   }
 }
 

@@ -63,12 +63,12 @@ struct MultilineEditorTokenTests {
 
     insert("@cl", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
-    #expect(boundText == "[ ]")
+    #expect(boundText == "[ ] ")
 
     insert("\n", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
 
-    #expect(boundText == "[ ]\n")
+    #expect(boundText == "[ ] \n")
     #expect(heights.last == EditorMetrics.panelHeight(forLines: 2, maxLines: 4))
   }
 
@@ -345,6 +345,16 @@ struct MultilineEditorChecklistToggleTests {
     textView.toggleChecklistShortcut(nil)
 
     #expect(textView.string == "cursor placement")
+  }
+
+  @Test("shortcut normalizes compact checklist markers with a following text space")
+  func shortcutNormalizesCompactChecklistMarkers() {
+    let textView = makeChecklistTextView(text: "[ ]testing")
+    textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "[x] testing")
   }
 
   @Test("shortcut ignores embedded markers and still marks the line start")
