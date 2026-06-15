@@ -73,7 +73,7 @@ final class ChatSession: ObservableObject {
     }
     if let mostRecent = chats.first {
       currentID = mostRecent.id
-      currentText = mostRecent.text
+      currentText = Self.displayText(for: mostRecent)
     } else {
       _ = await createBlankChat()
     }
@@ -84,10 +84,10 @@ final class ChatSession: ObservableObject {
     await store.loadFromDisk()
     chats = await store.list()
     if let id = currentID, let current = chats.first(where: { $0.id == id }) {
-      currentText = current.text
+      currentText = Self.displayText(for: current)
     } else if let mostRecent = chats.first {
       currentID = mostRecent.id
-      currentText = mostRecent.text
+      currentText = Self.displayText(for: mostRecent)
     } else {
       _ = await createBlankChat()
     }
@@ -131,7 +131,7 @@ final class ChatSession: ObservableObject {
     let next = ((index + delta) % count + count) % count
     let chat = chats[next]
     currentID = chat.id
-    currentText = chat.text
+    currentText = Self.displayText(for: chat)
     announce("note \(next + 1) of \(count)")
   }
 
@@ -146,7 +146,7 @@ final class ChatSession: ObservableObject {
       previewDismissTask = nil
     }
     currentID = chat.id
-    currentText = chat.text
+    currentText = Self.displayText(for: chat)
   }
 
   /// Binds to ⌘D -- removes the current chat and lands on the next
@@ -165,7 +165,7 @@ final class ChatSession: ObservableObject {
     chats = await store.list()
     if let replacement = chats.first {
       currentID = replacement.id
-      currentText = replacement.text
+      currentText = Self.displayText(for: replacement)
       announce("deleted", sticky: true)
     } else {
       _ = await createBlankChat()
@@ -183,7 +183,7 @@ final class ChatSession: ObservableObject {
     try? await store.restore(chat)
     chats = await store.list()
     currentID = chat.id
-    currentText = chat.text
+    currentText = Self.displayText(for: chat)
     announce("restored", sticky: true, highlightedID: chat.id)
   }
 
@@ -221,6 +221,23 @@ final class ChatSession: ObservableObject {
   }
 
   // MARK: - Private
+
+  private static let legacyCheckedMarkerRegex = try? NSRegularExpression(
+    pattern: #"(?m)(^|[ \t])\[(x|X)\](?=[ \t\r\n]|$)"#
+  )
+
+  private static func displayText(for chat: Chat) -> String {
+    normalizeLegacyCheckedMarkers(in: chat.text)
+  }
+
+  private static func normalizeLegacyCheckedMarkers(in text: String) -> String {
+    let range = NSRange(location: 0, length: (text as NSString).length)
+    return legacyCheckedMarkerRegex?.stringByReplacingMatches(
+      in: text,
+      range: range,
+      withTemplate: "$1[ x ]"
+    ) ?? text
+  }
 
   private func createBlankChat(initialText: String = "") async -> Bool {
     guard let chat = try? await store.create() else { return false }

@@ -24,6 +24,22 @@ struct ChatSessionTests {
     #expect(chats.first?.text == "typed before bootstrap")
   }
 
+  @Test("bootstrap displays legacy compact checked markers with spaced x")
+  func bootstrapNormalizesLegacyCheckedMarkerDisplay() async throws {
+    let dir = try makeTempDirectory()
+    let writer = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let chat = try await writer.create()
+    await writer.update(id: chat.id, text: "[x] legacy checked item\narray[x] stays code-ish")
+    await writer.flush()
+
+    let reader = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let session = ChatSession(store: reader)
+
+    await session.bootstrap()
+
+    #expect(session.currentText == "[ x ] legacy checked item\narray[x] stays code-ish")
+  }
+
   private func makeTempDirectory() throws -> URL {
     let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     let dir = root.appendingPathComponent("SpotNoteChatSessionTests-\(UUID().uuidString)", isDirectory: true)

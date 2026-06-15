@@ -340,7 +340,7 @@ struct MultilineEditorChecklistToggleTests {
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "[x] cursor placement")
+    #expect(textView.string == "[ x ] cursor placement")
 
     textView.toggleChecklistShortcut(nil)
 
@@ -354,7 +354,7 @@ struct MultilineEditorChecklistToggleTests {
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "[x] testing")
+    #expect(textView.string == "[ x ] testing")
   }
 
   @Test("shortcut ignores embedded markers and still marks the line start")
@@ -374,17 +374,17 @@ struct MultilineEditorChecklistToggleTests {
 
     try clickCharacter(at: markerLocation, in: textView)
 
-    #expect(textView.string == "prefix [x] cursor placement")
+    #expect(textView.string == "prefix [ x ] cursor placement")
   }
 
   @Test("copy preserves literal Markdown checklist markers")
   func copyPreservesMarkdownChecklistMarkers() {
-    let textView = makeChecklistTextView(text: "[ ] one\n[x] two")
+    let textView = makeChecklistTextView(text: "[ ] one\n[ x ] two")
     textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
 
     textView.copy(nil)
 
-    #expect(NSPasteboard.general.string(forType: .string) == "[ ] one\n[x] two")
+    #expect(NSPasteboard.general.string(forType: .string) == "[ ] one\n[ x ] two")
   }
 
   @Test("caret erase uses previously painted rect after selection moves")

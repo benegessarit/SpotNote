@@ -20,6 +20,7 @@ struct ScratchpadHandoffTests {
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "! [ ] Call Elliot") == "Call Elliot")
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "- ☑ Wipe mac") == "Wipe mac")
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "◆ [x] Send note") == "Send note")
+    #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "◆ [ x ] Send note") == "Send note")
   }
 
   @Test("blank Linear title is rejected")

@@ -1263,7 +1263,8 @@ extension String {
 
 private enum ChecklistMarker {
   static let unchecked = "[ ]"
-  static let checked = "[x]"
+  static let checked = "[ x ]"
+  private static let legacyChecked = ["[x]", "[X]"]
   static let uncheckedWithTextGap = unchecked + " "
 
   struct Match {
@@ -1276,15 +1277,14 @@ private enum ChecklistMarker {
     let replacement: String
   }
 
-  private static let regex = try? NSRegularExpression(pattern: #"\[( |x)\]"#)
+  private static let regex = try? NSRegularExpression(pattern: #"\[(?: |x|X| x )\]"#)
 
   static func matches(in text: String) -> [Match] {
     let nsText = text as NSString
     let fullRange = NSRange(location: 0, length: nsText.length)
     return regex?.matches(in: text, range: fullRange).compactMap { result in
-      guard result.numberOfRanges > 1 else { return nil }
       let marker = nsText.substring(with: result.range)
-      return Match(range: result.range, isChecked: marker == checked)
+      return Match(range: result.range, isChecked: marker == checked || legacyChecked.contains(marker))
     } ?? []
   }
 
@@ -1300,16 +1300,8 @@ private enum ChecklistMarker {
   }
 
   static func lineStartMatch(in lineText: String) -> Match? {
-    let nsLine = lineText as NSString
     let offset = lineStartInsertionOffset(in: lineText)
-    let markerLength = (unchecked as NSString).length
-    guard offset + markerLength <= nsLine.length else { return nil }
-    let marker = nsLine.substring(with: NSRange(location: offset, length: markerLength))
-    guard marker == unchecked || marker == checked else { return nil }
-    return Match(
-      range: NSRange(location: offset, length: markerLength),
-      isChecked: marker == checked
-    )
+    return matches(in: lineText).first { $0.range.location == offset }
   }
 
   static func lineStartInsertionOffset(in lineText: String) -> Int {
