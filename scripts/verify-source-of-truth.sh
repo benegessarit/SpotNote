@@ -44,6 +44,7 @@ require_file "Sources/Spotlight/HermesToastView.swift"
 require_file "Sources/Spotlight/Resources/HermesLogo.png"
 require_file "Tests/SpotlightTests/ScratchpadHandoffTests.swift"
 require_file "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+require_file "scripts/launch-contract-smoke.py"
 
 [[ ! -e "$ROOT/Sources/Spotlight/VimStatusLine.swift" ]] || fail "statusline source still exists"
 if /usr/bin/grep -R -F -- "vimBarHeight" "$ROOT/Sources" "$ROOT/Tests" >/dev/null; then
@@ -58,6 +59,7 @@ require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swif
 require_grep "Sending to Linear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "Linear task created" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "rightwardTravel * 0.30" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+python3 "$ROOT/scripts/launch-contract-smoke.py" >/dev/null
 
 printf 'OK: stable source root %s\n' "$ROOT"
 printf 'OK: custom source fingerprints present\n'
