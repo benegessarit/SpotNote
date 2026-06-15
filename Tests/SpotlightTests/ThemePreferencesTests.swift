@@ -14,11 +14,11 @@ struct ThemePreferencesTests {
     return defaults
   }
 
-  @Test("default selected theme is Obsidian")
-  func defaultsToObsidian() {
+  @Test("default selected theme is Catppuccin Frappe")
+  func defaultsToCatppuccinFrappe() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.selectedThemeID == ThemeCatalog.obsidian.id)
-    #expect(prefs.activeTheme.id == ThemeCatalog.obsidian.id)
+    #expect(prefs.selectedThemeID == ThemeCatalog.catppuccinFrappe.id)
+    #expect(prefs.activeTheme.id == ThemeCatalog.catppuccinFrappe.id)
   }
 
   @Test("setting selectedThemeID persists to UserDefaults")
@@ -46,9 +46,18 @@ struct ThemePreferencesTests {
     #expect(prefs.selectedThemeID == ThemeCatalog.ink.id)
   }
 
-  @Test("unknown id falls back to Obsidian")
+  @Test("unknown id falls back to Catppuccin Frappe")
   func unknownFallsBack() {
-    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.obsidian.id)
+    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.catppuccinFrappe.id)
+  }
+
+  @Test("custom Catppuccin and Rose Pine themes are present")
+  func customThemesPresent() {
+    let ids = Set(ThemeCatalog.all.map(\.id))
+    #expect(ids.contains("catppuccin-frappe"))
+    #expect(ids.contains("catppuccin-mocha"))
+    #expect(ids.contains("catppuccin-latte"))
+    #expect(ids.contains("rose-pine-moonlight"))
   }
 
   @Test("all dark themes have mode .dark; all light themes have mode .light")
@@ -61,11 +70,11 @@ struct ThemePreferencesTests {
     }
   }
 
-  @Test("catalog has exactly five dark and five light themes")
+  @Test("catalog restores neutral and custom themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 5)
-    #expect(ThemeCatalog.lightThemes.count == 5)
-    #expect(ThemeCatalog.all.count == 10)
+    #expect(ThemeCatalog.darkThemes.count == 8)
+    #expect(ThemeCatalog.lightThemes.count == 6)
+    #expect(ThemeCatalog.all.count == 14)
   }
 
   @Test("showLineNumbers defaults to true on first launch")

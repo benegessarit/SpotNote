@@ -74,6 +74,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case insertTodayBadge
   case insertChecklist
   case toggleChecklist
+  case sendToLinear
   case newChat
   case olderChat
   case newerChat
@@ -97,6 +98,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .insertTodayBadge: return "Insert today badge"
     case .insertChecklist: return "Insert checklist item"
     case .toggleChecklist: return "Toggle checklist state"
+    case .sendToLinear: return "Send line to Linear"
     case .newChat: return "New note"
     case .olderChat: return "Older note"
     case .newerChat: return "Newer note"
@@ -121,6 +123,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .insertTodayBadge: return "Insert @today token at the caret."
     case .insertChecklist: return "Insert @cl token at the caret."
     case .toggleChecklist: return "Toggle the current checklist item between empty and checked."
+    case .sendToLinear: return "Create one Linear Triage task from the current line, then delete it after handoff."
     case .newChat: return "Start a fresh blank note."
     case .olderChat: return "Step back through your saved notes (hold to repeat)."
     case .newerChat: return "Step forward through your saved notes (hold to repeat)."
@@ -144,6 +147,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .insertTodayBadge: return Shortcut(key: "t", modifiers: [.command, .shift])
     case .insertChecklist: return Shortcut(key: "l", modifiers: [.command, .shift])
     case .toggleChecklist: return Shortcut(key: "k", modifiers: [.command, .shift])
+    case .sendToLinear: return Shortcut(key: "l", modifiers: [.command, .option])
     case .newChat: return Shortcut(key: "n", modifiers: [.command])
     case .olderChat: return Shortcut(key: "n", modifiers: [.control])
     case .newerChat: return Shortcut(key: "p", modifiers: [.control])

@@ -52,6 +52,17 @@ if [[ -f "$ICNS_PATH" ]]; then
   cp "$ICNS_PATH" "$RESOURCES/AppIcon.icns"
 fi
 
+# SwiftPM executable resource bundles are resolved by the generated
+# `Bundle.module` accessor as children of `Bundle.main.bundleURL` when
+# running inside an app bundle. Keep the assembled app self-contained so
+# it does not rely on the local `.build/.../*.bundle` fallback path.
+shopt -s nullglob
+for bundle in "$BIN_PATH"/*.bundle; do
+  rm -rf "$RESOURCES/$(basename "$bundle")"
+  cp -R "$bundle" "$RESOURCES/"
+done
+shopt -u nullglob
+
 FRAMEWORKS_DIR="$CONTENTS/Frameworks"
 mkdir -p "$FRAMEWORKS_DIR"
 shopt -s nullglob

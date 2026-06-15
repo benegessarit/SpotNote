@@ -13,9 +13,39 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let placeholder: Color
 }
 
-/// Ten curated themes -- five dark, five light.
+/// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine skins.
 enum ThemeCatalog {
   // MARK: Dark
+
+  static let catppuccinFrappe = Theme(
+    id: "catppuccin-frappe",
+    name: "Catppuccin Frappe",
+    mode: .dark,
+    background: Color(red: 0.188, green: 0.204, blue: 0.275),
+    border: Color(red: 0.792, green: 0.651, blue: 0.957).opacity(0.24),
+    text: Color(red: 0.776, green: 0.816, blue: 0.961),
+    placeholder: Color(red: 0.514, green: 0.545, blue: 0.655)
+  )
+
+  static let catppuccinMocha = Theme(
+    id: "catppuccin-mocha",
+    name: "Catppuccin Mocha",
+    mode: .dark,
+    background: Color(red: 0.118, green: 0.118, blue: 0.180),
+    border: Color(red: 0.690, green: 0.611, blue: 0.914).opacity(0.24),
+    text: Color(red: 0.804, green: 0.839, blue: 0.957),
+    placeholder: Color(red: 0.498, green: 0.518, blue: 0.612)
+  )
+
+  static let rosePineMoonlight = Theme(
+    id: "rose-pine-moonlight",
+    name: "Rose Pine Moonlight",
+    mode: .dark,
+    background: Color(red: 0.137, green: 0.129, blue: 0.212),
+    border: Color(red: 0.769, green: 0.678, blue: 0.859).opacity(0.22),
+    text: Color(red: 0.878, green: 0.871, blue: 0.957),
+    placeholder: Color(red: 0.431, green: 0.416, blue: 0.525)
+  )
 
   static let obsidian = Theme(
     id: "obsidian",
@@ -69,6 +99,16 @@ enum ThemeCatalog {
 
   // MARK: Light
 
+  static let catppuccinLatte = Theme(
+    id: "catppuccin-latte",
+    name: "Catppuccin Latte",
+    mode: .light,
+    background: Color(red: 0.937, green: 0.945, blue: 0.961),
+    border: Color(red: 0.533, green: 0.224, blue: 0.765).opacity(0.16),
+    text: Color(red: 0.298, green: 0.310, blue: 0.412),
+    placeholder: Color(red: 0.549, green: 0.561, blue: 0.631)
+  )
+
   static let parchment = Theme(
     id: "parchment",
     name: "Parchment",
@@ -119,15 +159,17 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
   )
 
-  static let darkThemes: [Theme] = [obsidian, ink, graphite, midnight, charcoal]
-  static let lightThemes: [Theme] = [parchment, mist, bone, linen, porcelain]
+  static let darkThemes: [Theme] = [
+    catppuccinFrappe, catppuccinMocha, rosePineMoonlight, obsidian, ink, graphite, midnight, charcoal
+  ]
+  static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes
 
   /// Default theme applied on first launch.
-  static let defaultID = obsidian.id
+  static let defaultID = catppuccinFrappe.id
 
   /// Looks up a theme by id, falling back to the default.
   static func theme(withID id: String) -> Theme {
-    all.first { $0.id == id } ?? obsidian
+    all.first { $0.id == id } ?? catppuccinFrappe
   }
 }

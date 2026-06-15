@@ -46,6 +46,10 @@ struct MultilineEditor: NSViewRepresentable {
   /// mode (insert-mode Esc still falls through to the engine to switch
   /// modes first, matching real vim).
   var onEscape: (() -> Void)?
+  /// Sends a normalized current-line title to the local Hermes/Marginal
+  /// ingress, which creates the Linear issue without embedding Linear
+  /// credentials in SpotNote.
+  var onSendLinearTask: ((String) async throws -> Void)?
   /// Called from the AppKit delegate synchronously, so the panel resizes in
   /// the same runloop tick as the text change. A SwiftUI `@State` round-trip
   /// would defer the resize by one runloop, causing a visible flash.
@@ -65,6 +69,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.vimModeEnabled = vimModeEnabled
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
+    textView.onSendLinearTask = onSendLinearTask
     return scroll
   }
 
@@ -125,6 +130,7 @@ struct MultilineEditor: NSViewRepresentable {
     }
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
+    textView.onSendLinearTask = onSendLinearTask
     applyStyle(textView: textView)
     textView.placeholderString = placeholder
     configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
@@ -498,6 +504,7 @@ final class PlaceholderTextView: NSTextView {
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
+  var onSendLinearTask: ((String) async throws -> Void)?
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -748,6 +755,63 @@ final class PlaceholderTextView: NSTextView {
   func executeDeleteLinesInsert(_ count: Int) {
     executeDeleteLines(count)
     executeVimAction(.switchToInsert)
+  }
+
+  @objc func sendCurrentLineToLinearShortcut(_ sender: Any?) {
+    sendCurrentLinesToLinear(1)
+  }
+
+  func sendCurrentLinesToLinear(_ count: Int) {
+    guard let onSendLinearTask else {
+      vimController?.showMessage("Linear handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedLineRange(count: max(1, count), in: nsString)
+    let original = nsString.substring(with: range)
+    guard let title = LinearTaskTitleNormalizer.title(fromSpotNoteLine: original) else {
+      vimController?.showMessage("No Linear task on this line", kind: .error, icon: .hermes)
+      return
+    }
+    vimController?.showMessage("Sending to Linear", kind: .info, icon: .hermes)
+    Task { @MainActor [weak self, range, original, title] in
+      guard let self else { return }
+      do {
+        try await onSendLinearTask(title)
+        let current = self.string as NSString
+        guard range.location + range.length <= current.length,
+          current.substring(with: range) == original
+        else {
+          self.vimController?.showMessage("Linear created; line changed", kind: .error, icon: .hermes)
+          return
+        }
+        if self.shouldChangeText(in: range, replacementString: "") {
+          self.replaceCharacters(in: range, with: "")
+          self.didChangeText()
+          let cursor = min(range.location, (self.string as NSString).length)
+          self.setSelectedRange(NSRange(location: cursor, length: 0))
+        }
+        self.vimController?.showMessage("Linear task created", kind: .success, icon: .hermes)
+      } catch {
+        self.vimController?.showMessage("Linear send failed", kind: .error, icon: .hermes)
+      }
+    }
+  }
+
+  private func selectedLineRange(count: Int, in nsString: NSString) -> NSRange {
+    var range = nsString.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+    for _ in 1..<count {
+      let nextStart = range.location + range.length
+      guard nextStart < nsString.length else { break }
+      let nextLine = nsString.lineRange(for: NSRange(location: nextStart, length: 0))
+      range.length += nextLine.length
+    }
+    if range.location > 0, range.location + range.length >= nsString.length {
+      range.location -= 1
+      range.length += 1
+    }
+    return range
   }
 
   private func moveToFirstNonBlank() {

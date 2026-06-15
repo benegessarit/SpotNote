@@ -145,6 +145,21 @@ struct VimEngineTests {
     #expect(second == .moveCursor(.documentStart))
   }
 
+  @Test("gl sends the current line to Linear")
+  func glSendsCurrentLineToLinear() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "l", hasModifiers: false) == .sendCurrentLineToLinear(count: 1))
+  }
+
+  @Test("3gl sends three lines to Linear")
+  func countGlSendsMultipleLinesToLinear() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "l", hasModifiers: false) == .sendCurrentLineToLinear(count: 3))
+  }
+
   // MARK: - Count prefix
 
   @Test("3j moves down 3 lines")

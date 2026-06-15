@@ -105,6 +105,29 @@ struct SpotlightWindowControllerTests {
     #expect(alpha < 1.0)
   }
 
+  @Test("default HUD origin shifts 30% of the available rightward travel")
+  func defaultHUDOriginIsThirtyPercentRightOfCenter() {
+    let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
+    let panelWidth: CGFloat = 400
+    let centeredX = (screen.midX - panelWidth / 2).rounded()
+    let rightwardTravel = screen.maxX - panelWidth - centeredX
+
+    let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
+
+    #expect(x == centeredX + (rightwardTravel * 0.30).rounded())
+  }
+
+  @Test("default HUD origin stays on-screen after the rightward shift")
+  func defaultHUDOriginDoesNotOverflowRightEdge() {
+    let screen = NSRect(x: 100, y: 0, width: 640, height: 700)
+    let panelWidth: CGFloat = 620
+
+    let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
+
+    #expect(x >= screen.minX)
+    #expect(x + panelWidth <= screen.maxX)
+  }
+
   @Test("construction is cheap and side-effect-free beyond font registration")
   @MainActor
   func constructionIsCheap() throws {

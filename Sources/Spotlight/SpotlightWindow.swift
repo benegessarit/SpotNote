@@ -30,6 +30,15 @@ public final class SpotlightWindowController {
     .canJoinAllApplications, .canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
+  nonisolated static let defaultRightwardOffsetRatio: CGFloat = 0.30
+
+  nonisolated static func restingOriginX(in screenFrame: NSRect, panelWidth: CGFloat) -> CGFloat {
+    let centeredX = (screenFrame.midX - panelWidth / 2).rounded()
+    let rightmostX = screenFrame.maxX - panelWidth
+    let rightwardTravel = max(0, rightmostX - centeredX)
+    let shiftedX = centeredX + (rightwardTravel * defaultRightwardOffsetRatio).rounded()
+    return min(max(shiftedX, screenFrame.minX), rightmostX).rounded()
+  }
 
   private var panel: SpotlightPanel?
   private var fuzzyPreviewPanel: FuzzyPreviewPanel?
@@ -41,6 +50,7 @@ public final class SpotlightWindowController {
   private let fuzzyController = FuzzyController()
   private let commandController = CommandController()
   private let copyController = CopyController()
+  private let handoffClient = ScratchpadHandoffClient()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private var observers: [NSObjectProtocol] = []
@@ -116,7 +126,6 @@ public final class SpotlightWindowController {
   /// SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
     var height: CGFloat = 0
-    if preferences.vimMode { height += SpotlightRootView.vimBarHeight }
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
     } else if commandController.isVisible {
@@ -376,7 +385,7 @@ public final class SpotlightWindowController {
       top = (screenFrame.midY + screenFrame.height * 0.18 + height / 2).rounded()
       pinnedTopY = top
     }
-    let x = (screenFrame.midX - panel.frame.width / 2).rounded()
+    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
     setPanelFrame(
       NSRect(x: x, y: top - height, width: panel.frame.width, height: height),
       display: false
@@ -412,6 +421,9 @@ public final class SpotlightWindowController {
         },
         onEscape: { [weak self] in
           self?.close()
+        },
+        onSendLinearTask: { [handoffClient] title in
+          _ = try await handoffClient.sendLinearTask(title: title)
         }
       )
     )
@@ -475,7 +487,7 @@ public final class SpotlightWindowController {
       top = (screenFrame.midY + screenFrame.height * 0.18 + initialHeight / 2).rounded()
       pinnedTopY = top
     }
-    let x = (screenFrame.midX - panel.frame.width / 2).rounded()
+    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
     let y = top - panel.frame.height
     return NSPoint(x: x, y: y)
   }
@@ -703,6 +715,11 @@ extension SpotlightWindowController {
     case .toggleChecklist:
       _ = panel?.firstResponder?.tryToPerform(
         #selector(PlaceholderTextView.toggleChecklistShortcut(_:)),
+        with: nil
+      )
+    case .sendToLinear:
+      _ = panel?.firstResponder?.tryToPerform(
+        #selector(PlaceholderTextView.sendCurrentLineToLinearShortcut(_:)),
         with: nil
       )
     case .pinNote:

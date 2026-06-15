@@ -33,6 +33,7 @@ struct SpotlightRootView: View {
   /// Invoked when Esc should dismiss the HUD (vim off, or vim on and
   /// already in normal mode).
   let onEscape: () -> Void
+  let onSendLinearTask: (String) async throws -> Void
 
   private var theme: Theme { preferences.activeTheme }
 
@@ -56,13 +57,12 @@ struct SpotlightRootView: View {
     )
   }
 
-  static let vimBarHeight: CGFloat = 18
+  static let vimBarHeight: CGFloat = 0
 
   private var extraChromeHeight: CGFloat {
     var total: CGFloat = 0
     if find.isVisible { total += EditorMetrics.findBarHeight }
     if preferences.showHints { total += EditorMetrics.tutorialBarHeight }
-    if preferences.vimMode { total += Self.vimBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
     } else if command.isVisible {
@@ -86,10 +86,6 @@ struct SpotlightRootView: View {
       }
       editorCard
         .transaction { $0.animation = nil }
-      if preferences.vimMode {
-        vimModeBar
-          .transaction { $0.animation = nil }
-      }
       if fuzzy.isVisible {
         FuzzyPalette(controller: fuzzy, theme: theme) { chat in
           session.jump(to: chat)
@@ -118,11 +114,20 @@ struct SpotlightRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .overlay(alignment: .topTrailing) {
+      if let message = vimController.message {
+        HermesToastView(message: message, theme: theme)
+          .padding(.top, EditorMetrics.outerPadding + 7)
+          .padding(.trailing, EditorMetrics.outerPadding + 8)
+          .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+    }
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: session.navigationPreview != nil)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
     .animation(.easeOut(duration: 0.10), value: command.isVisible)
+    .animation(.easeOut(duration: 0.12), value: vimController.message)
     .onChange(of: session.chats) { _, newChats in
       fuzzy.updateCorpus(newChats)
     }
@@ -152,8 +157,7 @@ struct SpotlightRootView: View {
   }
 
   private var hasAttachedBottom: Bool {
-    preferences.vimMode || session.navigationPreview != nil
-      || fuzzy.isVisible || command.isVisible
+    session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
   }
 
   private var editorCardShape: UnevenRoundedRectangle {
@@ -182,6 +186,7 @@ struct SpotlightRootView: View {
       vimModeEnabled: preferences.vimMode,
       vimController: vimController,
       onEscape: onEscape,
+      onSendLinearTask: onSendLinearTask,
       onHeightChange: onHeightChange
     )
     .padding(.leading, EditorMetrics.leadingInset)
@@ -201,109 +206,4 @@ struct SpotlightRootView: View {
     .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
   }
 
-  private var hasOverlayBelow: Bool {
-    fuzzy.isVisible || command.isVisible || session.navigationPreview != nil
-  }
-
-  private var vimBarShape: UnevenRoundedRectangle {
-    let roundBottom = !hasOverlayBelow
-    return UnevenRoundedRectangle(
-      topLeadingRadius: 0,
-      bottomLeadingRadius: roundBottom ? 10 : 0,
-      bottomTrailingRadius: roundBottom ? 10 : 0,
-      topTrailingRadius: 0,
-      style: .continuous
-    )
-  }
-
-  private var vimModeBar: some View {
-    HStack(spacing: 6) {
-      if let prompt = vimController.prompt {
-        VimPromptView(prompt: prompt, theme: theme)
-        Spacer(minLength: 0)
-      } else {
-        Text(label(for: vimController.mode))
-          .font(.system(size: 9, weight: .semibold, design: .monospaced))
-          .foregroundStyle(color(for: vimController.mode))
-        Spacer(minLength: 8)
-        if let message = vimController.message {
-          Text(message.text)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(messageColor(for: message.kind))
-            .lineLimit(1)
-            .truncationMode(.tail)
-        } else if let status = vimController.searchStatus {
-          Text(status)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(theme.text.opacity(0.55))
-            .lineLimit(1)
-        }
-      }
-    }
-    .padding(.horizontal, 8)
-    .frame(height: Self.vimBarHeight)
-    .background(vimBarShape.fill(theme.background))
-    .overlay(alignment: .top) {
-      Rectangle()
-        .fill(theme.border.opacity(0.6))
-        .frame(height: 1)
-    }
-    .overlay(vimBarShape.strokeBorder(theme.border, lineWidth: 1))
-    .padding(.horizontal, EditorMetrics.outerPadding)
-  }
-
-  private func label(for mode: VimMode) -> String {
-    switch mode {
-    case .normal: return "NORMAL"
-    case .insert: return "INSERT"
-    case .visualLine: return "VISUAL LINE"
-    }
-  }
-
-  private func color(for mode: VimMode) -> Color {
-    switch mode {
-    case .normal: return theme.text.opacity(0.7)
-    case .insert: return theme.placeholder
-    case .visualLine: return theme.text.opacity(0.85)
-    }
-  }
-
-  private func messageColor(for kind: VimController.MessageKind) -> Color {
-    switch kind {
-    case .info: return theme.text.opacity(0.7)
-    case .success: return Color(red: 0.40, green: 0.78, blue: 0.50)
-    case .error: return Color(red: 0.95, green: 0.45, blue: 0.45)
-    }
-  }
-}
-
-/// Renders the active `:` / `/` prompt with a slow-blinking caret. The
-/// caret is a discrete `▏` glyph rather than an `NSTextField` so the
-/// prompt can live in the bottom bar without stealing first responder
-/// from the editor (the prompt keystrokes are intercepted at the
-/// `NSTextView` layer, not the prompt itself).
-private struct VimPromptView: View {
-  let prompt: VimController.Prompt
-  let theme: Theme
-
-  var body: some View {
-    HStack(spacing: 0) {
-      Text(prefix)
-        .foregroundStyle(theme.text.opacity(0.85))
-      Text(prompt.buffer)
-        .foregroundStyle(theme.text)
-      TimelineView(.periodic(from: .now, by: 0.55)) { context in
-        let visible = Int(context.date.timeIntervalSinceReferenceDate / 0.55) % 2 == 0
-        Text("▏")
-          .foregroundStyle(theme.text.opacity(visible ? 0.95 : 0))
-      }
-    }
-    .font(.system(size: 11, weight: .regular, design: .monospaced))
-    .lineLimit(1)
-    .truncationMode(.head)
-  }
-
-  private var prefix: String {
-    prompt.kind == .command ? ":" : "/"
-  }
 }

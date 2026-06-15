@@ -72,6 +72,15 @@ struct ShortcutStoreTests {
     #expect(none == nil)
   }
 
+  @Test("send to Linear defaults to Cmd Option L")
+  func sendToLinearDefaultShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    let binding = store.binding(for: .sendToLinear)
+    #expect(binding.key == "l")
+    #expect(binding.modifiers == [.command, .option])
+    #expect(store.match(key: "l", modifiers: [.command, .option]) == .sendToLinear)
+  }
+
   @Test("resetAll restores every action to its default")
   func resetAllRestoresDefaults() {
     let store = ShortcutStore(defaults: makeDefaults())

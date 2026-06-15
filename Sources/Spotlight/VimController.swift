@@ -7,10 +7,18 @@ final class VimController: ObservableObject {
   enum PromptKind: Equatable { case command, search }
 
   enum MessageKind: Equatable { case info, success, error }
+  enum MessageIcon: Equatable { case hermes }
 
   struct Message: Equatable {
     let text: String
     let kind: MessageKind
+    var icon: MessageIcon?
+
+    init(text: String, kind: MessageKind, icon: MessageIcon? = nil) {
+      self.text = text
+      self.kind = kind
+      self.icon = icon
+    }
   }
 
   struct Prompt: Equatable {
@@ -131,8 +139,8 @@ final class VimController: ObservableObject {
     }
   }
 
-  func showMessage(_ text: String, kind: MessageKind) {
-    let msg = Message(text: text, kind: kind)
+  func showMessage(_ text: String, kind: MessageKind, icon: MessageIcon? = nil) {
+    let msg = Message(text: text, kind: kind, icon: icon)
     message = msg
     messageClearTask?.cancel()
     let duration = Self.messageDuration

@@ -155,6 +155,7 @@ extension PlaceholderTextView {
     case .deleteLine(let count): executeDeleteLines(count)
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .deleteChar(let count): executeDeleteChar(count)
+    case .sendCurrentLineToLinear(let count): sendCurrentLinesToLinear(count)
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):

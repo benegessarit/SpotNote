@@ -41,6 +41,7 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
+  case sendCurrentLineToLinear(count: Int)
   case gotoLine(Int)
   case enterVisualLine
   case extendVisualLine(Motion)
@@ -118,6 +119,7 @@ final class VimEngine {
     case "g":
       pendingBuffer = ""
       if key == "g" { return .moveCursor(.documentStart) }
+      if key == "l" { return .sendCurrentLineToLinear(count: count) }
       return .none
     default:
       pendingBuffer = ""
