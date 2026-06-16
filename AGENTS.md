@@ -22,6 +22,7 @@ The local David build intentionally differs from upstream SpotNote:
 - The editor text is the slightly-smaller nvim-like scale: `EditorMetrics.fontSize == 22`, with line numbers matching that same value.
 - Short notes open roomy/tall: `EditorMetrics.roomyVisibleLinesFloor == 9`, which makes the four-line inbox panel about 2x the old height.
 - The HUD opens horizontally centered and vertically centered slightly below the screen midline, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsHorizontallyCentered` and `defaultHUDOriginIsSlightlyBelowMidline`.
+- The editor card has no top-right copy icon; keep copy available through keyboard/menu actions instead of visible chrome.
 
 ## Safe edit flow
 

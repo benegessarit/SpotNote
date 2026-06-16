@@ -433,7 +433,6 @@ public final class SpotlightWindowController {
         find: findController,
         fuzzy: fuzzyController,
         command: commandController,
-        copy: copyController,
         vimController: vimController,
         onHeightChange: { [weak self] height in
           self?.setPanelHeight(height, animated: false)

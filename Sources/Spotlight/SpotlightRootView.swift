@@ -24,7 +24,6 @@ struct SpotlightRootView: View {
   @ObservedObject var find: FindController
   @ObservedObject var fuzzy: FuzzyController
   @ObservedObject var command: CommandController
-  @ObservedObject var copy: CopyController
   @ObservedObject var vimController: VimController
   /// Called synchronously from the editor delegate when the text's line
   /// count changes, so the panel resize happens in the same runloop tick
@@ -194,13 +193,6 @@ struct SpotlightRootView: View {
     .padding(.vertical, EditorMetrics.verticalInset)
     .background(editorCardShape.fill(theme.background))
     .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
-    .overlay(alignment: .topTrailing) {
-      CopyButton(controller: copy, theme: theme) {
-        copy.copy(session.currentText)
-      }
-      .padding(.trailing, 6)
-      .padding(.top, 9)
-    }
     .padding(.top, EditorMetrics.outerPadding)
     .padding(.horizontal, EditorMetrics.outerPadding)
     .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
