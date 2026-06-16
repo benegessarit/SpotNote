@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AppKit
 import SwiftUI
 import Testing
@@ -63,12 +64,12 @@ struct MultilineEditorTokenTests {
 
     insert("@cl", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
-    #expect(boundText == "[ ] ")
+    #expect(boundText == "[   ] ")
 
     insert("\n", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
 
-    #expect(boundText == "[ ] \n")
+    #expect(boundText == "[   ] \n")
     #expect(heights.last == EditorMetrics.panelHeight(forLines: 2, maxLines: 4))
   }
 
@@ -111,12 +112,12 @@ struct MultilineEditorTokenTests {
     pressBackspace(in: context.textView)
     context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
 
-    #expect(context.boundText() == "[ ]")
+    #expect(context.boundText() == "[   ]")
 
     insert(" item", into: context.textView)
     context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
 
-    #expect(context.boundText() == "[ ] item")
+    #expect(context.boundText() == "[   ] item")
   }
 
   @Test("cmd+z after @cl rendering restores markdown literal")
@@ -128,7 +129,7 @@ struct MultilineEditorTokenTests {
     pressCommandZ(in: context.textView)
     context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
 
-    #expect(context.boundText() == "[ ]")
+    #expect(context.boundText() == "[   ]")
   }
 
   @Test("direct undo after @cl rendering restores markdown literal")
@@ -140,7 +141,7 @@ struct MultilineEditorTokenTests {
     _ = context.textView.tryToPerform(Selector(("undo:")), with: nil)
     context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
 
-    #expect(context.boundText() == "[ ]")
+    #expect(context.boundText() == "[   ]")
   }
 
   @Test("backspace after @today rendering reverts even if AppKit leaves caret at original token end")
@@ -329,13 +330,13 @@ struct MultilineEditorChecklistToggleTests {
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "alpha\n[ ] call Elliot")
-    #expect(textView.selectedRange.location == originalCaret + ("[ ] " as NSString).length)
+    #expect(textView.string == "alpha\n[   ] call Elliot")
+    #expect(textView.selectedRange.location == originalCaret + ("[   ] " as NSString).length)
   }
 
-  @Test("shortcut cycles only a line-start Markdown checklist marker")
-  func shortcutCyclesLineStartMarkdownChecklistMarker() {
-    let textView = makeChecklistTextView(text: "[ ] cursor placement")
+  @Test("shortcut cycles canonical unchecked marker to checked then bare text")
+  func shortcutCyclesCanonicalUncheckedMarker() {
+    let textView = makeChecklistTextView(text: "[   ] cursor placement")
     textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
 
     textView.toggleChecklistShortcut(nil)
@@ -345,6 +346,16 @@ struct MultilineEditorChecklistToggleTests {
     textView.toggleChecklistShortcut(nil)
 
     #expect(textView.string == "cursor placement")
+  }
+
+  @Test("shortcut cycles legacy unchecked marker to checked")
+  func shortcutCyclesLegacyUncheckedMarker() {
+    let textView = makeChecklistTextView(text: "[ ] cursor placement")
+    textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+
+    textView.toggleChecklistShortcut(nil)
+
+    #expect(textView.string == "[ x ] cursor placement")
   }
 
   @Test("shortcut normalizes compact checklist markers with a following text space")
@@ -364,7 +375,7 @@ struct MultilineEditorChecklistToggleTests {
 
     textView.toggleChecklistShortcut(nil)
 
-    #expect(textView.string == "[ ] prefix [ ] cursor placement")
+    #expect(textView.string == "[   ] prefix [ ] cursor placement")
   }
 
   @Test("click toggles Markdown checklist marker in the middle of a line")
@@ -379,12 +390,12 @@ struct MultilineEditorChecklistToggleTests {
 
   @Test("copy preserves literal Markdown checklist markers")
   func copyPreservesMarkdownChecklistMarkers() {
-    let textView = makeChecklistTextView(text: "[ ] one\n[ x ] two")
+    let textView = makeChecklistTextView(text: "[   ] one\n[ x ] two")
     textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
 
     textView.copy(nil)
 
-    #expect(NSPasteboard.general.string(forType: .string) == "[ ] one\n[ x ] two")
+    #expect(NSPasteboard.general.string(forType: .string) == "[   ] one\n[ x ] two")
   }
 
   @Test("caret erase uses previously painted rect after selection moves")

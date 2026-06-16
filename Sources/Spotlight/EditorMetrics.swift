@@ -9,18 +9,18 @@ enum EditorMetrics {
   static let verticalInset: CGFloat = 16
   /// Padding between the rounded card and the panel edge (shadow gutter).
   static let outerPadding: CGFloat = 4
-  /// Leading padding inside the rounded card -- small so the line-number
-  /// gutter hugs the card's left edge.
-  static let leadingInset: CGFloat = 10
+  /// Leading padding inside the rounded card. Paired with `textLeadingGap`
+  /// so the line number column matches the pre-statusline-removal HUD.
+  static let leadingInset: CGFloat = 28
   /// Trailing padding inside the rounded card.
   static let trailingInset: CGFloat = 16
   /// Gap applied to the text view's leading text-container inset so the
   /// caret doesn't abut the line-number gutter.
-  static let textLeadingGap: CGFloat = 10
+  static let textLeadingGap: CGFloat = 18
   /// Right-side breathing room now that the in-editor copy button is gone.
   static let textTrailingGap: CGFloat = 12
   /// Font size used for the editor text.
-  static let fontSize: CGFloat = 23
+  static let fontSize: CGFloat = 22
   /// Vim-normal-mode block cursor width. This intentionally reads like a
   /// real block cursor instead of AppKit's default one-pixel insertion bar.
   static let normalModeCursorWidth: CGFloat = 13
@@ -31,9 +31,9 @@ enum EditorMetrics {
   static let tutorialBarHeight: CGFloat = 58
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
-  /// Minimum default row count for the roomy HUD. Keep this local so the
-  /// nonisolated sizing helper does not reach into main-actor UI preferences.
-  static let roomyVisibleLinesFloor = 3
+  /// Minimum default row count for the roomy HUD. Keeps short inbox-style
+  /// notes open at roughly twice the previous four-line panel height.
+  static let roomyVisibleLinesFloor = 9
 
   /// Panel height for `lines` display rows, clamped to the user-selected
   /// visible-line cap while keeping short notes at the default roomy size.

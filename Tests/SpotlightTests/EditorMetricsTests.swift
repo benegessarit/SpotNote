@@ -77,12 +77,31 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
 
-  @Test("editor metrics use the larger nvim-style HUD scale")
-  func largerNvimStyleScale() {
-    #expect(EditorMetrics.fontSize >= 23)
+  @Test("editor metrics use the slightly smaller nvim-style HUD scale")
+  func slightlySmallerNvimStyleScale() {
+    #expect(EditorMetrics.fontSize == 22)
     #expect(EditorMetrics.lineHeight >= 34)
     #expect(EditorMetrics.panelWidth >= 720)
     #expect(EditorMetrics.textTrailingGap <= 18)
+  }
+
+  @Test("short notes open at roughly twice the old four-line HUD height")
+  func shortNotesOpenAtDoubleHeight() {
+    let oldFourLineHeight =
+      CGFloat(4) * EditorMetrics.lineHeight
+      + EditorMetrics.verticalInset * 2
+      + EditorMetrics.outerPadding * 2
+    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 10)
+
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 9)
+    #expect(openHeight == EditorMetrics.panelHeight(forLines: 9, maxLines: 10))
+    #expect(openHeight >= oldFourLineHeight * 1.95)
+  }
+
+  @Test("line number gutter keeps the old spacious left margin")
+  func lineNumberGutterKeepsOldLeftMargin() {
+    #expect(EditorMetrics.leadingInset == 28)
+    #expect(EditorMetrics.textLeadingGap == 18)
   }
 
   @Test("normal-mode cursor matches nvim-style peach block metrics")

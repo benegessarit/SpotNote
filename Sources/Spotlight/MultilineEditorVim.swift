@@ -14,6 +14,9 @@ extension PlaceholderTextView {
     controller.substituteHandler = { [weak self] req in
       self?.performSubstitute(req) ?? 0
     }
+    controller.flashHandler = { [weak self] request in
+      self?.performFlashJump(request) ?? false
+    }
   }
 
   /// Per-keystroke vim dispatch. Extracted from `keyDown` so the main
@@ -63,6 +66,12 @@ extension PlaceholderTextView {
     controller: VimController,
     mods: NSEvent.ModifierFlags
   ) -> Bool {
+    switch controller.prompt?.kind {
+    case .flash, .lineFlash:
+      return handleFlashPromptKey(event: event, controller: controller, mods: mods)
+    default:
+      break
+    }
     if event.keyCode == 53 {
       controller.cancelPrompt()
       needsDisplay = true
@@ -139,6 +148,21 @@ extension PlaceholderTextView {
     return count
   }
 
+  /// `s<char>` / `S<char>` -- a native, Flash-style one-character jump.
+  /// The pure target selection lives in `VimFlash`; this method only applies
+  /// the resulting AppKit caret/scroll side effects to the live text view.
+  @discardableResult
+  func performFlashJump(_ request: VimFlashRequest) -> Bool {
+    guard let target = VimFlash.targetLocation(in: string, from: selectedRange.location, request: request) else {
+      return false
+    }
+    let range = NSRange(location: target, length: 0)
+    setSelectedRange(range)
+    scrollRangeToVisible(range)
+    needsDisplay = true
+    return true
+  }
+
   /// Maps a parsed `VimAction` to text-view side effects. Lives in this
   /// file so the giant per-case switch doesn't bloat
   /// `MultilineEditor.swift`.
@@ -156,6 +180,7 @@ extension PlaceholderTextView {
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .deleteChar(let count): executeDeleteChar(count)
     case .sendCurrentLineToLinear(let count): sendCurrentLinesToLinear(count)
+    case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
@@ -371,6 +396,11 @@ enum VimActionDispatcher {
     switch action {
     case .enterCommand: view.vimController?.enterPrompt(.command)
     case .enterSearch: view.vimController?.enterPrompt(.search)
+    case .enterFlash(let direction, let count, let scope):
+      view.enterFlashPrompt(direction: direction, count: count, scope: scope)
+    case .enterLineFlash(let count):
+      view.vimController?.enterPrompt(.lineFlash(count: count))
+      view.refreshLineFlashHints()
     case .findNext: view.vimController?.findStep(1)
     case .findPrevious: view.vimController?.findStep(-1)
     default: return false

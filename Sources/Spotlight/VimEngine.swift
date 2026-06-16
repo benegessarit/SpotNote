@@ -41,7 +41,10 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
+  case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
+  case enterLineFlash(count: Int)
   case sendCurrentLineToLinear(count: Int)
+  case appendCurrentLineToDailyNote(count: Int)
   case gotoLine(Int)
   case enterVisualLine
   case extendVisualLine(Motion)
@@ -98,6 +101,7 @@ final class VimEngine {
     return handleSingle(key: key)
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   private func handlePending(key: String) -> VimAction {
     let count = resolvedCount
     defer { clearAccumulator() }
@@ -120,6 +124,7 @@ final class VimEngine {
       pendingBuffer = ""
       if key == "g" { return .moveCursor(.documentStart) }
       if key == "l" { return .sendCurrentLineToLinear(count: count) }
+      if key == "d" { return .appendCurrentLineToDailyNote(count: count) }
       return .none
     default:
       pendingBuffer = ""
@@ -149,6 +154,7 @@ final class VimEngine {
     }
 
     if let action = enterInsertAction(for: key) { return action }
+    if let action = flashAction(for: key, count: count) { return action }
     switch key {
     case "x": return .deleteChar(count: count)
     case "D": return .deleteToEndOfLine
@@ -256,6 +262,17 @@ final class VimEngine {
     case "n": return .findNext
     case "N": return .findPrevious
     default: return .none
+    }
+  }
+
+  private func flashAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "s": return .enterFlash(.forward, count: count, scope: .document)
+    case "S": return .enterFlash(.backward, count: count, scope: .document)
+    case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
+    case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
+    case "K": return .enterLineFlash(count: count)
+    default: return nil
     }
   }
 

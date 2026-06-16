@@ -15,8 +15,13 @@ The local David build intentionally differs from upstream SpotNote:
 - Catppuccin and Rosé Pine themes are present in `Sources/Spotlight/Theme.swift`.
 - Linear handoff is routed through `Sources/Spotlight/ScratchpadHandoff.swift` to the local Hermes ingress endpoint.
 - Hermes feedback uses `Sources/Spotlight/HermesToastView.swift` plus `Sources/Spotlight/Resources/HermesLogo.png`.
+- The first/default note is the vault-backed Markdown inbox at `~/Documents/knowledge/Captures/spotnote-inbox.md`; JSON chat persistence is secondary app-local library state, not the launch buffer.
 - The old Vim statusline is removed entirely: no `vimBarHeight` constant and no `VimStatusLine.swift` source file should exist.
-- The HUD opens 30% of the available rightward travel from center, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsThirtyPercentRightOfCenter`.
+- Native Flash-style Vim jumps are restored without terminal embedding or statusline chrome: `VimFlash.swift`, `MultilineEditorFlash.swift`, and `MultilineEditorFlashRendering.swift` own `s`/`S` whole-document jumps, `f`/`F` same-line jumps, and `K` row/gutter labels.
+- The line-number gutter matches the old spacing with `EditorMetrics.leadingInset == 28` and `EditorMetrics.textLeadingGap == 18`; do not only move the whole editor group when fixing number/text spacing.
+- The editor text is the slightly-smaller nvim-like scale: `EditorMetrics.fontSize == 22`, with line numbers matching that same value.
+- Short notes open roomy/tall: `EditorMetrics.roomyVisibleLinesFloor == 9`, which makes the four-line inbox panel about 2x the old height.
+- The HUD opens horizontally centered and vertically centered slightly below the screen midline, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsHorizontallyCentered` and `defaultHUDOriginIsSlightlyBelowMidline`.
 
 ## Safe edit flow
 
@@ -50,8 +55,9 @@ The local David build intentionally differs from upstream SpotNote:
 ## Manual smoke after install
 
 - Launch/toggle SpotNote with `⌘⇧Space`.
-- Confirm the panel appears right of center, not centered.
+- Confirm the panel opens horizontally centered and slightly below the screen midline.
 - Confirm no bottom Vim statusline appears.
+- In Vim normal mode, confirm `s` starts inline Flash labels, `f` limits labels to the current line, and `K` replaces gutter line numbers with row labels.
 - Type a line, then use `⌘⌥L` or Vim normal-mode `gl` to send it to Linear; the line should delete only after successful handoff and show a Hermes toast.
 
 ## Boundaries

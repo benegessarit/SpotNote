@@ -24,6 +24,14 @@ require_grep() {
   /usr/bin/grep -F -- "$needle" "$ROOT/$file" >/dev/null || fail "missing '$needle' in $file"
 }
 
+reject_grep() {
+  local needle="$1"
+  local file="$2"
+  if /usr/bin/grep -F -- "$needle" "$ROOT/$file" >/dev/null; then
+    fail "retired SpotNote contract '$needle' still present in $file"
+  fi
+}
+
 case "$ROOT" in
   *'/.hermes/kanban/'*|*'/.paperclip-'*|'/tmp/'*|'/private/tmp/'*)
     fail "refusing disposable SpotNote source root: $ROOT"
@@ -58,7 +66,16 @@ require_grep "rose-pine-moonlight" "Sources/Spotlight/Theme.swift"
 require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swift"
 require_grep "Sending to Linear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "Linear task created" "Sources/Spotlight/MultilineEditor.swift"
-require_grep "rightwardTravel * 0.30" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+require_grep "defaultHUDOriginIsHorizontallyCentered" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+require_grep "defaultHUDOriginIsSlightlyBelowMidline" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+reject_grep "defaultRightwardOffsetRatio" "Sources/Spotlight/SpotlightWindow.swift"
+reject_grep "rightwardTravel * 0.30" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
+reject_grep "right of center, not centered" "AGENTS.md"
+require_grep "leadingInset: CGFloat = 28" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "textLeadingGap: CGFloat = 18" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "fontSize: CGFloat = 22" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "roomyVisibleLinesFloor = 9" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "line number gutter keeps the old spacious left margin" "Tests/SpotlightTests/EditorMetricsTests.swift"
 python3 "$ROOT/scripts/launch-contract-smoke.py" >/dev/null
 
 printf 'OK: stable source root %s\n' "$ROOT"

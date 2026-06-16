@@ -1,4 +1,4 @@
-// swiftlint:disable file_length type_body_length function_body_length
+// swiftlint:disable file_length type_body_length function_body_length function_parameter_count
 import AppKit
 import SwiftUI
 
@@ -50,6 +50,9 @@ struct MultilineEditor: NSViewRepresentable {
   /// ingress, which creates the Linear issue without embedding Linear
   /// credentials in SpotNote.
   var onSendLinearTask: ((String) async throws -> Void)?
+  /// Appends current/counted lines to today's vault daily note. The editor
+  /// clears the original lines only after this durable write succeeds.
+  var onAppendDailyNote: ((String) async throws -> URL)?
   /// Called from the AppKit delegate synchronously, so the panel resizes in
   /// the same runloop tick as the text change. A SwiftUI `@State` round-trip
   /// would defer the resize by one runloop, causing a visible flash.
@@ -70,6 +73,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
+    textView.onAppendDailyNote = onAppendDailyNote
     return scroll
   }
 
@@ -131,6 +135,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
+    textView.onAppendDailyNote = onAppendDailyNote
     applyStyle(textView: textView)
     textView.placeholderString = placeholder
     configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
@@ -501,6 +506,11 @@ final class PlaceholderTextView: NSTextView {
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
   var onSendLinearTask: ((String) async throws -> Void)?
+  var onAppendDailyNote: ((String) async throws -> URL)?
+  var flashHints: [VimFlashTarget] = []
+  var flashLabelBuffer: String = ""
+  var isShowingLineFlashHints = false
+  var flashTemporaryAttributeRanges: [NSRange] = []
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -513,6 +523,7 @@ final class PlaceholderTextView: NSTextView {
         if vimEngine == nil { vimEngine = VimEngine() }
       } else {
         vimEngine = nil
+        clearFlashHints()
       }
       notifyVimModeChanged()
       needsDisplay = true
@@ -757,29 +768,72 @@ final class PlaceholderTextView: NSTextView {
     sendCurrentLinesToLinear(1)
   }
 
+  @objc func appendCurrentLineToDailyNoteShortcut(_ sender: Any?) {
+    appendCurrentLinesToDailyNote(1)
+  }
+
   func sendCurrentLinesToLinear(_ count: Int) {
     guard let onSendLinearTask else {
       vimController?.showMessage("Linear handoff unavailable", kind: .error, icon: .hermes)
       return
     }
+    commitSelectedLines(
+      count: count,
+      preparing: LinearTaskTitleNormalizer.title(fromSpotNoteLine:),
+      emptyMessage: "No Linear task on this line",
+      progressMessage: "Sending to Linear",
+      successMessage: "Linear task created",
+      changedMessage: "Linear created; line changed",
+      failureMessage: "Linear send failed",
+      commit: { try await onSendLinearTask($0) }
+    )
+  }
+
+  func appendCurrentLinesToDailyNote(_ count: Int) {
+    guard let onAppendDailyNote else {
+      vimController?.showMessage("Daily note handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    commitSelectedLines(
+      count: count,
+      preparing: DailyNotePayload.normalized,
+      emptyMessage: "No daily-note text on this line",
+      progressMessage: "Appending to Daily Note",
+      successMessage: "Daily note updated",
+      changedMessage: "Daily note updated; line changed",
+      failureMessage: "Daily note append failed",
+      commit: { _ = try await onAppendDailyNote($0) }
+    )
+  }
+
+  private func commitSelectedLines(
+    count: Int,
+    preparing payloadFor: (String) -> String?,
+    emptyMessage: String,
+    progressMessage: String,
+    successMessage: String,
+    changedMessage: String,
+    failureMessage: String,
+    commit: @escaping (String) async throws -> Void
+  ) {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
     let range = selectedLineRange(count: max(1, count), in: nsString)
     let original = nsString.substring(with: range)
-    guard let title = LinearTaskTitleNormalizer.title(fromSpotNoteLine: original) else {
-      vimController?.showMessage("No Linear task on this line", kind: .error, icon: .hermes)
+    guard let payload = payloadFor(original) else {
+      vimController?.showMessage(emptyMessage, kind: .error, icon: .hermes)
       return
     }
-    vimController?.showMessage("Sending to Linear", kind: .info, icon: .hermes)
-    Task { @MainActor [weak self, range, original, title] in
+    vimController?.showMessage(progressMessage, kind: .info, icon: .hermes)
+    Task { @MainActor [weak self, range, original, payload, commit] in
       guard let self else { return }
       do {
-        try await onSendLinearTask(title)
+        try await commit(payload)
         let current = self.string as NSString
         guard range.location + range.length <= current.length,
           current.substring(with: range) == original
         else {
-          self.vimController?.showMessage("Linear created; line changed", kind: .error, icon: .hermes)
+          self.vimController?.showMessage(changedMessage, kind: .error, icon: .hermes)
           return
         }
         if self.shouldChangeText(in: range, replacementString: "") {
@@ -788,9 +842,9 @@ final class PlaceholderTextView: NSTextView {
           let cursor = min(range.location, (self.string as NSString).length)
           self.setSelectedRange(NSRange(location: cursor, length: 0))
         }
-        self.vimController?.showMessage("Linear task created", kind: .success, icon: .hermes)
+        self.vimController?.showMessage(successMessage, kind: .success, icon: .hermes)
       } catch {
-        self.vimController?.showMessage("Linear send failed", kind: .error, icon: .hermes)
+        self.vimController?.showMessage(failureMessage, kind: .error, icon: .hermes)
       }
     }
   }
@@ -831,6 +885,7 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
+    drawFlashHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [
@@ -1192,7 +1247,8 @@ final class PlaceholderTextView: NSTextView {
     let nsString = string as NSString
     let lineText = nsString.substring(with: lineRange)
     guard let match = ChecklistMarker.match(in: lineText, near: targetOffset) else { return false }
-    let edit = cycle ? ChecklistMarker.cycleEdit(for: match, in: lineText) : ChecklistMarker.toggleEdit(for: match, in: lineText)
+    let edit =
+      cycle ? ChecklistMarker.cycleEdit(for: match, in: lineText) : ChecklistMarker.toggleEdit(for: match, in: lineText)
     let absoluteRange = NSRange(location: lineRange.location + edit.range.location, length: edit.range.length)
     if shouldChangeText(in: absoluteRange, replacementString: edit.replacement) {
       replaceCharacters(in: absoluteRange, with: edit.replacement)
@@ -1262,9 +1318,8 @@ extension String {
 }
 
 private enum ChecklistMarker {
-  static let unchecked = "[ ]"
+  static let unchecked = "[   ]"
   static let checked = "[ x ]"
-  private static let legacyChecked = ["[x]", "[X]"]
   static let uncheckedWithTextGap = unchecked + " "
 
   struct Match {
@@ -1277,14 +1332,15 @@ private enum ChecklistMarker {
     let replacement: String
   }
 
-  private static let regex = try? NSRegularExpression(pattern: #"\[(?: |x|X| x )\]"#)
+  private static let regex = try? NSRegularExpression(pattern: #"\[\s*(?:x|X)?\s*\]"#)
 
   static func matches(in text: String) -> [Match] {
     let nsText = text as NSString
     let fullRange = NSRange(location: 0, length: nsText.length)
     return regex?.matches(in: text, range: fullRange).compactMap { result in
       let marker = nsText.substring(with: result.range)
-      return Match(range: result.range, isChecked: marker == checked || legacyChecked.contains(marker))
+      let compact = marker.filter { !$0.isWhitespace }
+      return Match(range: result.range, isChecked: compact == "[x]" || compact == "[X]")
     } ?? []
   }
 

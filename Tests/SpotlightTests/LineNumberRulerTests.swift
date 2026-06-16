@@ -53,6 +53,11 @@ struct LineNumberRulerTests {
 
   // MARK: - thickness(forLineCount:labelSize:)
 
+  @Test("line number labels use the same nvim-size scale as editor text")
+  func labelFontUsesEditorScale() {
+    #expect(LineNumberRuler.labelFontSize == EditorMetrics.fontSize)
+  }
+
   @Test("thickness is monotonically non-decreasing with line count")
   func thicknessMonotonic() {
     let single = LineNumberRuler.thickness(forLineCount: 1, labelSize: 15)

@@ -34,6 +34,7 @@ struct SpotlightRootView: View {
   /// already in normal mode).
   let onEscape: () -> Void
   let onSendLinearTask: (String) async throws -> Void
+  let onAppendDailyNote: (String) async throws -> URL
 
   private var theme: Theme { preferences.activeTheme }
 
@@ -185,6 +186,7 @@ struct SpotlightRootView: View {
       vimController: vimController,
       onEscape: onEscape,
       onSendLinearTask: onSendLinearTask,
+      onAppendDailyNote: onAppendDailyNote,
       onHeightChange: onHeightChange
     )
     .padding(.leading, EditorMetrics.leadingInset)

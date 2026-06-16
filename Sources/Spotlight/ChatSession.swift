@@ -48,6 +48,7 @@ final class ChatSession: ObservableObject {
   var lastDeleted: Chat? { deletedStack.last }
 
   private let store: ChatStore
+  private let vaultInbox: VaultInboxDocument?
   private var previewDismissTask: Task<Void, Never>?
   /// While true, `announce` skips scheduling auto-dismiss so the
   /// navigation overlay stays put. Driven by the window controller's
@@ -56,16 +57,18 @@ final class ChatSession: ObservableObject {
   private static let previewDismissDelay: Duration = .milliseconds(1400)
   private static let deletePreviewDelay: Duration = .milliseconds(4000)
 
-  init(store: ChatStore) {
+  init(store: ChatStore, vaultInbox: VaultInboxDocument? = nil) {
     self.store = store
+    self.vaultInbox = vaultInbox
   }
 
-  /// Loads the chat list and restores the most-recently-edited chat. If
-  /// the store is empty, creates a fresh chat so the user can start
-  /// typing immediately.
+  /// Loads the chat list and restores the vault-backed inbox when it
+  /// exists. If there is no vault inbox, restores the most-recently-edited
+  /// app-local chat. If the store is empty, creates a fresh chat so the
+  /// user can start typing immediately.
   func bootstrap() async {
     await store.loadFromDisk()
-    chats = await store.list()
+    chats = await availableChats()
     if currentID != nil { return }
     if !currentText.isEmpty {
       _ = await createBlankChat(initialText: currentText)
@@ -80,9 +83,9 @@ final class ChatSession: ObservableObject {
   }
 
   func reload() async {
-    await store.flush()
+    await flush()
     await store.loadFromDisk()
-    chats = await store.list()
+    chats = await availableChats()
     if let id = currentID, let current = chats.first(where: { $0.id == id }) {
       currentText = Self.displayText(for: current)
     } else if let mostRecent = chats.first {
@@ -120,7 +123,7 @@ final class ChatSession: ObservableObject {
   func cycleNewer() async { await cycle(by: -1) }
 
   private func cycle(by delta: Int) async {
-    chats = await store.list()
+    chats = await availableChats()
     guard !chats.isEmpty else { return }
     guard chats.count > 1 else {
       announce("only one note")
@@ -149,20 +152,22 @@ final class ChatSession: ObservableObject {
     currentText = Self.displayText(for: chat)
   }
 
-  /// Binds to ⌘D -- removes the current chat and lands on the next
-  /// most-recently-edited one. When the store becomes empty a fresh
-  /// blank chat is created so the user can keep typing immediately.
-  /// The deleted chat (with the in-memory text, in case of unsaved
-  /// edits) is captured into `lastDeleted` so ⌘Z can restore it.
+  /// Binds to ⌘D -- removes the current app-local chat and lands on the
+  /// next available note. The vault inbox is protected from chat-library
+  /// deletion because it is a real Markdown file in the knowledge vault.
   func deleteCurrent() async {
     guard let id = currentID else { return }
+    guard id != vaultInbox?.id else {
+      announce("inbox file stays")
+      return
+    }
     var snapshot =
       chats.first(where: { $0.id == id })
       ?? Chat(id: id, createdAt: Date(), updatedAt: Date(), text: currentText)
     snapshot.text = currentText
     try? await store.delete(id: id)
     deletedStack.append(snapshot)
-    chats = await store.list()
+    chats = await availableChats()
     if let replacement = chats.first {
       currentID = replacement.id
       currentText = Self.displayText(for: replacement)
@@ -181,7 +186,7 @@ final class ChatSession: ObservableObject {
   func undoDelete() async {
     guard let chat = deletedStack.popLast() else { return }
     try? await store.restore(chat)
-    chats = await store.list()
+    chats = await availableChats()
     currentID = chat.id
     currentText = Self.displayText(for: chat)
     announce("restored", sticky: true, highlightedID: chat.id)
@@ -189,8 +194,12 @@ final class ChatSession: ObservableObject {
 
   func togglePin() async {
     guard let id = currentID else { return }
+    guard id != vaultInbox?.id else {
+      announce("inbox is always pinned")
+      return
+    }
     try? await store.togglePin(id: id)
-    chats = await store.list()
+    chats = await availableChats()
     let wasPinned = chats.first(where: { $0.id == id })?.isPinned ?? false
     announce(wasPinned ? "pinned ★" : "unpinned", sticky: false)
   }
@@ -216,8 +225,18 @@ final class ChatSession: ObservableObject {
       }
       return
     }
+    if id == vaultInbox?.id {
+      let inbox = vaultInbox
+      Task { await inbox?.update(text: snapshot) }
+      return
+    }
     let store = store
     Task { await store.update(id: id, text: snapshot) }
+  }
+
+  func flush() async {
+    await store.flush()
+    await vaultInbox?.flush()
   }
 
   // MARK: - Private
@@ -246,8 +265,14 @@ final class ChatSession: ObservableObject {
     if !initialText.isEmpty {
       await store.update(id: chat.id, text: initialText)
     }
-    chats = await store.list()
+    chats = await availableChats()
     return true
+  }
+
+  private func availableChats() async -> [Chat] {
+    let saved = await store.list().filter { $0.id != vaultInbox?.id }
+    guard let inbox = await vaultInbox?.load() else { return saved }
+    return [inbox] + saved
   }
 
   private func createCurrentChatForPendingEdit(_ snapshot: String) async {

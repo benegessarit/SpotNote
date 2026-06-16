@@ -4,7 +4,12 @@ import SwiftUI
 
 @MainActor
 final class VimController: ObservableObject {
-  enum PromptKind: Equatable { case command, search }
+  enum PromptKind: Equatable {
+    case command
+    case search
+    case flash(VimFlashDirection, count: Int, scope: VimFlashScope)
+    case lineFlash(count: Int)
+  }
 
   enum MessageKind: Equatable { case info, success, error }
   enum MessageIcon: Equatable { case hermes }
@@ -58,6 +63,9 @@ final class VimController: ObservableObject {
   /// Step handler for normal-mode `n` / `N`. Same return semantics as
   /// `searchHandler`.
   var findStepHandler: ((Int) -> SearchOutcome?)?
+  /// One-character Flash-style jump handler installed by the live text view.
+  /// Returns `true` when the caret moved.
+  var flashHandler: ((VimFlashRequest) -> Bool)?
 
   private var messageClearTask: Task<Void, Never>?
   private static let messageDuration: Duration = .seconds(2)
@@ -119,8 +127,24 @@ final class VimController: ObservableObject {
       } else {
         applySearchOutcome(searchHandler?(buffer))
       }
+    case .flash, .lineFlash:
+      return true
     }
     return true
+  }
+
+  func submitFlash(_ query: String) {
+    guard let current = prompt,
+      case .flash(let direction, let count, let scope) = current.kind
+    else { return }
+    prompt = nil
+    guard !query.isEmpty else { return }
+    let request = VimFlashRequest(query: query, direction: direction, count: count, scope: scope)
+    if flashHandler?(request) == true {
+      message = nil
+    } else {
+      showMessage("flash: no match", kind: .error)
+    }
   }
 
   func findStep(_ delta: Int) {

@@ -25,7 +25,7 @@ struct ShortcutsPane: View {
         title: "Notes",
         actions: [
           .newChat, .olderChat, .newerChat, .deleteChat, .undoDelete, .pinNote,
-          .copyContent, .shareCurrentChat
+          .appendToDailyNote, .copyContent, .shareCurrentChat
         ],
         store: shortcuts
       )

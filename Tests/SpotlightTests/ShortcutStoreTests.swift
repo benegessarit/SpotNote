@@ -81,12 +81,41 @@ struct ShortcutStoreTests {
     #expect(store.match(key: "l", modifiers: [.command, .option]) == .sendToLinear)
   }
 
+  @Test("append to Daily Note defaults to Cmd Option D")
+  func appendToDailyNoteDefaultShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    let binding = store.binding(for: .appendToDailyNote)
+    #expect(binding.key == "d")
+    #expect(binding.modifiers == [.command, .option])
+    #expect(store.match(key: "d", modifiers: [.command, .option]) == .appendToDailyNote)
+  }
+
+  @Test("loading an older shortcut map avoids conflicts for new default chords")
+  func missingActionBackfillAvoidsExistingChordConflicts() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where action != .appendToDailyNote {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    let existingOwner = Shortcut(key: "d", modifiers: [.command, .option])
+    oldMap[ShortcutAction.openSettings.rawValue] = existingOwner
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    let store = ShortcutStore(defaults: defaults, storageKey: key)
+
+    #expect(store.binding(for: .openSettings) == existingOwner)
+    #expect(store.binding(for: .appendToDailyNote) == Shortcut(key: "d", modifiers: [.command, .option, .shift]))
+    #expect(store.match(key: "d", modifiers: [.command, .option]) == .openSettings)
+    #expect(store.match(key: "d", modifiers: [.command, .option, .shift]) == .appendToDailyNote)
+  }
+
   @Test("loading an older shortcut map writes missing actions back to defaults")
   func missingActionsArePersistedBackToDefaults() throws {
     let defaults = makeDefaults()
     let key = "shortcuts.bindings.v5"
     var oldMap: [String: Shortcut] = [:]
-    for action in ShortcutAction.allCases where action != .sendToLinear {
+    for action in ShortcutAction.allCases where ![.sendToLinear, .appendToDailyNote].contains(action) {
       oldMap[action.rawValue] = action.defaultShortcut
     }
     defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
@@ -96,6 +125,7 @@ struct ShortcutStoreTests {
     let storedData = try #require(defaults.data(forKey: key))
     let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
     #expect(stored[ShortcutAction.sendToLinear.rawValue] == ShortcutAction.sendToLinear.defaultShortcut)
+    #expect(stored[ShortcutAction.appendToDailyNote.rawValue] == ShortcutAction.appendToDailyNote.defaultShortcut)
   }
 
   @Test("resetAll restores every action to its default")
@@ -127,7 +157,7 @@ struct ShortcutStoreTests {
 
   @Test("checklist shortcut help describes visible Markdown syntax")
   func checklistShortcutHelpDescribesMarkdownSyntax() {
-    #expect(ShortcutAction.insertChecklist.subtitle.contains("[ ]"))
+    #expect(ShortcutAction.insertChecklist.subtitle.contains("[   ]"))
     #expect(!ShortcutAction.insertChecklist.subtitle.contains("@cl"))
   }
 }

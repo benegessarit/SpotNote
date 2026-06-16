@@ -7,7 +7,7 @@ import SwiftUI
 public final class ThemePreferences: ObservableObject {
   public static let minVisibleLines = 1
   public static let maxVisibleLinesCap = 30
-  public static let defaultVisibleLines = 3
+  public static let defaultVisibleLines = 9
 
   private enum Key {
     static let selectedID = "theme.selected.id"

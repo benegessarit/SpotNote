@@ -30,14 +30,23 @@ public final class SpotlightWindowController {
     .canJoinAllApplications, .canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
-  nonisolated static let defaultRightwardOffsetRatio: CGFloat = 0.30
+  nonisolated static let defaultLoweredCenterRatio: CGFloat = 0.06
 
   nonisolated static func restingOriginX(in screenFrame: NSRect, panelWidth: CGFloat) -> CGFloat {
     let centeredX = (screenFrame.midX - panelWidth / 2).rounded()
-    let rightmostX = screenFrame.maxX - panelWidth
-    let rightwardTravel = max(0, rightmostX - centeredX)
-    let shiftedX = centeredX + (rightwardTravel * defaultRightwardOffsetRatio).rounded()
-    return min(max(shiftedX, screenFrame.minX), rightmostX).rounded()
+    let rightmostX = max(screenFrame.minX, screenFrame.maxX - panelWidth)
+    return min(max(centeredX, screenFrame.minX), rightmostX).rounded()
+  }
+
+  nonisolated static func restingOriginY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
+    let loweredCenterY = (screenFrame.midY - screenFrame.height * defaultLoweredCenterRatio).rounded()
+    let centeredY = (loweredCenterY - panelHeight / 2).rounded()
+    let highestY = max(screenFrame.minY, screenFrame.maxY - panelHeight)
+    return min(max(centeredY, screenFrame.minY), highestY).rounded()
+  }
+
+  nonisolated static func restingTopY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
+    restingOriginY(in: screenFrame, panelHeight: panelHeight) + panelHeight
   }
 
   private var panel: SpotlightPanel?
@@ -51,6 +60,7 @@ public final class SpotlightWindowController {
   private let commandController = CommandController()
   private let copyController = CopyController()
   private let handoffClient = ScratchpadHandoffClient()
+  private let dailyNoteWriter = DailyNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private let onWillShowHUD: () -> Void
@@ -165,12 +175,13 @@ public final class SpotlightWindowController {
     preferences: ThemePreferences,
     store: ChatStore,
     shortcuts: ShortcutStore,
+    vaultInbox: VaultInboxDocument? = nil,
     onOpenSettings: @escaping () -> Void,
     onWillShowHUD: @escaping () -> Void = {},
     onDidHideHUD: @escaping () -> Void = {}
   ) {
     self.preferences = preferences
-    self.session = ChatSession(store: store)
+    self.session = ChatSession(store: store, vaultInbox: vaultInbox)
     self.shortcuts = shortcuts
     self.onOpenSettings = onOpenSettings
     self.onWillShowHUD = onWillShowHUD
@@ -390,7 +401,7 @@ public final class SpotlightWindowController {
     if let cached = pinnedTopY {
       top = cached
     } else {
-      top = (screenFrame.midY + screenFrame.height * 0.18 + height / 2).rounded()
+      top = Self.restingTopY(in: screenFrame, panelHeight: height)
       pinnedTopY = top
     }
     let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
@@ -432,6 +443,9 @@ public final class SpotlightWindowController {
         },
         onSendLinearTask: { [handoffClient] title in
           _ = try await handoffClient.sendLinearTask(title: title)
+        },
+        onAppendDailyNote: { [dailyNoteWriter] text in
+          try await dailyNoteWriter.append(text)
         }
       )
     )
@@ -492,7 +506,7 @@ public final class SpotlightWindowController {
         forLines: 1,
         maxLines: preferences.maxVisibleLines
       )
-      top = (screenFrame.midY + screenFrame.height * 0.18 + initialHeight / 2).rounded()
+      top = Self.restingTopY(in: screenFrame, panelHeight: initialHeight)
       pinnedTopY = top
     }
     let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
@@ -728,6 +742,11 @@ extension SpotlightWindowController {
     case .sendToLinear:
       _ = panel?.firstResponder?.tryToPerform(
         #selector(PlaceholderTextView.sendCurrentLineToLinearShortcut(_:)),
+        with: nil
+      )
+    case .appendToDailyNote:
+      _ = panel?.firstResponder?.tryToPerform(
+        #selector(PlaceholderTextView.appendCurrentLineToDailyNoteShortcut(_:)),
         with: nil
       )
     case .pinNote:

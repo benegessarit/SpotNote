@@ -18,6 +18,7 @@ struct ScratchpadHandoffTests {
   @Test("title normalizer strips SpotNote checklist and priority markup")
   func titleNormalizerStripsMarkup() {
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "! [ ] Call Elliot") == "Call Elliot")
+    #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "! [   ] Call Elliot") == "Call Elliot")
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "- ☑ Wipe mac") == "Wipe mac")
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "◆ [x] Send note") == "Send note")
     #expect(LinearTaskTitleNormalizer.title(fromSpotNoteLine: "◆ [ x ] Send note") == "Send note")
@@ -32,9 +33,10 @@ struct ScratchpadHandoffTests {
 
   @Test("local-ingress snake-case capture_id is decoded into the handoff receipt")
   func snakeCaseCaptureIDReceipt() async throws {
-    let response = #"{"accepted":true,"capture_id":"spotnote-linear-task:test"}"#.data(using: .utf8) ?? Data()
+    let response = Data(#"{"accepted":true,"capture_id":"spotnote-linear-task:test"}"#.utf8)
+    let endpoint = try #require(URL(string: "http://127.0.0.1:8645/api/local-ingress/marginal"))
     let client = ScratchpadHandoffClient(
-      endpoint: URL(string: "http://127.0.0.1:8645/api/local-ingress/marginal")!,
+      endpoint: endpoint,
       session: StubURLSession(data: response, statusCode: 202)
     )
 
@@ -54,12 +56,13 @@ private final class StubURLSession: URLSessionProtocol, @unchecked Sendable {
   }
 
   func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    let response = HTTPURLResponse(
-      url: request.url ?? URL(string: "http://127.0.0.1")!,
-      statusCode: statusCode,
-      httpVersion: nil,
-      headerFields: nil
-    ) ?? HTTPURLResponse()
+    let response =
+      HTTPURLResponse(
+        url: request.url ?? URL(fileURLWithPath: "/"),
+        statusCode: statusCode,
+        httpVersion: nil,
+        headerFields: nil
+      ) ?? HTTPURLResponse()
     return (data, response)
   }
 }

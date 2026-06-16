@@ -109,11 +109,11 @@ struct ThemePreferencesTests {
     #expect(rehydrated.showMenuBarIcon == false)
   }
 
-  @Test("maxVisibleLines defaults to 3 on first launch")
+  @Test("maxVisibleLines defaults to the roomy 9-line HUD on first launch")
   func maxVisibleLinesDefault() {
     let prefs = ThemePreferences(defaults: makeDefaults())
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
-    #expect(prefs.maxVisibleLines == 3)
+    #expect(prefs.maxVisibleLines == 9)
   }
 
   @Test("maxVisibleLines persists and rehydrates")

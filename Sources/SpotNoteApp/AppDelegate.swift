@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     preferences: preferences,
     store: chatStore,
     shortcuts: shortcutStore,
+    vaultInbox: VaultInboxDocument(),
     onOpenSettings: { [weak self] in self?.showSettings() },
     onWillShowHUD: {
       DockIconSwitcher.applyVisibility(true)

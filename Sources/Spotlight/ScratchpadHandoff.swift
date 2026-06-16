@@ -98,7 +98,8 @@ private struct LocalIngressResponse: Decodable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     accepted = try container.decode(Bool.self, forKey: .accepted)
-    captureID = try container.decodeIfPresent(String.self, forKey: .captureID)
+    captureID =
+      try container.decodeIfPresent(String.self, forKey: .captureID)
       ?? container.decodeIfPresent(String.self, forKey: .captureIDSnake)
   }
 }
@@ -143,7 +144,7 @@ enum LinearTaskTitleNormalizer {
 
   private static func stripCheckbox(_ raw: String) -> String {
     var line = raw
-    for marker in ["[ ]", "[ x ]", "[x]", "[X]", "☐", "☑"] where line.hasPrefix(marker) {
+    for marker in ["[   ]", "[ ]", "[ x ]", "[x]", "[X]", "☐", "☑"] where line.hasPrefix(marker) {
       line.removeFirst(marker.count)
       return line.trimmingCharacters(in: .whitespaces)
     }
@@ -165,7 +166,7 @@ enum LinearTaskHandoffPrompt {
     - Labels: none unless Linear requires an existing default
     - Title: use the exact task title below
 
-    Do not preserve SpotNote checklist markers such as [ ], [ x ], [x], bullets, or ! priority markers.
+    Do not preserve SpotNote checklist markers such as [   ], [ ], [ x ], [x], bullets, or ! priority markers.
     Do not search for or update an existing issue; this motion explicitly creates a new Triage task.
     Reply with the created Linear identifier and URL, or the blocker if creation fails.
 
