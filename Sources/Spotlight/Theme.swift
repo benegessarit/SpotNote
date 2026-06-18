@@ -47,6 +47,16 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.431, green: 0.416, blue: 0.525)
   )
 
+  static let mirage = Theme(
+    id: "mirage",
+    name: "Mirage",
+    mode: .dark,
+    background: Color(red: 27 / 255, green: 39 / 255, blue: 56 / 255),
+    border: Color(red: 221 / 255, green: 179 / 255, blue: 255 / 255).opacity(0.22),
+    text: Color(red: 166 / 255, green: 178 / 255, blue: 192 / 255),
+    placeholder: Color(red: 87 / 255, green: 86 / 255, blue: 86 / 255)
+  )
+
   static let obsidian = Theme(
     id: "obsidian",
     name: "Obsidian",

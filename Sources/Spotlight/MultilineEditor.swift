@@ -378,11 +378,21 @@ struct MultilineEditor: NSViewRepresentable {
     ]
   }
 
-  private func applyStyle(textView: PlaceholderTextView) {
+  func applyStyle(textView: PlaceholderTextView) {
     let newTextColor = NSColor(theme.text)
     let newPlaceholderColor = NSColor(theme.placeholder)
-    if textView.font != font { textView.font = font }
-    if textView.textColor != newTextColor { textView.textColor = newTextColor }
+    // `textView.font` / `textView.textColor` are not just passive defaults:
+    // on a non-empty NSTextView they rewrite storage attributes. When the
+    // caret is in a styled Markdown heading, using them as style-refresh
+    // guards erases every heading back to body font/color. Existing text is
+    // styled via `refreshAttributes`/`CodeStyler`; these setters are only
+    // safe as empty-editor defaults.
+    if textView.string.isEmpty, textView.font != font {
+      textView.font = font
+    }
+    if textView.string.isEmpty, textView.textColor != newTextColor {
+      textView.textColor = newTextColor
+    }
     textView.insertionPointColor = PlaceholderTextView.normalModeCursorColor
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle

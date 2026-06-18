@@ -123,6 +123,48 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
+  @Test("style refresh with the caret in a heading preserves later Markdown headings")
+  func styleRefreshWithCaretInHeadingPreservesLaterHeadings() throws {
+    let theme = ThemeCatalog.mirage
+    let font = SpotNoteFont.editor()
+    let text = "# To Do\n\n20m @email\n\n# Tray"
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let editor = MultilineEditor(
+      text: .constant(text),
+      theme: theme,
+      placeholder: "",
+      showLineNumbers: false,
+      font: font,
+      focusRequest: 0,
+      maxVisibleLines: 9,
+      extraChromeHeight: 0,
+      onHeightChange: { _ in }
+    )
+    let fullRange = NSRange(location: 0, length: (text as NSString).length)
+    textView.textStorage?.setAttributes(
+      [.font: font, .foregroundColor: NSColor(theme.text)],
+      range: fullRange
+    )
+    editor.applyCodeStyling(on: textView)
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    editor.applyStyle(textView: textView)
+
+    let toDoFont = try #require(storageFont(at: lineStart(0, in: text), in: textView))
+    let trayFont = try #require(storageFont(at: lineStart(4, in: text), in: textView))
+    let bodyColor = try #require(storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB))
+    let toDoColor = try #require(storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB))
+    let trayColor = try #require(storageColor(at: lineStart(4, in: text), in: textView)?.usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
+    #expect(NSFontManager.shared.traits(of: trayFont).contains(.boldFontMask))
+    #expect(colorDistance(toDoColor, bodyColor) >= 0.24)
+    #expect(colorDistance(trayColor, bodyColor) >= 0.24)
+    #expect(textView.textStorage?.string == text)
+  }
+
   @Test("Markdown-looking headings inside fenced code are not bolded")
   func headingsInsideFencedCodeAreIgnored() {
     let text = "```\n## not a heading\n```\n## Tray"
