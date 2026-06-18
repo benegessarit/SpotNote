@@ -187,6 +187,8 @@ extension PlaceholderTextView {
       for sub in actions { executeVimAction(sub) }
     case .gotoLine(let line):
       _ = jumpToLine(line)
+    case .jumpToTraySection: _ = jumpToTraySectionForVim()
+    case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
     case .enterVisualLine:
       enterVisualLineMode()
     case .extendVisualLine(let motion):

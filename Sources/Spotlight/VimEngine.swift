@@ -45,6 +45,8 @@ enum VimAction: Equatable, Sendable {
   case enterLineFlash(count: Int)
   case sendCurrentLineToLinear(count: Int)
   case appendCurrentLineToDailyNote(count: Int)
+  case jumpToTraySection
+  case jumpToToDoSection
   case gotoLine(Int)
   case enterVisualLine
   case extendVisualLine(Motion)
@@ -125,6 +127,14 @@ final class VimEngine {
       if key == "g" { return .moveCursor(.documentStart) }
       if key == "l" { return .sendCurrentLineToLinear(count: count) }
       if key == "d" { return .appendCurrentLineToDailyNote(count: count) }
+      if key == "D" {
+        mode = .insert
+        return .jumpToToDoSection
+      }
+      if key == "T" {
+        mode = .insert
+        return .jumpToTraySection
+      }
       return .none
     default:
       pendingBuffer = ""

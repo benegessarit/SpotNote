@@ -70,6 +70,81 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(rect.origin.y == EditorMetrics.lineHeight)
   }
 
+  @Test("gT jumps to the next open line at the end of an existing Tray section")
+  func gShiftTJumpsToExistingTrayOpenLine() {
+    let textView = makeVimMotionTextView(text: "Tasks\n## Tray\nfirst\nsecond")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+
+    #expect(textView.string == "Tasks\n## Tray\nfirst\nsecond\n")
+    #expect(textView.selectedRange.location == (textView.string as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
+  @Test("gT ignores internal Tray blank lines and appends after the last Tray item")
+  func gShiftTIgnoresInternalTrayBlankLines() {
+    let textView = makeVimMotionTextView(text: "Tasks\n## Tray\nfirst\n\nsecond\n\nthird")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+
+    #expect(textView.string == "Tasks\n## Tray\nfirst\n\nsecond\n\nthird\n")
+    #expect(textView.selectedRange.location == (textView.string as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
+  @Test("gT creates a missing Tray section at the bottom and enters insert mode")
+  func gShiftTCreatesMissingTraySection() {
+    let textView = makeVimMotionTextView(text: "Tasks\nalpha")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+
+    #expect(textView.string == "Tasks\nalpha\n\n## Tray\n")
+    #expect(textView.selectedRange.location == (textView.string as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
+  @Test("gD jumps to a new To Do bullet line before Tray")
+  func gShiftDJumpsToNewToDoBulletBeforeTray() {
+    let textView = makeVimMotionTextView(text: "## To Do\n- email\n- cure\n## Tray\nrandom")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+
+    #expect(textView.string == "## To Do\n- email\n- cure\n- \n## Tray\nrandom")
+    #expect(textView.selectedRange.location == ("## To Do\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
+  @Test("gD creates To Do above an existing Tray section")
+  func gShiftDCreatesToDoAboveTray() {
+    let textView = makeVimMotionTextView(text: "- email\n- cure\n\n## Tray\nrandom")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+
+    #expect(textView.string == "## To Do\n- email\n- cure\n- \n## Tray\nrandom")
+    #expect(textView.selectedRange.location == ("## To Do\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
   @Test("Flash jump moves to the first whole-document matching character")
   func flashJumpForward() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")

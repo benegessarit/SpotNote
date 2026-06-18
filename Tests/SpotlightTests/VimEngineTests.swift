@@ -167,6 +167,22 @@ struct VimEngineTests {
     #expect(engine.handle(key: "d", hasModifiers: false) == .appendCurrentLineToDailyNote(count: 1))
   }
 
+  @Test("gD jumps to the To Do section")
+  func gShiftDJumpsToToDoSection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToToDoSection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("gT jumps to the Tray section")
+  func gShiftTJumpsToTraySection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
   @Test("3gd appends three lines to today's daily note")
   func countGdAppendsMultipleLinesToDailyNote() {
     let engine = VimEngine()
