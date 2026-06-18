@@ -36,6 +36,7 @@ extension PlaceholderTextView {
       acceptSuggestion(suggestion)
       return true
     }
+    if isInsert, mods.isEmpty, handleVimInsertModeReturnKey(event) { return true }
     if mods == .control, chars == "c", engine.mode != .normal {
       _ = engine.handle(key: "\u{1B}", hasModifiers: false)
       executeVimAction(.switchToNormal)
