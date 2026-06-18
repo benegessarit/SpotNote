@@ -80,9 +80,8 @@ extension PlaceholderTextView {
     let range = selectedRange
     if range.length > 0, range.location + range.length <= nsString.length {
       let text = nsString.substring(with: range)
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.setString(text, forType: .string)
+      vimPasteboard.clearContents()
+      vimPasteboard.setString(text, forType: .string)
     }
     exitVisualSelection(restoreCaretTo: visualCaret ?? range.location)
   }

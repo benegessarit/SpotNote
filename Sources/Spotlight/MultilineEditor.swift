@@ -514,6 +514,7 @@ final class PlaceholderTextView: NSTextView {
   /// extend symmetrically instead of always re-collapsing to a fixed
   /// edge of the snapped line range.
   var visualLineCaret: Int?
+  var vimPasteboard: NSPasteboard = .general
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
@@ -526,7 +527,7 @@ final class PlaceholderTextView: NSTextView {
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
-  private var isPasting = false
+  var isPasting = false
   private var suppressedOccurrences: [SuppressedTokenOccurrence] = []
 
   var vimModeEnabled: Bool = false {

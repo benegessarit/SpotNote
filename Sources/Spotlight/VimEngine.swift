@@ -35,6 +35,7 @@ enum VimAction: Equatable, Sendable {
   case openLineBelow
   case openLineAbove
   case undo(count: Int)
+  case pasteAfter(count: Int)
   case insertAtEndOfLine
   case insertAtFirstNonBlank
   case composite([VimAction])
@@ -174,12 +175,8 @@ final class VimEngine {
     if let action = enterInsertAction(for: key) { return action }
     if let action = flashAction(for: key, count: count) { return action }
     if let action = visualEntryAction(for: key) { return action }
-    switch key {
-    case "x": return .deleteChar(count: count)
-    case "D": return .deleteToEndOfLine
-    case "u": return .undo(count: count)
-    default: return promptOrSearchAction(for: key)
-    }
+    if let action = editingAction(for: key, count: count) { return action }
+    return promptOrSearchAction(for: key)
   }
 
   // MARK: - Visual line mode
@@ -319,6 +316,16 @@ final class VimEngine {
 }
 
 extension VimEngine {
+  func editingAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "x": return .deleteChar(count: count)
+    case "D": return .deleteToEndOfLine
+    case "p": return .pasteAfter(count: count)
+    case "u": return .undo(count: count)
+    default: return nil
+    }
+  }
+
   func visualEntryAction(for key: String) -> VimAction? {
     switch key {
     case "v":

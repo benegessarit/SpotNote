@@ -181,6 +181,7 @@ extension PlaceholderTextView {
     case .deleteLine(let count): executeDeleteLines(count)
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .deleteChar(let count): executeDeleteChar(count)
+    case .pasteAfter(let count): executeVimPasteAfter(count: count)
     case .sendCurrentLineToLinear(let count): sendCurrentLinesToLinear(count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .undo(let count):
@@ -256,9 +257,8 @@ extension PlaceholderTextView {
     let range = selectedRange
     if range.length > 0, range.length <= nsString.length {
       let text = nsString.substring(with: range)
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.setString(text, forType: .string)
+      vimPasteboard.clearContents()
+      vimPasteboard.setString(text, forType: .string)
     }
     exitVisualLineSelection(restoreCaretTo: range.location)
   }
