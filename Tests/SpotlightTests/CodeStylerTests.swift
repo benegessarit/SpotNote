@@ -123,8 +123,8 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
-  @Test("style refresh with the caret in a heading preserves later Markdown headings")
-  func styleRefreshWithCaretInHeadingPreservesLaterHeadings() throws {
+  @Test("style refresh with the caret in a heading preserves heading-only bold")
+  func styleRefreshWithCaretInHeadingPreservesHeadingOnlyBold() throws {
     let theme = ThemeCatalog.mirage
     let font = SpotNoteFont.editor()
     let text = "# To Do\n\n20m @email\n\n# Tray"
@@ -151,14 +151,17 @@ struct CodeStylerVisualTests {
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
     editor.applyStyle(textView: textView)
+    editor.applyCodeStyling(on: textView)
 
     let toDoFont = try #require(storageFont(at: lineStart(0, in: text), in: textView))
+    let bodyFont = try #require(storageFont(at: lineStart(2, in: text), in: textView))
     let trayFont = try #require(storageFont(at: lineStart(4, in: text), in: textView))
     let bodyColor = try #require(storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB))
     let toDoColor = try #require(storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB))
     let trayColor = try #require(storageColor(at: lineStart(4, in: text), in: textView)?.usingColorSpace(.sRGB))
 
     #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
     #expect(NSFontManager.shared.traits(of: trayFont).contains(.boldFontMask))
     #expect(colorDistance(toDoColor, bodyColor) >= 0.24)
     #expect(colorDistance(trayColor, bodyColor) >= 0.24)

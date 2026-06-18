@@ -18,7 +18,7 @@ enum CodeStylerHeading {
     guard let regex = try? NSRegularExpression(pattern: "(?m)^[ \\t]{0,3}#{1,6}(?:[ \\t]+[^\\n]*)?$") else {
       return
     }
-    let baseFont = style.baseFont ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let baseFont = bodyFont(matching: style.baseFont)
     let headingFont = boldFont(matching: baseFont)
     var headingRanges: [NSRange] = []
     regex.enumerateMatches(in: nsText as String, range: fullRange) { match, _, _ in
@@ -86,6 +86,19 @@ enum CodeStylerHeading {
     let currentColor = storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
     guard current != font || !colorsMatch(currentColor, foreground) else { return }
     storage.addAttributes([.font: font, .foregroundColor: foreground], range: range)
+  }
+
+  private static func bodyFont(matching font: NSFont?) -> NSFont {
+    let base = font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let manager = NSFontManager.shared
+    let converted = manager.convert(base, toNotHaveTrait: .boldFontMask)
+    if !manager.traits(of: converted).contains(.boldFontMask) {
+      return converted
+    }
+    if base.isFixedPitch {
+      return .monospacedSystemFont(ofSize: base.pointSize, weight: .regular)
+    }
+    return .systemFont(ofSize: base.pointSize, weight: .regular)
   }
 
   private static func boldFont(matching font: NSFont?) -> NSFont {
