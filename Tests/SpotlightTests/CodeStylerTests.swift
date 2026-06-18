@@ -99,8 +99,8 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
-  @Test("Markdown headings use a brighter storage foreground than body text")
-  func markdownHeadingsUseBrighterStorageForeground() throws {
+  @Test("Markdown headings use a visibly distinct storage foreground")
+  func markdownHeadingsUseVisiblyDistinctStorageForeground() throws {
     let theme = ThemeCatalog.mirage
     let text = "plain\n## To Do\nnext"
     let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
@@ -119,8 +119,7 @@ struct CodeStylerVisualTests {
       storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
     )
 
-    #expect(headingColor != bodyColor)
-    #expect(relativeLuminance(of: headingColor) > relativeLuminance(of: bodyColor))
+    #expect(colorDistance(headingColor, bodyColor) >= 0.24)
     #expect(textView.textStorage?.string == text)
   }
 
@@ -148,8 +147,10 @@ struct CodeStylerVisualTests {
     textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
   }
 
-  private func relativeLuminance(of color: NSColor) -> CGFloat {
-    0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent
+  private func colorDistance(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
+    abs(lhs.redComponent - rhs.redComponent)
+      + abs(lhs.greenComponent - rhs.greenComponent)
+      + abs(lhs.blueComponent - rhs.blueComponent)
   }
 
   private func lineStart(_ index: Int, in text: String) -> Int {

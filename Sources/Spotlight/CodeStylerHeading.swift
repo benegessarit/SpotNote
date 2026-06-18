@@ -50,13 +50,20 @@ enum CodeStylerHeading {
 
   static func foreground(base: NSColor, mode: Theme.Mode) -> NSColor {
     let baseColor = base.usingColorSpace(.sRGB) ?? base
-    let target =
-      mode == .dark
-      ? NSColor(srgbRed: 0.91, green: 0.82, blue: 1.00, alpha: baseColor.alphaComponent)
-      : NSColor(srgbRed: 0.20, green: 0.16, blue: 0.31, alpha: baseColor.alphaComponent)
-    let fraction: CGFloat = mode == .dark ? 0.22 : 0.14
-    let blended = baseColor.blended(withFraction: fraction, of: target) ?? baseColor
-    return blended.withAlphaComponent(baseColor.alphaComponent)
+    if mode == .dark {
+      return NSColor(
+        srgbRed: 0.97,
+        green: 0.77,
+        blue: 1.00,
+        alpha: baseColor.alphaComponent
+      )
+    }
+    return NSColor(
+      srgbRed: 0.34,
+      green: 0.22,
+      blue: 0.54,
+      alpha: baseColor.alphaComponent
+    )
   }
 
   private static func lineContentRange(for lineRange: NSRange, in nsText: NSString) -> NSRange {
