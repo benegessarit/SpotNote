@@ -174,6 +174,7 @@ extension PlaceholderTextView {
 
   // swiftlint:disable:next cyclomatic_complexity
   private func executeMutatingVimAction(_ action: VimAction) {
+    if executeVisualVimAction(action) { return }
     switch action {
     case .moveCursor(let motion): executeMotion(motion)
     case .delete(let motion): executeDeleteMotion(motion)
@@ -366,13 +367,15 @@ enum VimActionDispatcher {
     case .none:
       return true
     case .switchToInsert, .switchToNormal:
-      // Collapse any lingering visual-line selection back to the
-      // motion's last caret so Esc/V from VISUAL LINE leaves the user
-      // exactly where they were, not on a wide highlight.
-      if let caret = view.visualLineCaret {
+      // Collapse any lingering visual selection back to the motion's
+      // last caret so Esc/v/V leaves the user exactly where they were,
+      // not on a wide highlight.
+      if let caret = view.visualLineCaret ?? view.visualCaret {
         let clamped = min(caret, (view.string as NSString).length)
         view.setSelectedRange(NSRange(location: clamped, length: 0))
       }
+      view.visualAnchor = nil
+      view.visualCaret = nil
       view.visualLineAnchor = nil
       view.visualLineCaret = nil
       view.notifyVimModeChanged()

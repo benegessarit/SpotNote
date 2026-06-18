@@ -506,6 +506,8 @@ final class PlaceholderTextView: NSTextView {
   /// rendered selection always spans full lines from this anchor to
   /// wherever the caret currently sits, so motions just move the
   /// "tail" of the selection.
+  var visualAnchor: Int?
+  var visualCaret: Int?
   var visualLineAnchor: Int?
   /// Live caret tracked separately from the selection -- `extendVisualLine`
   /// uses it as the moving end (above OR below the anchor) so motions

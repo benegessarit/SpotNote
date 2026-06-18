@@ -3,6 +3,7 @@ import Foundation
 enum VimMode: Equatable, Sendable {
   case normal
   case insert
+  case visual
   case visualLine
 }
 
@@ -48,6 +49,11 @@ enum VimAction: Equatable, Sendable {
   case jumpToTraySection
   case jumpToToDoSection
   case gotoLine(Int)
+  case enterVisual
+  case extendVisual(Motion)
+  case yankVisualSelection
+  case deleteVisualSelection
+  case changeVisualSelection
   case enterVisualLine
   case extendVisualLine(Motion)
   case yankVisualLine
@@ -68,6 +74,8 @@ final class VimEngine {
       return handleInsert(key: key)
     case .normal:
       return handleNormal(key: key)
+    case .visual:
+      return handleVisual(key: key)
     case .visualLine:
       return handleVisualLine(key: key)
     }
@@ -165,13 +173,11 @@ final class VimEngine {
 
     if let action = enterInsertAction(for: key) { return action }
     if let action = flashAction(for: key, count: count) { return action }
+    if let action = visualEntryAction(for: key) { return action }
     switch key {
     case "x": return .deleteChar(count: count)
     case "D": return .deleteToEndOfLine
     case "u": return .undo(count: count)
-    case "V":
-      mode = .visualLine
-      return .enterVisualLine
     default: return promptOrSearchAction(for: key)
     }
   }
@@ -309,5 +315,82 @@ final class VimEngine {
 
   private func clearAccumulator() {
     countAccumulator = 0
+  }
+}
+
+extension VimEngine {
+  func visualEntryAction(for key: String) -> VimAction? {
+    switch key {
+    case "v":
+      mode = .visual
+      return .enterVisual
+    case "V":
+      mode = .visualLine
+      return .enterVisualLine
+    default:
+      return nil
+    }
+  }
+
+  func handleVisual(key: String) -> VimAction {
+    if !pendingBuffer.isEmpty {
+      return handleVisualPending(key: key)
+    }
+    if key.count == 1, let ch = key.first, ch.isNumber {
+      let digit = ch.wholeNumberValue ?? 0
+      if digit > 0 || countAccumulator > 0 {
+        countAccumulator = countAccumulator * 10 + digit
+        return .none
+      }
+    }
+    if key == "g" {
+      pendingBuffer = "g"
+      return .none
+    }
+    if key == "G", countAccumulator > 0 {
+      let target = countAccumulator
+      clearAccumulator()
+      return .extendVisual(.down(max(0, target - 1)))
+    }
+
+    let count = resolvedCount
+    defer { clearAccumulator() }
+
+    if let motion = motionForKey(key, count: count) {
+      return .extendVisual(motion)
+    }
+    return visualCommand(for: key)
+  }
+
+  private func handleVisualPending(key: String) -> VimAction {
+    let buffered = pendingBuffer
+    pendingBuffer = ""
+    if buffered == "g", key == "g" {
+      clearAccumulator()
+      return .extendVisual(.documentStart)
+    }
+    return .none
+  }
+
+  private func visualCommand(for key: String) -> VimAction {
+    switch key {
+    case "v", "\u{1B}", "escape":
+      mode = .normal
+      return .switchToNormal
+    case "V":
+      mode = .visualLine
+      return .enterVisualLine
+    case "y":
+      mode = .normal
+      return .yankVisualSelection
+    case "d", "x":
+      mode = .normal
+      return .deleteVisualSelection
+    case "c", "s":
+      mode = .insert
+      return .changeVisualSelection
+    default:
+      return .none
+    }
   }
 }
