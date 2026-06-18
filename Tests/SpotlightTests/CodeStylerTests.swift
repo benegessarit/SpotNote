@@ -78,3 +78,84 @@ struct SyntaxHighlighterTests {
     #expect(tokens.contains { $0.category == .number })
   }
 }
+
+@MainActor
+@Suite("CodeStyler Markdown visual styling")
+struct CodeStylerVisualTests {
+  @Test("Markdown headings are visibly bolded without changing stored text")
+  func markdownHeadingsAreVisiblyBold() throws {
+    let text = "plain\n## Tray\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
+
+    let headingFont = try #require(storageFont(at: lineStart(1, in: text), in: textView))
+    let bodyFont = try #require(storageFont(at: 0, in: textView))
+
+    #expect(NSFontManager.shared.traits(of: headingFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("Markdown headings use a brighter storage foreground than body text")
+  func markdownHeadingsUseBrighterStorageForeground() throws {
+    let theme = ThemeCatalog.mirage
+    let text = "plain\n## To Do\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+    textView.textStorage?.addAttribute(
+      .foregroundColor,
+      value: NSColor(theme.text),
+      range: NSRange(location: 0, length: (text as NSString).length)
+    )
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+
+    #expect(headingColor != bodyColor)
+    #expect(relativeLuminance(of: headingColor) > relativeLuminance(of: bodyColor))
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("Markdown-looking headings inside fenced code are not bolded")
+  func headingsInsideFencedCodeAreIgnored() {
+    let text = "```\n## not a heading\n```\n## Tray"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
+
+    let fencedFont = storageFont(at: lineStart(1, in: text), in: textView)
+    let headingFont = storageFont(at: lineStart(3, in: text), in: textView)
+
+    #expect(fencedFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == false)
+    #expect(headingFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true)
+  }
+
+  private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
+    textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+  }
+
+  private func storageColor(at location: Int, in textView: NSTextView) -> NSColor? {
+    textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
+  }
+
+  private func relativeLuminance(of color: NSColor) -> CGFloat {
+    0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent
+  }
+
+  private func lineStart(_ index: Int, in text: String) -> Int {
+    guard index > 0 else { return 0 }
+    let lines = text.components(separatedBy: "\n")
+    let prefix = lines.prefix(index).joined(separator: "\n")
+    return (prefix as NSString).length + 1
+  }
+}

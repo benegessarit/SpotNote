@@ -1,0 +1,106 @@
+import AppKit
+
+enum CodeStylerHeading {
+  struct Style {
+    let baseFont: NSFont?
+    let bodyForeground: NSColor
+    let headingForeground: NSColor
+  }
+
+  static func apply(
+    in nsText: NSString,
+    fullRange: NSRange,
+    textStorage: NSTextStorage?,
+    style: Style,
+    processed: [NSRange]
+  ) {
+    guard let textStorage else { return }
+    guard let regex = try? NSRegularExpression(pattern: "(?m)^[ \\t]{0,3}#{1,6}(?:[ \\t]+[^\\n]*)?$") else {
+      return
+    }
+    let baseFont = style.baseFont ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let headingFont = boldFont(matching: baseFont)
+    var headingRanges: [NSRange] = []
+    regex.enumerateMatches(in: nsText as String, range: fullRange) { match, _, _ in
+      guard let range = match?.range else { return }
+      guard !processed.contains(where: { NSIntersectionRange($0, range).length > 0 }) else { return }
+      headingRanges.append(range)
+    }
+
+    textStorage.beginEditing()
+    defer { textStorage.endEditing() }
+    var location = 0
+    while location < fullRange.length {
+      let lineRange = nsText.lineRange(for: NSRange(location: location, length: 0))
+      let contentRange = lineContentRange(for: lineRange, in: nsText)
+      if contentRange.length > 0 {
+        let isHeading = headingRanges.contains { NSEqualRanges($0, contentRange) }
+        applyTextAttributes(
+          font: isHeading ? headingFont : baseFont,
+          foreground: isHeading ? style.headingForeground : style.bodyForeground,
+          to: contentRange,
+          in: textStorage
+        )
+      }
+      let next = lineRange.location + lineRange.length
+      guard next > location else { break }
+      location = next
+    }
+  }
+
+  static func foreground(base: NSColor, mode: Theme.Mode) -> NSColor {
+    let baseColor = base.usingColorSpace(.sRGB) ?? base
+    let target =
+      mode == .dark
+      ? NSColor(srgbRed: 0.91, green: 0.82, blue: 1.00, alpha: baseColor.alphaComponent)
+      : NSColor(srgbRed: 0.20, green: 0.16, blue: 0.31, alpha: baseColor.alphaComponent)
+    let fraction: CGFloat = mode == .dark ? 0.22 : 0.14
+    let blended = baseColor.blended(withFraction: fraction, of: target) ?? baseColor
+    return blended.withAlphaComponent(baseColor.alphaComponent)
+  }
+
+  private static func lineContentRange(for lineRange: NSRange, in nsText: NSString) -> NSRange {
+    var end = lineRange.location + lineRange.length
+    while end > lineRange.location {
+      let ch = nsText.character(at: end - 1)
+      guard ch == 0x0A || ch == 0x0D else { break }
+      end -= 1
+    }
+    return NSRange(location: lineRange.location, length: max(0, end - lineRange.location))
+  }
+
+  private static func applyTextAttributes(
+    font: NSFont,
+    foreground: NSColor,
+    to range: NSRange,
+    in storage: NSTextStorage
+  ) {
+    let current = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
+    let currentColor = storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
+    guard current != font || !colorsMatch(currentColor, foreground) else { return }
+    storage.addAttributes([.font: font, .foregroundColor: foreground], range: range)
+  }
+
+  private static func boldFont(matching font: NSFont?) -> NSFont {
+    let base = font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let manager = NSFontManager.shared
+    let converted = manager.convert(base, toHaveTrait: .boldFontMask)
+    if manager.traits(of: converted).contains(.boldFontMask) {
+      return converted
+    }
+    if base.isFixedPitch {
+      return .monospacedSystemFont(ofSize: base.pointSize, weight: .bold)
+    }
+    return .boldSystemFont(ofSize: base.pointSize)
+  }
+
+  private static func colorsMatch(_ lhs: NSColor?, _ rhs: NSColor) -> Bool {
+    guard let left = lhs?.usingColorSpace(.sRGB), let right = rhs.usingColorSpace(.sRGB) else {
+      return lhs?.isEqual(rhs) == true
+    }
+    return abs(left.redComponent - right.redComponent) < 0.001
+      && abs(left.greenComponent - right.greenComponent) < 0.001
+      && abs(left.blueComponent - right.blueComponent) < 0.001
+      && abs(left.alphaComponent - right.alphaComponent) < 0.001
+  }
+}

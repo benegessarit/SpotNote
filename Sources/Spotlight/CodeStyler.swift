@@ -1,18 +1,24 @@
 import AppKit
 
 /// Markdown-style code styling applied as `NSLayoutManager` temporary
-/// attributes -- visual only, never touches the `NSTextStorage`. Key
+/// attributes -- visual only, never touches the Markdown string. Key
 /// properties:
 ///
 /// - Backticks stay as literal characters in the document.
 /// - Inline `` `code` `` spans get a subtle background + dimmed fences.
+/// - Markdown headings get bold + brighter visual attributes; the stored
+///   Markdown string stays plain text.
 /// - Triple-fenced blocks are NOT background-tinted; instead the inner
 ///   code is tokenized via `SyntaxHighlighter` and colored per category.
 ///   Unrecognized languages fall back to a pan-language keyword set.
 ///
 /// Because temporary attributes bypass `NSTextStorage.processEditing`,
-/// re-applying on every keystroke doesn't invalidate the edited-range
-/// layout cache -- which is what used to make the backticks flash.
+/// re-applying color/background spans on every keystroke doesn't invalidate
+/// the edited-range layout cache -- which is what used to make the
+/// backticks flash. Heading fonts are the exception: AppKit's layout
+/// manager only draws non-layout temporary attributes, so headings use
+/// storage attributes while still leaving the stored Markdown string
+/// unchanged.
 enum CodeStyler {
   struct Palette {
     let codeBackground: NSColor
@@ -38,6 +44,13 @@ enum CodeStyler {
       fullRange: fullRange,
       layoutManager: layoutManager,
       palette: palette
+    )
+    CodeStylerHeading.apply(
+      in: nsText,
+      fullRange: fullRange,
+      textStorage: textView.textStorage,
+      style: headingStyle(for: textView, theme: theme),
+      processed: processed
     )
     styleInline(
       in: nsText,
@@ -156,6 +169,16 @@ enum CodeStyler {
     case .number: return palette.number
     case .comment: return palette.comment
     }
+  }
+
+  @MainActor
+  private static func headingStyle(for textView: NSTextView, theme: Theme) -> CodeStylerHeading.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerHeading.Style(
+      baseFont: textView.font,
+      bodyForeground: bodyForeground,
+      headingForeground: CodeStylerHeading.foreground(base: bodyForeground, mode: theme.mode)
+    )
   }
 
   private static func palette(for theme: Theme) -> Palette {
