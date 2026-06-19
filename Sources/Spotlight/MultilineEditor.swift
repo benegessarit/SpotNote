@@ -144,7 +144,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onAppendCompletedItems = onAppendCompletedItems
     textView.onAppendTrayNote = onAppendTrayNote
     textView.onChecklistLinesChange = onChecklistLinesChange
-    applyStyle(textView: textView)
+    applyStyleAndRefreshAttributesIfNeeded(on: textView)
     if textView.checklistLines != checklistLines {
       textView.checklistLines = checklistLines
       textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
@@ -415,6 +415,14 @@ struct MultilineEditor: NSViewRepresentable {
     ]
   }
 
+  func applyStyleAndRefreshAttributesIfNeeded(on textView: PlaceholderTextView) {
+    let needsAttributeRefresh = textViewNeedsAttributeRefresh(textView)
+    applyStyle(textView: textView)
+    if needsAttributeRefresh {
+      refreshAttributes(on: textView)
+    }
+  }
+
   func applyStyle(textView: PlaceholderTextView) {
     let newTextColor = NSColor(theme.text)
     let newPlaceholderColor = NSColor(theme.placeholder)
@@ -447,6 +455,41 @@ struct MultilineEditor: NSViewRepresentable {
     storage.setAttributes(textAttributes, range: range)
     ensureParagraphStyle(on: textView)
     applyCodeStyling(on: textView)
+  }
+
+  private func textViewNeedsAttributeRefresh(_ textView: PlaceholderTextView) -> Bool {
+    guard
+      let currentFont = textView.editorTextAttributes[.font] as? NSFont,
+      let nextFont = textAttributes[.font] as? NSFont,
+      currentFont == nextFont,
+      colorsMatch(
+        textView.editorTextAttributes[.foregroundColor] as? NSColor,
+        NSColor(theme.text)
+      ),
+      paragraphStylesMatch(
+        textView.editorTextAttributes[.paragraphStyle] as? NSParagraphStyle,
+        fixedParagraphStyle
+      )
+    else { return true }
+    return false
+  }
+
+  private func colorsMatch(_ lhs: NSColor?, _ rhs: NSColor) -> Bool {
+    guard let left = lhs?.usingColorSpace(.sRGB), let right = rhs.usingColorSpace(.sRGB) else {
+      return lhs?.isEqual(rhs) == true
+    }
+    return abs(left.redComponent - right.redComponent) < 0.001
+      && abs(left.greenComponent - right.greenComponent) < 0.001
+      && abs(left.blueComponent - right.blueComponent) < 0.001
+      && abs(left.alphaComponent - right.alphaComponent) < 0.001
+  }
+
+  private func paragraphStylesMatch(_ lhs: NSParagraphStyle?, _ rhs: NSParagraphStyle) -> Bool {
+    guard let lhs else { return false }
+    return lhs.minimumLineHeight == rhs.minimumLineHeight
+      && lhs.maximumLineHeight == rhs.maximumLineHeight
+      && lhs.firstLineHeadIndent == rhs.firstLineHeadIndent
+      && lhs.headIndent == rhs.headIndent
   }
 
   private func replaceLayoutManager(on textView: NSTextView) {

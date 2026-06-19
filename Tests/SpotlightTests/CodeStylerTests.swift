@@ -168,6 +168,36 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
+  @Test("theme change recolors existing body text")
+  func themeChangeRecolorsExistingBodyText() throws {
+    let text = "plain\n## To Do\nnext"
+    let font = SpotNoteFont.editor()
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let roseEditor = editor(text: text, theme: ThemeCatalog.rosePineMoonlight, font: font)
+    roseEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    let roseBody = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let roseText = try #require(NSColor(ThemeCatalog.rosePineMoonlight.text).usingColorSpace(.sRGB))
+    #expect(colorDistance(roseBody, roseText) < 0.01)
+
+    let draculaEditor = editor(text: text, theme: ThemeCatalog.dracula, font: font)
+    draculaEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let nextBodyColor = try #require(
+      storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let draculaText = try #require(NSColor(ThemeCatalog.dracula.text).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(bodyColor, draculaText) < 0.01)
+    #expect(colorDistance(nextBodyColor, draculaText) < 0.01)
+    #expect(colorDistance(headingColor, draculaText) >= 0.24)
+  }
+
   @Test("Markdown-looking headings inside fenced code are not bolded")
   func headingsInsideFencedCodeAreIgnored() {
     let text = "```\n## not a heading\n```\n## Tray"
@@ -207,6 +237,20 @@ struct CodeStylerVisualTests {
 
   private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
     textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+  }
+
+  private func editor(text: String, theme: Theme, font: NSFont) -> MultilineEditor {
+    MultilineEditor(
+      text: .constant(text),
+      theme: theme,
+      placeholder: "",
+      showLineNumbers: false,
+      font: font,
+      focusRequest: 0,
+      maxVisibleLines: 9,
+      extraChromeHeight: 0,
+      onHeightChange: { _ in }
+    )
   }
 
   private func storageColor(at location: Int, in textView: NSTextView) -> NSColor? {
