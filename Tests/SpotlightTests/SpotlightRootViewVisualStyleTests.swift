@@ -4,10 +4,10 @@ import Testing
 
 @Suite("Spotlight root visual style")
 struct SpotlightRootViewVisualStyleTests {
-  @Test("editor card glass tint stays translucent")
+  @Test("editor card glass tint leaves the HUD material prominent")
   @MainActor
-  func editorCardGlassTintStaysTranslucent() {
-    #expect(SpotlightRootView.darkGlassTintOpacity <= 0.52)
-    #expect(SpotlightRootView.lightGlassTintOpacity <= 0.48)
+  func editorCardGlassTintLeavesHUDMaterialProminent() {
+    #expect(SpotlightRootView.darkGlassTintOpacity == 0.34)
+    #expect(SpotlightRootView.lightGlassTintOpacity == 0.30)
   }
 }
