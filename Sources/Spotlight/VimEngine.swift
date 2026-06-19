@@ -133,31 +133,47 @@ final class VimEngine {
       if let motion = motionForKey(key, count: count) { return .delete(motion) }
       return .none
     case "g":
-      pendingBuffer = ""
-      if key == "g" { return .moveCursor(.documentStart) }
-      if key == "d" { return .sendCurrentTaskToLinear(status: .done, count: count) }
-      if key == "p" { return .sendCurrentTaskToLinear(status: .planned, count: count) }
-      if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
-      if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
-      if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
-      if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
-      if key == "D" {
-        mode = .insert
-        return .jumpToToDoSection
-      }
-      if key == "T" {
-        mode = .insert
-        return .jumpToTraySection
-      }
-      return .none
+      return handlePendingG(key: key, count: count)
+    case "t":
+      return handlePendingT(key: key)
     default:
       pendingBuffer = ""
       return .none
     }
   }
 
+  private func handlePendingG(key: String, count: Int) -> VimAction {
+    pendingBuffer = ""
+    if key == "g" { return .moveCursor(.documentStart) }
+    if key == "d" { return .sendCurrentTaskToLinear(status: .done, count: count) }
+    if key == "p" { return .sendCurrentTaskToLinear(status: .planned, count: count) }
+    if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
+    if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
+    if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
+    if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
+    if key == "D" { return jumpToToDoSectionInsertAction() }
+    if key == "T" { return jumpToTraySectionInsertAction() }
+    return .none
+  }
+
+  private func handlePendingT(key: String) -> VimAction {
+    pendingBuffer = ""
+    if key == "t" { return jumpToTraySectionInsertAction() }
+    return .none
+  }
+
+  private func jumpToTraySectionInsertAction() -> VimAction {
+    mode = .insert
+    return .jumpToTraySection
+  }
+
+  private func jumpToToDoSectionInsertAction() -> VimAction {
+    mode = .insert
+    return .jumpToToDoSection
+  }
+
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "g" || key == "c" {
+    if key == "d" || key == "g" || key == "c" || key == "t" {
       pendingBuffer = key
       return .none
     }

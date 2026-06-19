@@ -19,7 +19,7 @@ struct TrayNotePathResolver: Sendable {
 
 enum TrayNotePayload {
   static func normalized(_ text: String) -> String? {
-    DailyNotePayload.normalized(text)
+    NotePayload.normalized(text)
   }
 }
 

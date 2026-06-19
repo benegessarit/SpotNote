@@ -217,6 +217,22 @@ struct VimEngineTests {
     #expect(engine.mode == .insert)
   }
 
+  @Test("gT jumps to the Tray section")
+  func gShiftTJumpsToTraySection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("tt jumps to the Tray section")
+  func ttJumpsToTraySection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "t", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
   @Test("s opens a whole-document forward Flash jump prompt")
   func flashForwardPrompt() {
     let engine = VimEngine()
