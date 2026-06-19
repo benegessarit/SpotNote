@@ -133,8 +133,8 @@ struct SpotlightRootView: View {
     session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
   }
 
-  static let darkGlassTintOpacity = 0.34
-  static let lightGlassTintOpacity = 0.30
+  static let darkGlassTintOpacity = 0.28
+  static let lightGlassTintOpacity = 0.26
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
