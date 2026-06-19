@@ -443,6 +443,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
     textView.editorTextAttributes = textAttributes
+    textView.editorHeadingTextColor = NSColor(theme.headingText)
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
       ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
@@ -466,6 +467,7 @@ struct MultilineEditor: NSViewRepresentable {
         textView.editorTextAttributes[.foregroundColor] as? NSColor,
         NSColor(theme.text)
       ),
+      colorsMatch(textView.editorHeadingTextColor, NSColor(theme.headingText)),
       paragraphStylesMatch(
         textView.editorTextAttributes[.paragraphStyle] as? NSParagraphStyle,
         fixedParagraphStyle
@@ -616,6 +618,7 @@ final class PlaceholderTextView: NSTextView {
   weak var suggestionField: SuggestionView?
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
+  var editorHeadingTextColor: NSColor?
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,
     green: 179 / 255,

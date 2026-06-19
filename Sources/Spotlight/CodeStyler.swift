@@ -184,7 +184,7 @@ enum CodeStyler {
     return CodeStylerHeading.Style(
       baseFont: textView.font,
       bodyForeground: bodyForeground,
-      headingForeground: CodeStylerHeading.foreground(base: bodyForeground, mode: theme.mode)
+      headingForeground: NSColor(theme.headingText)
     )
   }
 

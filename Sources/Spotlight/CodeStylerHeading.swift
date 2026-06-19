@@ -48,24 +48,6 @@ enum CodeStylerHeading {
     }
   }
 
-  static func foreground(base: NSColor, mode: Theme.Mode) -> NSColor {
-    let baseColor = base.usingColorSpace(.sRGB) ?? base
-    if mode == .dark {
-      return NSColor(
-        srgbRed: 0.97,
-        green: 0.77,
-        blue: 1.00,
-        alpha: baseColor.alphaComponent
-      )
-    }
-    return NSColor(
-      srgbRed: 0.34,
-      green: 0.22,
-      blue: 0.54,
-      alpha: baseColor.alphaComponent
-    )
-  }
-
   private static func lineContentRange(for lineRange: NSRange, in nsText: NSString) -> NSRange {
     var end = lineRange.location + lineRange.length
     while end > lineRange.location {

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Spotlight
@@ -198,6 +199,31 @@ struct CodeStylerVisualTests {
     #expect(colorDistance(headingColor, draculaText) >= 0.24)
   }
 
+  @Test("theme change recolors existing headings when body text color is unchanged")
+  func themeChangeRecolorsExistingHeadingsWhenBodyTextColorIsUnchanged() throws {
+    let text = "plain\n## To Do\nnext"
+    let font = SpotNoteFont.editor()
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let body = Color(red: 0.8, green: 0.82, blue: 0.86)
+    let oldTheme = testTheme(id: "old-heading", body: body, heading: Color(red: 1.0, green: 0.4, blue: 0.4))
+    let newTheme = testTheme(id: "new-heading", body: body, heading: Color(red: 0.4, green: 0.7, blue: 1.0))
+
+    editor(text: text, theme: oldTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    editor(text: text, theme: newTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let expectedBody = try #require(NSColor(newTheme.text).usingColorSpace(.sRGB))
+    let expectedHeading = try #require(NSColor(newTheme.headingText).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(bodyColor, expectedBody) < 0.01)
+    #expect(colorDistance(headingColor, expectedHeading) < 0.01)
+  }
+
   @Test("Markdown-looking headings inside fenced code are not bolded")
   func headingsInsideFencedCodeAreIgnored() {
     let text = "```\n## not a heading\n```\n## Tray"
@@ -250,6 +276,19 @@ struct CodeStylerVisualTests {
       maxVisibleLines: 9,
       extraChromeHeight: 0,
       onHeightChange: { _ in }
+    )
+  }
+
+  private func testTheme(id: String, body: Color, heading: Color) -> Theme {
+    Theme(
+      id: id,
+      name: id,
+      mode: .dark,
+      background: Color(red: 0.1, green: 0.1, blue: 0.12),
+      border: .clear,
+      text: body,
+      headingText: heading,
+      placeholder: Color(red: 0.5, green: 0.5, blue: 0.55)
     )
   }
 
