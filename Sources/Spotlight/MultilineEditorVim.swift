@@ -228,7 +228,7 @@ extension PlaceholderTextView {
     case .gotoLine(let line):
       _ = jumpToLine(line)
     case .jumpToTraySection: _ = jumpToTraySectionForVim()
-    case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
+    case .jumpToHabitsSection: _ = jumpToHabitsSectionForVim()
     default:
       return false
     }

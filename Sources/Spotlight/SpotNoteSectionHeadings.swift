@@ -1,7 +1,7 @@
 import Foundation
 
 enum SpotNoteSectionHeadings {
-  static let toDo = Definition(canonical: "## TODO", aliases: ["## To Do"])
+  static let habits = Definition(canonical: "## HABITS", aliases: ["## TODO", "## To Do"])
   static let tray = Definition(canonical: "## TRAY", aliases: ["## Tray"])
 
   struct Definition {

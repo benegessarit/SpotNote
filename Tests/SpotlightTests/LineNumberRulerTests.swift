@@ -137,6 +137,12 @@ struct LineNumberRulerTests {
     #expect(LineNumberRuler.thickness(forLineCount: 999, labelSize: 22, showsLineNumbers: true) > 0)
   }
 
+  @Test("line Flash temporarily opens the hidden gutter for row labels")
+  func lineFlashTemporarilyOpensHiddenGutter() {
+    #expect(LineNumberRuler.thickness(forLineCount: 8, labelSize: 22) == 0)
+    #expect(LineNumberRuler.thickness(forLineCount: 8, labelSize: 22, showsLineFlashHints: true) > 0)
+  }
+
   @Test("glyph fragments after blank lines keep their logical line index")
   func glyphFragmentsAfterBlankLinesKeepLogicalLineIndex() {
     let text = "## To Do\n\nPass email" as NSString

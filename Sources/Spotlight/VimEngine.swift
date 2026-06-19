@@ -50,7 +50,7 @@ enum VimAction: Equatable, Sendable {
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
   case jumpToTraySection
-  case jumpToToDoSection
+  case jumpToHabitsSection
   case gotoLine(Int)
   case enterVisual
   case extendVisual(Motion)
@@ -167,7 +167,7 @@ final class VimEngine {
     if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
     if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
     if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
-    if key == "D" { return jumpToToDoSectionInsertAction() }
+    if key == "D" { return jumpToHabitsSectionInsertAction() }
     if key == "T" { return jumpToTraySectionInsertAction() }
     return .none
   }
@@ -183,9 +183,9 @@ final class VimEngine {
     return .jumpToTraySection
   }
 
-  private func jumpToToDoSectionInsertAction() -> VimAction {
+  private func jumpToHabitsSectionInsertAction() -> VimAction {
     mode = .insert
-    return .jumpToToDoSection
+    return .jumpToHabitsSection
   }
 
   private func handleSingle(key: String) -> VimAction {

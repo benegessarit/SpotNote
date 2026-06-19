@@ -209,11 +209,11 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test("gD jumps to the TODO section")
-  func gShiftDJumpsToToDoSection() {
+  @Test("gD jumps to the HABITS section")
+  func gShiftDJumpsToHabitsSection() {
     let engine = VimEngine()
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToToDoSection)
+    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToHabitsSection)
     #expect(engine.mode == .insert)
   }
 

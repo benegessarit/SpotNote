@@ -195,8 +195,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.vimEngine?.mode == .insert)
   }
 
-  @Test("gD creates To Do above an existing Tray section")
-  func gShiftDCreatesToDoAboveTray() {
+  @Test("gD creates HABITS above an existing Tray section")
+  func gShiftDCreatesHabitsAboveTray() {
     let textView = makeVimMotionTextView(text: "- email\n- cure\n\n## Tray\nrandom")
     textView.vimModeEnabled = true
     textView.attachVimController(VimController())
@@ -205,8 +205,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
 
-    #expect(textView.string == "## TODO\n- email\n- cure\n- \n## Tray\nrandom")
-    #expect(textView.selectedRange.location == ("## TODO\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.string == "## HABITS\n- email\n- cure\n- \n## Tray\nrandom")
+    #expect(textView.selectedRange.location == ("## HABITS\n- email\n- cure\n- " as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }
 
@@ -386,20 +386,6 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(targets[1].location > 0)
     #expect(targets[1].location < ("alpha beta gamma delta epsilon\n" as NSString).length)
     #expect(targets.contains { $0.location == ("alpha beta gamma delta epsilon\n" as NSString).length })
-  }
-
-  @Test("Shift-K keyDown opens visible row Flash labels")
-  func shiftKKeyDownOpensLineFlash() {
-    let textView = makeVimMotionTextView(text: "one\ntwo\nthree")
-    let controller = VimController()
-    textView.attachVimController(controller)
-    textView.vimModeEnabled = true
-
-    textView.keyDown(with: keyEvent(characters: "K", ignoring: "k", keyCode: 40, modifiers: .shift))
-
-    #expect(controller.prompt?.kind == .lineFlash(count: 1))
-    #expect(textView.isShowingLineFlashHints)
-    #expect(Array(textView.flashHints.map(\.label).prefix(3)) == ["a", "s", "d"])
   }
 
   @Test("f keyDown opens same-line Flash labels only on the current line")

@@ -11,12 +11,12 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gD` -- jump to the in-note `## TODO` section, creating it at the
-  /// top when absent, and leave the editor in insert mode on a fresh task
+  /// `gD` -- jump to the in-note `## HABITS` section, creating it at the
+  /// top when absent, and leave the editor in insert mode on a fresh habit
   /// bullet before any later section such as `## TRAY`.
   @discardableResult
-  func jumpToToDoSectionForVim() -> Bool {
-    let target = ensureToDoInsertionLocation()
+  func jumpToHabitsSectionForVim() -> Bool {
+    let target = ensureHabitsInsertionLocation()
     revealVimSectionJumpTarget(target)
     return true
   }
@@ -37,19 +37,19 @@ extension PlaceholderTextView {
     return ensureOpenLineAfterTrayHeading(heading, in: nsString)
   }
 
-  private func ensureToDoInsertionLocation() -> Int {
+  private func ensureHabitsInsertionLocation() -> Int {
     var nsString = string as NSString
-    if headingRange(matching: SpotNoteSectionHeadings.toDo, in: nsString) == nil {
+    if headingRange(matching: SpotNoteSectionHeadings.habits, in: nsString) == nil {
       replaceTextForSectionJump(
         in: NSRange(location: 0, length: 0),
-        with: SpotNoteSectionHeadings.toDo.canonicalLine
+        with: SpotNoteSectionHeadings.habits.canonicalLine
       )
       nsString = string as NSString
     }
-    guard let heading = headingRange(matching: SpotNoteSectionHeadings.toDo, in: nsString) else {
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.habits, in: nsString) else {
       return nsString.length
     }
-    return ensureOpenBulletLineAfterToDoHeading(heading, in: nsString)
+    return ensureOpenBulletLineAfterHabitsHeading(heading, in: nsString)
   }
 
   private func appendMissingTraySection(to nsString: NSString) -> Int {
@@ -110,7 +110,7 @@ extension PlaceholderTextView {
     return character == 0x0A || character == 0x0D
   }
 
-  private func ensureOpenBulletLineAfterToDoHeading(_ heading: NSRange, in nsString: NSString) -> Int {
+  private func ensureOpenBulletLineAfterHabitsHeading(_ heading: NSRange, in nsString: NSString) -> Int {
     var location = heading.location + heading.length
     while location < nsString.length {
       let line = nsString.lineRange(for: NSRange(location: location, length: 0))

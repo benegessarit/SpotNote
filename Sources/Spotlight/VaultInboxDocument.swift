@@ -38,7 +38,7 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   var defaultMarkdown: String {
     switch self {
-    case .tasks: return SpotNoteSectionHeadings.toDo.canonicalLine
+    case .tasks: return SpotNoteSectionHeadings.habits.canonicalLine
     }
   }
 
@@ -52,9 +52,20 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
     let body = NotePayload.trimmingTrailingLineWhitespace(
       in: droppingLeadingNewlines(from: markdown)
     )
-    if startsWithMarkdownHeading(body, SpotNoteSectionHeadings.toDo) { return body }
-    guard !body.isEmpty else { return SpotNoteSectionHeadings.toDo.canonicalLine }
-    return SpotNoteSectionHeadings.toDo.canonicalLine + body
+    let canonicalBody = canonicalizingFirstHeading(in: body, to: SpotNoteSectionHeadings.habits)
+    if startsWithMarkdownHeading(canonicalBody, SpotNoteSectionHeadings.habits) { return canonicalBody }
+    guard !canonicalBody.isEmpty else { return SpotNoteSectionHeadings.habits.canonicalLine }
+    return SpotNoteSectionHeadings.habits.canonicalLine + canonicalBody
+  }
+
+  private static func canonicalizingFirstHeading(
+    in markdown: String,
+    to heading: SpotNoteSectionHeadings.Definition
+  ) -> String {
+    let lines = markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+    guard let firstLine = lines.first, heading.matches(String(firstLine)) else { return markdown }
+    let remainder = lines.count > 1 ? "\n" + lines[1] : ""
+    return heading.canonical + remainder
   }
 
   private static func droppingLeadingNewlines(from markdown: String) -> String {

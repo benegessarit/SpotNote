@@ -28,7 +28,8 @@ final class LineNumberRuler: NSRulerView {
     self.ruleThickness = Self.thickness(
       forLineCount: 1,
       labelSize: Self.labelFontSize,
-      showsLineNumbers: showsLineNumbers
+      showsLineNumbers: showsLineNumbers,
+      showsLineFlashHints: false
     )
 
     if let clipView = textView.enclosingScrollView?.contentView {
@@ -50,7 +51,8 @@ final class LineNumberRuler: NSRulerView {
     let required = Self.thickness(
       forLineCount: lineCount,
       labelSize: Self.labelFontSize,
-      showsLineNumbers: showsLineNumbers
+      showsLineNumbers: showsLineNumbers,
+      showsLineFlashHints: (textView as? PlaceholderTextView)?.isShowingLineFlashHints == true
     )
     if abs(ruleThickness - required) > 0.5 {
       ruleThickness = required
@@ -61,10 +63,11 @@ final class LineNumberRuler: NSRulerView {
   static func thickness(
     forLineCount lineCount: Int,
     labelSize: CGFloat,
-    showsLineNumbers: Bool = false
+    showsLineNumbers: Bool = false,
+    showsLineFlashHints: Bool = false
   ) -> CGFloat {
     guard showsLineNumbers else {
-      return 0
+      return showsLineFlashHints ? Self.signColumnWidth(forLabelSize: labelSize) : 0
     }
     // Clamp before stringifying so a negative count's "-" doesn't inflate
     // the digit count.
@@ -111,7 +114,7 @@ final class LineNumberRuler: NSRulerView {
   /// `NSLayoutManager.enumerateLineFragments` only visits glyph-bearing
   /// rows, so blank lines have no fragment of their own. Counting newlines
   /// before each fragment keeps gutter markers aligned after edits such as
-  /// Vim `o` on `## TODO`, which inserts an empty logical line before the
+  /// Vim `o` on `## HABITS`, which inserts an empty logical line before the
   /// first checklist task.
   static func logicalLineIndex(forFragmentStartingAt location: Int, in text: NSString) -> Int {
     let clamped = min(max(0, location), text.length)
