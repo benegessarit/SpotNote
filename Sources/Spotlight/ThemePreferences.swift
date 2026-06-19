@@ -7,7 +7,10 @@ import SwiftUI
 public final class ThemePreferences: ObservableObject {
   public static let minVisibleLines = 1
   public static let maxVisibleLinesCap = 30
-  public static let defaultVisibleLines = 9
+  /// Default growth cap before the editor scrolls. Kept at twice the
+  /// 9-row resting HUD floor so short notes still open at the familiar
+  /// size, while longer notes can expand before scrolling.
+  public static let defaultVisibleLines = 18
 
   private enum Key {
     static let selectedID = "theme.selected.id"

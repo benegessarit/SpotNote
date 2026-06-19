@@ -182,11 +182,23 @@ struct ThemePreferencesTests {
     #expect(rehydrated.showMenuBarIcon == false)
   }
 
-  @Test("maxVisibleLines defaults to the roomy 9-line HUD on first launch")
+  @Test("maxVisibleLines defaults to twice the resting HUD height before scrolling")
   func maxVisibleLinesDefault() {
     let prefs = ThemePreferences(defaults: makeDefaults())
+    let restingRows = EditorMetrics.roomyVisibleLinesFloor
+    let defaultCap = ThemePreferences.defaultVisibleLines
+
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
-    #expect(prefs.maxVisibleLines == 9)
+    #expect(defaultCap == restingRows * 2)
+    #expect(prefs.maxVisibleLines == 18)
+    #expect(
+      EditorMetrics.panelHeight(forLines: defaultCap + 1, maxLines: defaultCap)
+        == EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)
+    )
+    #expect(
+      EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)
+        > EditorMetrics.panelHeight(forLines: restingRows, maxLines: defaultCap)
+    )
   }
 
   @Test("maxVisibleLines persists and rehydrates")
