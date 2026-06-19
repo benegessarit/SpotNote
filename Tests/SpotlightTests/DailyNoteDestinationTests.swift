@@ -53,11 +53,12 @@ struct DailyNoteDestinationTests {
     )
     let date = try makeDate(year: 2026, month: 6, day: 15, calendar: calendar)
 
-    let url = try await writer.append("\n    let answer = 42\n", toDailyNoteFor: date)
+    let url = try await writer.append("\n    let answer = 42  \n", toDailyNoteFor: date)
     let content = try String(contentsOf: url, encoding: .utf8)
 
     #expect(content.contains("\n    let answer = 42\n"))
     #expect(!content.contains("\nlet answer = 42\n"))
+    #expect(!content.contains("42  \n"))
   }
 
   @Test("writer preserves existing daily text and appends after a blank line")

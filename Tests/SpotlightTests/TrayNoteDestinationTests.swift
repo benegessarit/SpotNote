@@ -28,6 +28,17 @@ struct TrayNoteDestinationTests {
     #expect(content == "first thought\nsecond thought\n")
   }
 
+  @Test("writer trims trailing whitespace on each captured line")
+  func writerTrimsTrailingWhitespace() async throws {
+    let url = try makeTempDirectory().appending(path: "tray.md", directoryHint: .notDirectory)
+    let writer = TrayNoteWriter(resolver: TrayNotePathResolver(url: url))
+
+    try await writer.append("loose thought  \n  indented detail\t")
+    let content = try String(contentsOf: url, encoding: .utf8)
+
+    #expect(content == "loose thought\n  indented detail\n")
+  }
+
   @Test("blank tray payload is rejected")
   func blankPayloadRejected() async throws {
     let url = try makeTempDirectory().appending(path: "tray.md", directoryHint: .notDirectory)

@@ -79,7 +79,7 @@ struct ChatSessionTests {
     #expect(session.currentText == "## To Do\nold inbox\ndone item")
     #expect(session.currentChecklistLines == [1: .unchecked, 2: .checked])
 
-    session.currentText = "## To Do\nupdated inbox\ndone item"
+    session.currentText = "## To Do\nupdated inbox   \ndone item\t"
     session.persistIfNeeded()
     await session.flush()
 

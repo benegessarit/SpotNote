@@ -49,7 +49,9 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
   }
 
   private static func normalizedTasksMarkdown(_ markdown: String) -> String {
-    let body = droppingLeadingNewlines(from: markdown)
+    let body = NotePayload.trimmingTrailingLineWhitespace(
+      in: droppingLeadingNewlines(from: markdown)
+    )
     if startsWithMarkdownHeading(body, "## To Do") { return body }
     guard !body.isEmpty else { return "## To Do\n" }
     return "## To Do\n" + body
