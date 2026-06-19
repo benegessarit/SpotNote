@@ -184,16 +184,26 @@ extension PlaceholderTextView {
   }
 
   private func executeTextMutatingVimAction(_ action: VimAction) -> Bool {
+    if executeDeletionVimAction(action) { return true }
     switch action {
-    case .delete(let motion): executeDeleteMotion(motion)
-    case .deleteLine(let count): executeDeleteLines(count)
-    case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
-    case .deleteChar(let count): executeDeleteChar(count)
     case .pasteAfter(let count): executeVimPasteAfter(count: count)
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
       for sub in actions { executeVimAction(sub) }
+    default:
+      return false
+    }
+    return true
+  }
+
+  private func executeDeletionVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .delete(let motion): executeDeleteMotion(motion)
+    case .deleteLine(let count): executeDeleteLines(count)
+    case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
+    case .changeBulletBody: changeCurrentBulletBodyForVim()
+    case .deleteChar(let count): executeDeleteChar(count)
     default:
       return false
     }

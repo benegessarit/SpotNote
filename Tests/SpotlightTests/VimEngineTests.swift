@@ -367,6 +367,25 @@ struct VimEngineTests {
     #expect(engine.mode == .insert)
   }
 
+  @Test("cib changes the current bullet body and enters insert")
+  func cIBChangesCurrentBulletBody() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "c", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "i", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "b", hasModifiers: false) == .changeBulletBody)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("cB is a short alias for changing the current bullet body")
+  func cShiftBChangesCurrentBulletBody() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "c", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "B", hasModifiers: false) == .changeBulletBody)
+    #expect(engine.mode == .insert)
+  }
+
   @Test("3cc deletes 3 lines and enters insert")
   func countCC() {
     let engine = VimEngine()

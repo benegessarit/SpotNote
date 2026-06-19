@@ -2,6 +2,8 @@
 import AppKit
 import SwiftUI
 
+private enum VimWordClass: Equatable { case whitespace, keyword, punctuation }
+
 /// The HUD's text surface -- `NSTextView` in an `NSScrollView` with a
 /// custom `NSRulerView` line-number gutter.
 ///
@@ -886,6 +888,7 @@ final class PlaceholderTextView: NSTextView {
       return
     }
     if executeVisibleBoundaryMotion(motion) { return }
+    if executeVimWordForwardMotion(motion) { return }
     if let (selector, count) = repeatedMotion(motion) {
       for _ in 0..<count { selector(self) }
       return
@@ -952,11 +955,78 @@ final class PlaceholderTextView: NSTextView {
 
   private func repeatedMotion(_ motion: Motion) -> ((Any?) -> Void, Int)? {
     switch motion {
-    case .wordForward(let count), .wordEnd(let count):
+    case .wordEnd(let count):
       return (moveWordForward(_:), count)
     case .wordBackward(let count): return (moveWordBackward(_:), count)
     default: return nil
     }
+  }
+
+  private func executeVimWordForwardMotion(_ motion: Motion) -> Bool {
+    guard case .wordForward(let count) = motion else { return false }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return true }
+    var location = min(max(0, selectedRange.location), nsString.length)
+    for _ in 0..<max(1, count) {
+      location = vimWordForwardLocation(from: location, in: nsString)
+    }
+    setInsertionPoint(location)
+    scrollRangeToVisible(NSRange(location: location, length: 0))
+    return true
+  }
+
+  private func vimWordForwardLocation(from location: Int, in nsString: NSString) -> Int {
+    var index = min(max(0, location), nsString.length)
+    guard index < nsString.length else { return nsString.length }
+    if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+      return bodyStart
+    }
+
+    let currentClass = vimWordClass(at: index, in: nsString)
+    if currentClass != .whitespace {
+      while index < nsString.length, vimWordClass(at: index, in: nsString) == currentClass {
+        if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+          return bodyStart
+        }
+        index += 1
+      }
+    }
+    return vimNextWordStart(from: index, in: nsString)
+  }
+
+  private func vimNextWordStart(from location: Int, in nsString: NSString) -> Int {
+    var index = min(max(0, location), nsString.length)
+    while index < nsString.length {
+      if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+        return bodyStart
+      }
+      if vimWordClass(at: index, in: nsString) != .whitespace {
+        return index
+      }
+      index += 1
+    }
+    return nsString.length
+  }
+
+  private func vimWordClass(at location: Int, in nsString: NSString) -> VimWordClass {
+    guard location >= 0, location < nsString.length else { return .whitespace }
+    let codeUnit = nsString.character(at: location)
+    guard let scalar = UnicodeScalar(UInt32(codeUnit)) else { return .punctuation }
+    if CharacterSet.whitespacesAndNewlines.contains(scalar) { return .whitespace }
+    if CharacterSet.alphanumerics.contains(scalar) || scalar.value == 95 { return .keyword }
+    return .punctuation
+  }
+
+  private func markdownListBodyStart(containing location: Int, in nsString: NSString) -> Int? {
+    guard nsString.length > 0 else { return nil }
+    let line = logicalLineRange(containing: min(location, nsString.length), in: nsString)
+    let contentEnd = lineContentEnd(line, in: nsString)
+    guard contentEnd >= line.location else { return nil }
+    let lineText = nsString.substring(
+      with: NSRange(location: line.location, length: contentEnd - line.location)
+    )
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return nil }
+    return min(line.location + (prefix as NSString).length, contentEnd)
   }
 
   private func logicalLineDelta(for motion: Motion) -> Int? {
@@ -1045,6 +1115,29 @@ final class PlaceholderTextView: NSTextView {
 
   func openLineAboveForVim() {
     openLineForVim(above: true)
+  }
+
+  func changeCurrentBulletBodyForVim() {
+    guard selectedRange.length == 0 else { return }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = lineContentEnd(line, in: nsString)
+    let lineText = nsString.substring(
+      with: NSRange(location: line.location, length: contentEnd - line.location)
+    )
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return }
+
+    let bodyStart = line.location + (prefix as NSString).length
+    let bodyRange = NSRange(location: bodyStart, length: max(0, contentEnd - bodyStart))
+    if bodyRange.length > 0 {
+      guard shouldChangeText(in: bodyRange, replacementString: "") else { return }
+      replaceCharacters(in: bodyRange, with: "")
+      didChangeText()
+    }
+    setInsertionPoint(min(bodyStart, (string as NSString).length))
+    scrollRangeToVisible(NSRange(location: selectedRange.location, length: 0))
   }
 
   private func openLineForVim(above: Bool) {

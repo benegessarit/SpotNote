@@ -30,6 +30,7 @@ enum VimAction: Equatable, Sendable {
   case delete(Motion)
   case deleteLine(count: Int)
   case deleteLineInsert(count: Int)
+  case changeBulletBody
   case deleteToEndOfLine
   case deleteChar(count: Int)
   case openLineBelow
@@ -125,12 +126,27 @@ final class VimEngine {
       if let motion = motionForKey(key, count: count) { return .delete(motion) }
       return .none
     case "c":
+      if key == "i" {
+        pendingBuffer = "ci"
+        return .none
+      }
       pendingBuffer = ""
       if key == "c" {
         mode = .insert
         return .deleteLineInsert(count: count)
       }
+      if key == "B" {
+        mode = .insert
+        return .changeBulletBody
+      }
       if let motion = motionForKey(key, count: count) { return .delete(motion) }
+      return .none
+    case "ci":
+      pendingBuffer = ""
+      if key == "b" {
+        mode = .insert
+        return .changeBulletBody
+      }
       return .none
     case "g":
       return handlePendingG(key: key, count: count)
@@ -210,76 +226,6 @@ final class VimEngine {
     }
   }
 
-  // MARK: - Visual line mode
-
-  private func handleVisualLine(key: String) -> VimAction {
-    if !pendingBuffer.isEmpty {
-      return handleVisualLinePending(key: key)
-    }
-    if key.count == 1, let ch = key.first, ch.isNumber {
-      let digit = ch.wholeNumberValue ?? 0
-      if digit > 0 || countAccumulator > 0 {
-        countAccumulator = countAccumulator * 10 + digit
-        return .none
-      }
-    }
-    if key == "g" {
-      pendingBuffer = "g"
-      return .none
-    }
-
-    // `<count>G` jumps to a specific line and snaps the visual range
-    // to it; bare `G` falls through to the documentEnd motion.
-    if key == "G", countAccumulator > 0 {
-      let target = countAccumulator
-      clearAccumulator()
-      return .extendVisualLine(.down(max(0, target - 1)))
-    }
-
-    let count = resolvedCount
-    defer { clearAccumulator() }
-
-    if let motion = motionForKey(key, count: count) {
-      return .extendVisualLine(motion)
-    }
-    return visualLineCommand(for: key)
-  }
-
-  private func handleVisualLinePending(key: String) -> VimAction {
-    let buffered = pendingBuffer
-    let count = resolvedCount
-    pendingBuffer = ""
-    if buffered == "g", key == "g" {
-      clearAccumulator()
-      return .extendVisualLine(.documentStart)
-    }
-    if buffered == "g", key == "y" {
-      clearAccumulator()
-      mode = .normal
-      return .appendCurrentLineToTrayNote(count: count)
-    }
-    return .none
-  }
-
-  private func visualLineCommand(for key: String) -> VimAction {
-    switch key {
-    case "V", "\u{1B}", "escape":
-      mode = .normal
-      return .switchToNormal
-    case "y":
-      mode = .normal
-      return .yankVisualLine
-    case "d", "x":
-      mode = .normal
-      return .deleteVisualLineSelection
-    case "c", "s":
-      mode = .insert
-      return .changeVisualLineSelection
-    default:
-      return .none
-    }
-  }
-
   private func enterInsertAction(for key: String) -> VimAction? {
     switch key {
     case "i":
@@ -347,9 +293,7 @@ final class VimEngine {
 
   private var resolvedCount: Int { max(1, countAccumulator) }
 
-  private func clearAccumulator() {
-    countAccumulator = 0
-  }
+  private func clearAccumulator() { countAccumulator = 0 }
 }
 
 extension VimEngine {
@@ -363,6 +307,76 @@ extension VimEngine {
       return .enterVisualLine
     default:
       return nil
+    }
+  }
+
+  // MARK: - Visual line mode
+
+  private func handleVisualLine(key: String) -> VimAction {
+    if !pendingBuffer.isEmpty {
+      return handleVisualLinePending(key: key)
+    }
+    if key.count == 1, let ch = key.first, ch.isNumber {
+      let digit = ch.wholeNumberValue ?? 0
+      if digit > 0 || countAccumulator > 0 {
+        countAccumulator = countAccumulator * 10 + digit
+        return .none
+      }
+    }
+    if key == "g" {
+      pendingBuffer = "g"
+      return .none
+    }
+
+    // `<count>G` jumps to a specific line and snaps the visual range
+    // to it; bare `G` falls through to the documentEnd motion.
+    if key == "G", countAccumulator > 0 {
+      let target = countAccumulator
+      clearAccumulator()
+      return .extendVisualLine(.down(max(0, target - 1)))
+    }
+
+    let count = resolvedCount
+    defer { clearAccumulator() }
+
+    if let motion = motionForKey(key, count: count) {
+      return .extendVisualLine(motion)
+    }
+    return visualLineCommand(for: key)
+  }
+
+  private func handleVisualLinePending(key: String) -> VimAction {
+    let buffered = pendingBuffer
+    let count = resolvedCount
+    pendingBuffer = ""
+    if buffered == "g", key == "g" {
+      clearAccumulator()
+      return .extendVisualLine(.documentStart)
+    }
+    if buffered == "g", key == "y" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToTrayNote(count: count)
+    }
+    return .none
+  }
+
+  private func visualLineCommand(for key: String) -> VimAction {
+    switch key {
+    case "V", "\u{1B}", "escape":
+      mode = .normal
+      return .switchToNormal
+    case "y":
+      mode = .normal
+      return .yankVisualLine
+    case "d", "x":
+      mode = .normal
+      return .deleteVisualLineSelection
+    case "c", "s":
+      mode = .insert
+      return .changeVisualLineSelection
+    default:
+      return .none
     }
   }
 
