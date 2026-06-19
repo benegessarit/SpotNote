@@ -1341,8 +1341,11 @@ final class PlaceholderTextView: NSTextView {
       vimController?.showMessage("tray.md handoff unavailable", kind: .error, icon: .hermes)
       return
     }
-    commitSelectedLines(
-      count: count,
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedTrayNoteRange(count: max(1, count), in: nsString)
+    commitSelectedRange(
+      range,
       preparing: { original, _ in TrayNotePayload.normalized(original) },
       messages: LineCommitMessages(
         empty: "No tray.md text on this line",
@@ -1353,6 +1356,20 @@ final class PlaceholderTextView: NSTextView {
       ),
       commit: { _ = try await onAppendTrayNote($0) }
     )
+  }
+
+  private func selectedTrayNoteRange(count: Int, in nsString: NSString) -> NSRange {
+    let selection = selectedRange
+    if isValidTrayNoteSelection(selection, in: nsString) {
+      return selection
+    }
+    return selectedTaskRange(count: count, in: nsString)
+  }
+
+  private func isValidTrayNoteSelection(_ selection: NSRange, in nsString: NSString) -> Bool {
+    selection.length > 0
+      && selection.location >= 0
+      && selection.location + selection.length <= nsString.length
   }
 
   private struct LineCommitMessages: Sendable {

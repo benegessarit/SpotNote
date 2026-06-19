@@ -171,6 +171,44 @@ struct VimEngineTests {
     #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
   }
 
+  @Test("gy sends the current bullet to tray.md")
+  func gYSendsCurrentBulletToTrayNote() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted gy sends counted bullets to tray.md")
+  func countedGYSendsCountedBulletsToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
+  }
+
+  @Test("visual gy sends the active selection to tray.md and exits visual mode")
+  func visualGYSendsSelectionToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("visual-line gy sends the active line selection to tray.md and exits visual mode")
+  func visualLineGYSendsSelectionToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
   @Test("gD jumps to the To Do section")
   func gShiftDJumpsToToDoSection() {
     let engine = VimEngine()

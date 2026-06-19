@@ -140,6 +140,7 @@ final class VimEngine {
       if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
       if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
       if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
+      if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
       if key == "D" {
         mode = .insert
         return .jumpToToDoSection
@@ -230,10 +231,16 @@ final class VimEngine {
 
   private func handleVisualLinePending(key: String) -> VimAction {
     let buffered = pendingBuffer
+    let count = resolvedCount
     pendingBuffer = ""
     if buffered == "g", key == "g" {
       clearAccumulator()
       return .extendVisualLine(.documentStart)
+    }
+    if buffered == "g", key == "y" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToTrayNote(count: count)
     }
     return .none
   }
@@ -375,10 +382,16 @@ extension VimEngine {
 
   private func handleVisualPending(key: String) -> VimAction {
     let buffered = pendingBuffer
+    let count = resolvedCount
     pendingBuffer = ""
     if buffered == "g", key == "g" {
       clearAccumulator()
       return .extendVisual(.documentStart)
+    }
+    if buffered == "g", key == "y" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToTrayNote(count: count)
     }
     return .none
   }

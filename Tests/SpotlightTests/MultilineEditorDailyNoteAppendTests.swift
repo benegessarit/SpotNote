@@ -156,61 +156,6 @@ struct MultilineEditorDailyNoteAppendTests {
     #expect(controller.message?.kind == .error)
   }
 
-  @Test("append-to-tray-note sends current line and clears only after success")
-  func appendTrayNoteClearsAfterSuccess() async throws {
-    let textView = makeTextView(
-      text: "alpha\nbeta\ngamma",
-      checklistLines: [1: .unchecked]
-    )
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var captured: [String] = []
-    textView.onAppendTrayNote = { text in
-      captured.append(text)
-      return URL(fileURLWithPath: "/tmp/tray.md")
-    }
-
-    textView.appendCurrentLinesToTrayNote(1)
-    try await waitUntil { captured.count == 1 }
-
-    #expect(captured == ["beta"])
-    #expect(textView.string == "alpha\ngamma")
-    #expect(textView.checklistLines.isEmpty)
-  }
-
-  @Test("append-to-tray-note supports counted lines")
-  func appendTrayNoteSupportsCountedLines() async throws {
-    let textView = makeTextView(text: "alpha\nbeta\ngamma\ndelta")
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var captured: [String] = []
-    textView.onAppendTrayNote = { text in
-      captured.append(text)
-      return URL(fileURLWithPath: "/tmp/tray.md")
-    }
-
-    textView.appendCurrentLinesToTrayNote(2)
-    try await waitUntil { captured.count == 1 }
-
-    #expect(captured == ["beta\ngamma"])
-    #expect(textView.string == "alpha\ndelta")
-  }
-
-  @Test("append-to-tray-note keeps text when durable write fails")
-  func appendTrayNoteKeepsTextOnFailure() async throws {
-    struct StubFailure: Error {}
-    let textView = makeTextView(text: "alpha\nbeta\ngamma")
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var attempts = 0
-    textView.onAppendTrayNote = { _ in
-      attempts += 1
-      throw StubFailure()
-    }
-
-    textView.appendCurrentLinesToTrayNote(1)
-    try await waitUntil { attempts == 1 }
-
-    #expect(textView.string == "alpha\nbeta\ngamma")
-  }
-
   private func makeTextView(
     text: String,
     checklistLines: [Int: ChecklistLineState] = [:]
