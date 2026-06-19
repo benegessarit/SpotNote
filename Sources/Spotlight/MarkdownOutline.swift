@@ -7,6 +7,15 @@ import Foundation
 enum MarkdownOutline {
   static let indentUnit = "  "
 
+  static func standaloneMarkerCycleReplacement(for line: String) -> String? {
+    let indent = leadingWhitespace(in: line)
+    let body = line.dropFirst(indent.count)
+    let marker = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    if marker == "-" { return indent + "x" }
+    if marker == "x" { return "" }
+    return nil
+  }
+
   static func continuationPrefix(in line: String) -> String? {
     let scalars = Array(line.unicodeScalars)
     var index = 0
@@ -60,5 +69,9 @@ enum MarkdownOutline {
     }
     guard removal > 0 else { return nil }
     return String(line.dropFirst(removal))
+  }
+
+  private static func leadingWhitespace(in line: String) -> String {
+    String(line.prefix { $0 == " " || $0 == "\t" })
   }
 }

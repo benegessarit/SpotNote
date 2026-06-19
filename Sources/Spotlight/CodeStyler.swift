@@ -196,7 +196,8 @@ enum CodeStyler {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerListMarkers.Style(
       baseFont: textView.font,
-      markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78)
+      markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78),
+      doneMarkerForeground: NSColor(theme.headingText)
     )
   }
 

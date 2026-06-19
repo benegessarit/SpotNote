@@ -23,6 +23,12 @@ extension PlaceholderTextView {
       .filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
     guard !lines.isEmpty else { return }
 
+    if let markerCycleEdits = vimReturnMarkerCycleEdits(for: lines) {
+      let targetCaret = vimReturnMarkerCycleCaret(after: markerCycleEdits, originalSelection: selection)
+      applyVimReturnLineEdits(markerCycleEdits, targetCaret: targetCaret, engine: engine)
+      return
+    }
+
     let removingBullets = lines.allSatisfy {
       MarkdownOutline.continuationPrefix(in: $0.text) != nil
     }
@@ -34,13 +40,20 @@ extension PlaceholderTextView {
       guard let replacement, replacement != line.text else { return nil }
       return VimReturnLineEdit(range: line.range, original: line.text, replacement: replacement)
     }
-    guard !edits.isEmpty else { return }
-
     let targetCaret = vimReturnCaretLocation(
       after: edits,
       originalSelection: selection,
       removingBullets: removingBullets
     )
+    applyVimReturnLineEdits(edits, targetCaret: targetCaret, engine: engine)
+  }
+
+  private func applyVimReturnLineEdits(
+    _ edits: [VimReturnLineEdit],
+    targetCaret: Int,
+    engine: VimEngine
+  ) {
+    guard !edits.isEmpty else { return }
     for edit in edits.reversed() {
       guard shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
       replaceCharacters(in: edit.range, with: edit.replacement)
@@ -51,6 +64,26 @@ extension PlaceholderTextView {
     setSelectedRange(NSRange(location: clampedCaret, length: 0))
     scrollRangeToVisible(NSRange(location: clampedCaret, length: 0))
     needsDisplay = true
+  }
+
+  private func vimReturnMarkerCycleEdits(for lines: [VimReturnLine]) -> [VimReturnLineEdit]? {
+    let edits = lines.compactMap { line -> VimReturnLineEdit? in
+      guard let replacement = MarkdownOutline.standaloneMarkerCycleReplacement(for: line.text) else {
+        return nil
+      }
+      return VimReturnLineEdit(range: line.range, original: line.text, replacement: replacement)
+    }
+    return edits.count == lines.count ? edits : nil
+  }
+
+  private func vimReturnMarkerCycleCaret(
+    after edits: [VimReturnLineEdit],
+    originalSelection: NSRange
+  ) -> Int {
+    guard originalSelection.length == 0, let edit = edits.first else {
+      return edits.first?.range.location ?? originalSelection.location
+    }
+    return edit.range.location + (edit.replacement as NSString).length
   }
 
   private func vimReturnLineRanges(for selection: NSRange, in text: NSString) -> [NSRange] {

@@ -9,6 +9,7 @@ enum CodeStylerListMarkers {
   struct Style {
     let baseFont: NSFont?
     let markerForeground: NSColor
+    let doneMarkerForeground: NSColor
   }
 
   static func apply(
@@ -19,14 +20,10 @@ enum CodeStylerListMarkers {
     processed: [NSRange]
   ) {
     guard let textStorage else { return }
-    guard let regex = try? NSRegularExpression(pattern: #"(?m)^[ \t]*[-*+](?= )"#) else {
+    guard let regex = try? NSRegularExpression(pattern: #"(?m)^[ \t]*(?:[-*+](?= |[ \t]*$)|x(?=[ \t]*$))"#) else {
       return
     }
     let markerFont = markerFont(matching: style.baseFont)
-    let attributes: [NSAttributedString.Key: Any] = [
-      .font: markerFont,
-      .foregroundColor: style.markerForeground
-    ]
 
     textStorage.beginEditing()
     defer { textStorage.endEditing() }
@@ -36,8 +33,20 @@ enum CodeStylerListMarkers {
       guard !processed.contains(where: { NSIntersectionRange($0, markerRange).length > 0 }) else {
         return
       }
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: markerFont,
+        .foregroundColor: markerForeground(at: markerRange.location, text: nsText, style: style)
+      ]
       textStorage.addAttributes(attributes, range: markerRange)
     }
+  }
+
+  private static func markerForeground(
+    at location: Int,
+    text: NSString,
+    style: Style
+  ) -> NSColor {
+    text.character(at: location) == 0x78 ? style.doneMarkerForeground : style.markerForeground
   }
 
   private static func markerCharacterRange(in range: NSRange, text: NSString) -> NSRange {

@@ -261,6 +261,27 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
+  @Test("bare x markers render with the theme accent without changing stored text")
+  func bareXMarkersUseThemeAccent() throws {
+    let theme = ThemeCatalog.dracula
+    let text = "x\n- call Elliot\nplain"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let markerFont = try #require(storageFont(at: 0, in: textView))
+    let bodyFont = try #require(storageFont(at: lineStart(2, in: text), in: textView))
+    let markerColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let accent = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: markerFont).contains(.boldFontMask))
+    #expect(markerFont.pointSize >= bodyFont.pointSize + 1)
+    #expect(colorDistance(markerColor, accent) < 0.01)
+    #expect(textView.textStorage?.string == text)
+  }
+
   private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
     textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
   }

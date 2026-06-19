@@ -85,10 +85,15 @@ struct MultilineEditorOutlineTests {
     #expect(textView.selectedRange.location == 4)
   }
 
-  @Test("pressing return on an empty bullet exits the list")
-  func emptyBulletReturnExitsList() {
+  @Test("pressing return on an empty bullet cycles to x then a flush-left blank")
+  func emptyBulletReturnCyclesToDoneMarkerThenFlushBlank() {
     let textView = makeTextView(text: "- ")
     textView.setSelectedRange(NSRange(location: 2, length: 0))
+
+    textView.insertNewline(nil)
+
+    #expect(textView.string == "x")
+    #expect(textView.selectedRange.location == 1)
 
     textView.insertNewline(nil)
 
@@ -117,6 +122,38 @@ struct MultilineEditorOutlineTests {
     #expect(textView.selectedRange.location == 4)
     let plainStyle = try #require(paragraphStyle(in: textView, at: 0))
     #expect(plainStyle.headIndent == 0)
+  }
+
+  @Test("normal-mode return cycles a bare dash into x and then a flush-left blank")
+  func normalModeReturnCyclesBareDashThroughDoneMarker() throws {
+    let textView = makeNormalModeTextView(text: "-")
+    let editor = makeEditor(text: textView.string)
+    textView.setSelectedRange(NSRange(location: 1, length: 0))
+
+    textView.keyDown(with: returnKeyEvent())
+    editor.ensureParagraphStyle(on: textView)
+
+    #expect(textView.string == "x")
+    #expect(textView.selectedRange.location == 1)
+    let markerStyle = try #require(paragraphStyle(in: textView, at: 0))
+    #expect(markerStyle.headIndent == 0)
+
+    textView.keyDown(with: returnKeyEvent())
+    editor.ensureParagraphStyle(on: textView)
+
+    #expect(textView.string.isEmpty)
+    #expect(textView.selectedRange.location == 0)
+  }
+
+  @Test("normal-mode return clears an indented x marker to a flush-left blank")
+  func normalModeReturnClearsIndentedDoneMarkerFlushLeft() {
+    let textView = makeNormalModeTextView(text: "  x")
+    textView.setSelectedRange(NSRange(location: 3, length: 0))
+
+    textView.keyDown(with: returnKeyEvent())
+
+    #expect(textView.string.isEmpty)
+    #expect(textView.selectedRange.location == 0)
   }
 
   @Test("visual-line return toggles selected lines into bullets")
