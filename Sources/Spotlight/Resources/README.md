@@ -1,20 +1,20 @@
 # Spotlight resources
 
-Drop the Inter font files here so the panel renders in Inter instead of falling
-back to the system font:
+SpotNote's editor asks AppKit for IBM Plex Mono by PostScript name
+`IBMPlexMono`. The app bundles `IBMPlexMono-Regular.ttf` here so the HUD does
+not silently fall back to Inter or the generic system font on machines without
+IBM Plex Mono installed system-wide. `FontLoader.registerBundledFonts()`
+registers bundled `.ttf` / `.otf` files process-locally before the editor asks
+for the font.
 
-- `Inter-Regular.ttf`
-- `Inter-Medium.ttf`
+- `IBMPlexMono-Regular.ttf` or `IBMPlexMono-Regular.otf`
+- Optional matching weights, such as `IBMPlexMono-Bold.ttf`
 
 Easiest install:
 
 ```bash
-brew install --cask font-inter
-# then copy the installed TTFs into this directory:
-cp ~/Library/Fonts/Inter-Regular.ttf ~/Library/Fonts/Inter-Medium.ttf \
+brew install --cask font-ibm-plex
+# then copy the installed IBM Plex Mono regular file into this directory:
+cp ~/Library/Fonts/IBMPlexMono-Regular.ttf \
    Sources/Spotlight/Resources/
 ```
-
-Or download them directly from https://rsms.me/inter/ and place them in this
-directory. `FontLoader.registerBundledFonts()` picks up every `.ttf` / `.otf`
-here at launch.

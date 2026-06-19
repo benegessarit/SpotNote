@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+final class HermesToastPanel: NSPanel {
+  override var canBecomeKey: Bool { false }
+  override var canBecomeMain: Bool { false }
+}
+
 struct HermesToastView: View {
   let message: VimController.Message
   let theme: Theme

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Spotlight
@@ -14,11 +15,11 @@ struct ThemePreferencesTests {
     return defaults
   }
 
-  @Test("default selected theme is Catppuccin Frappe")
-  func defaultsToCatppuccinFrappe() {
+  @Test("default selected theme is Mirage")
+  func defaultsToMirage() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.selectedThemeID == ThemeCatalog.catppuccinFrappe.id)
-    #expect(prefs.activeTheme.id == ThemeCatalog.catppuccinFrappe.id)
+    #expect(prefs.selectedThemeID == ThemeCatalog.mirage.id)
+    #expect(prefs.activeTheme.id == ThemeCatalog.mirage.id)
   }
 
   @Test("setting selectedThemeID persists to UserDefaults")
@@ -46,18 +47,90 @@ struct ThemePreferencesTests {
     #expect(prefs.selectedThemeID == ThemeCatalog.ink.id)
   }
 
-  @Test("unknown id falls back to Catppuccin Frappe")
+  @Test("unknown id falls back to Mirage")
   func unknownFallsBack() {
-    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.catppuccinFrappe.id)
+    #expect(ThemeCatalog.theme(withID: "nope").id == ThemeCatalog.mirage.id)
   }
 
-  @Test("custom Catppuccin and Rose Pine themes are present")
+  @Test("custom Catppuccin, Rose Pine, Ayu, Mirage, Dracula, and nvim-family themes are present")
   func customThemesPresent() {
     let ids = Set(ThemeCatalog.all.map(\.id))
     #expect(ids.contains("catppuccin-frappe"))
     #expect(ids.contains("catppuccin-mocha"))
     #expect(ids.contains("catppuccin-latte"))
     #expect(ids.contains("rose-pine-moonlight"))
+    #expect(ids.contains("ayu-mirage"))
+    #expect(ids.contains("mirage"))
+    #expect(ids.contains("dracula"))
+    #expect(ids.contains("nvim-dark"))
+    #expect(ids.contains("neobones-dark"))
+    #expect(ids.contains("nightfox"))
+  }
+
+  @Test("Mirage uses the sourced cmuxthemes terminal palette")
+  func miragePalette() {
+    let theme = ThemeCatalog.mirage
+    #expect(theme.id == "mirage")
+    #expect(theme.name == "Mirage")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 27 / 255, green: 39 / 255, blue: 56 / 255))
+    #expect(theme.text == Color(red: 166 / 255, green: 178 / 255, blue: 192 / 255))
+    #expect(theme.placeholder == Color(red: 87 / 255, green: 86 / 255, blue: 86 / 255))
+  }
+
+  @Test("Ayu Mirage uses the sourced cmuxthemes terminal palette")
+  func ayuMiragePalette() {
+    let theme = ThemeCatalog.ayuMirage
+    #expect(theme.id == "ayu-mirage")
+    #expect(theme.name == "Ayu Mirage")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 31 / 255, green: 36 / 255, blue: 48 / 255))
+    #expect(theme.text == Color(red: 204 / 255, green: 202 / 255, blue: 194 / 255))
+    #expect(theme.placeholder == Color(red: 104 / 255, green: 104 / 255, blue: 104 / 255))
+  }
+
+  @Test("Dracula uses the sourced cmuxthemes terminal palette")
+  func draculaPalette() {
+    let theme = ThemeCatalog.dracula
+    #expect(theme.id == "dracula")
+    #expect(theme.name == "Dracula")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 40 / 255, green: 42 / 255, blue: 54 / 255))
+    #expect(theme.text == Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255))
+    #expect(theme.placeholder == Color(red: 98 / 255, green: 114 / 255, blue: 164 / 255))
+  }
+
+  @Test("Nvim Dark uses the sourced cmuxthemes terminal palette")
+  func nvimDarkPalette() {
+    let theme = ThemeCatalog.nvimDark
+    #expect(theme.id == "nvim-dark")
+    #expect(theme.name == "Nvim Dark")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 20 / 255, green: 22 / 255, blue: 27 / 255))
+    #expect(theme.text == Color(red: 224 / 255, green: 226 / 255, blue: 234 / 255))
+    #expect(theme.placeholder == Color(red: 79 / 255, green: 82 / 255, blue: 88 / 255))
+  }
+
+  @Test("Neobones Dark uses the sourced cmuxthemes terminal palette")
+  func neobonesDarkPalette() {
+    let theme = ThemeCatalog.neobonesDark
+    #expect(theme.id == "neobones-dark")
+    #expect(theme.name == "Neobones Dark")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 15 / 255, green: 25 / 255, blue: 31 / 255))
+    #expect(theme.text == Color(red: 198 / 255, green: 213 / 255, blue: 207 / 255))
+    #expect(theme.placeholder == Color(red: 51 / 255, green: 70 / 255, blue: 82 / 255))
+  }
+
+  @Test("Nightfox uses the sourced cmuxthemes terminal palette")
+  func nightfoxPalette() {
+    let theme = ThemeCatalog.nightfox
+    #expect(theme.id == "nightfox")
+    #expect(theme.name == "Nightfox")
+    #expect(theme.mode == .dark)
+    #expect(theme.background == Color(red: 25 / 255, green: 35 / 255, blue: 48 / 255))
+    #expect(theme.text == Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255))
+    #expect(theme.placeholder == Color(red: 87 / 255, green: 88 / 255, blue: 96 / 255))
   }
 
   @Test("all dark themes have mode .dark; all light themes have mode .light")
@@ -72,15 +145,15 @@ struct ThemePreferencesTests {
 
   @Test("catalog restores neutral and custom themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 8)
+    #expect(ThemeCatalog.darkThemes.count == 14)
     #expect(ThemeCatalog.lightThemes.count == 6)
-    #expect(ThemeCatalog.all.count == 14)
+    #expect(ThemeCatalog.all.count == 20)
   }
 
-  @Test("showLineNumbers defaults to true on first launch")
+  @Test("showLineNumbers defaults to false on first launch")
   func lineNumbersDefaultOn() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.showLineNumbers == true)
+    #expect(prefs.showLineNumbers == false)
   }
 
   @Test("showLineNumbers persists to UserDefaults, including the off value")

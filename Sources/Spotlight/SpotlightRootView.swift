@@ -12,10 +12,6 @@ final class FocusTrigger: ObservableObject {
   func requestCaretEnd() { caretEndTick &+= 1 }
 }
 
-private enum InterFont {
-  static let regular = "Inter-Regular"
-}
-
 struct SpotlightRootView: View {
   @ObservedObject var focusTrigger: FocusTrigger
   @ObservedObject var preferences: ThemePreferences
@@ -24,7 +20,7 @@ struct SpotlightRootView: View {
   @ObservedObject var find: FindController
   @ObservedObject var fuzzy: FuzzyController
   @ObservedObject var command: CommandController
-  @ObservedObject var vimController: VimController
+  let vimController: VimController
   /// Called synchronously from the editor delegate when the text's line
   /// count changes, so the panel resize happens in the same runloop tick
   /// as the text mutation (no flash).
@@ -32,14 +28,15 @@ struct SpotlightRootView: View {
   /// Invoked when Esc should dismiss the HUD (vim off, or vim on and
   /// already in normal mode).
   let onEscape: () -> Void
-  let onSendLinearTask: (String) async throws -> Void
+  let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
   let onAppendDailyNote: (String) async throws -> URL
+  let onAppendCompletedItems: (String) async throws -> URL
+  let onAppendTrayNote: (String) async throws -> URL
 
   private var theme: Theme { preferences.activeTheme }
 
   private var editorFont: NSFont {
-    NSFont(name: InterFont.regular, size: EditorMetrics.fontSize)
-      ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    SpotNoteFont.editor()
   }
 
   /// Binding that funnels user edits through `session.persistIfNeeded()`
@@ -60,7 +57,6 @@ struct SpotlightRootView: View {
   private var extraChromeHeight: CGFloat {
     var total: CGFloat = 0
     if find.isVisible { total += EditorMetrics.findBarHeight }
-    if preferences.showHints { total += EditorMetrics.tutorialBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
     } else if command.isVisible {
@@ -76,11 +72,6 @@ struct SpotlightRootView: View {
       if find.isVisible {
         FindBar(controller: find, theme: theme, editorText: session.currentText)
           .transition(.opacity)
-      }
-      if preferences.showHints {
-        TutorialBar(theme: theme, shortcuts: shortcuts) {
-          preferences.showHints = false
-        }
       }
       editorCard
         .transaction { $0.animation = nil }
@@ -112,20 +103,11 @@ struct SpotlightRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .overlay(alignment: .topTrailing) {
-      if let message = vimController.message {
-        HermesToastView(message: message, theme: theme)
-          .padding(.top, EditorMetrics.outerPadding + 7)
-          .padding(.trailing, EditorMetrics.outerPadding + 8)
-          .transition(.opacity.combined(with: .move(edge: .top)))
-      }
-    }
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: session.navigationPreview != nil)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
     .animation(.easeOut(duration: 0.10), value: command.isVisible)
-    .animation(.easeOut(duration: 0.12), value: vimController.message)
     .onChange(of: session.chats) { _, newChats in
       fuzzy.updateCorpus(newChats)
     }
@@ -138,13 +120,6 @@ struct SpotlightRootView: View {
     .onChange(of: command.isVisible) { _, isVisible in
       if !isVisible { focusTrigger.pulse() }
     }
-    .onChange(of: preferences.showHints) { _, _ in
-      let editorHeight = EditorMetrics.panelHeight(
-        forLines: EditorMetrics.lineCount(in: session.currentText),
-        maxLines: preferences.maxVisibleLines
-      )
-      onHeightChange(editorHeight + extraChromeHeight)
-    }
     .onAppear {
       let editorHeight = EditorMetrics.panelHeight(
         forLines: EditorMetrics.lineCount(in: session.currentText),
@@ -156,6 +131,13 @@ struct SpotlightRootView: View {
 
   private var hasAttachedBottom: Bool {
     session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
+  }
+
+  static let darkGlassTintOpacity = 0.64
+  static let lightGlassTintOpacity = 0.58
+
+  private var glassTintOpacity: Double {
+    theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
   }
 
   private var editorCardShape: UnevenRoundedRectangle {
@@ -172,8 +154,10 @@ struct SpotlightRootView: View {
   private var editorCard: some View {
     MultilineEditor(
       text: editorText,
+      checklistLines: session.currentChecklistLines,
+      onChecklistLinesChange: { session.updateChecklistLines($0) },
       theme: theme,
-      placeholder: "Jot something down…",
+      placeholder: editorPlaceholder,
       showLineNumbers: preferences.showLineNumbers,
       font: editorFont,
       focusRequest: focusTrigger.tick,
@@ -186,16 +170,29 @@ struct SpotlightRootView: View {
       onEscape: onEscape,
       onSendLinearTask: onSendLinearTask,
       onAppendDailyNote: onAppendDailyNote,
+      onAppendCompletedItems: onAppendCompletedItems,
+      onAppendTrayNote: onAppendTrayNote,
       onHeightChange: onHeightChange
     )
     .padding(.leading, EditorMetrics.leadingInset)
     .padding(.trailing, EditorMetrics.trailingInset)
     .padding(.vertical, EditorMetrics.verticalInset)
-    .background(editorCardShape.fill(theme.background))
+    .background {
+      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+        .clipShape(editorCardShape)
+        .overlay(editorCardShape.fill(theme.background.opacity(glassTintOpacity)))
+    }
     .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
     .padding(.top, EditorMetrics.outerPadding)
     .padding(.horizontal, EditorMetrics.outerPadding)
     .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
+  }
+
+  private var editorPlaceholder: String {
+    switch session.currentVaultState {
+    case .tasks: return "Add a task…"
+    case nil: return "Jot something down…"
+    }
   }
 
 }

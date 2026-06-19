@@ -3,6 +3,13 @@ import AppKit
 final class LineNumberRuler: NSRulerView {
   var textColor = NSColor.secondaryLabelColor.withAlphaComponent(0.8)
   var editorFont: NSFont
+  var showsLineNumbers: Bool {
+    didSet {
+      guard oldValue != showsLineNumbers else { return }
+      updateRequiredThickness()
+      needsDisplay = true
+    }
+  }
 
   static let labelFontSize: CGFloat = EditorMetrics.fontSize
 
@@ -11,11 +18,16 @@ final class LineNumberRuler: NSRulerView {
   /// by `NSRulerView`.
   override var mouseDownCanMoveWindow: Bool { true }
 
-  init(textView: NSTextView, editorFont: NSFont) {
+  init(textView: NSTextView, editorFont: NSFont, showsLineNumbers: Bool = false) {
     self.editorFont = editorFont
+    self.showsLineNumbers = showsLineNumbers
     super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
     self.clientView = textView
-    self.ruleThickness = Self.thickness(forLineCount: 1, labelSize: Self.labelFontSize)
+    self.ruleThickness = Self.thickness(
+      forLineCount: 1,
+      labelSize: Self.labelFontSize,
+      showsLineNumbers: showsLineNumbers
+    )
 
     if let clipView = textView.enclosingScrollView?.contentView {
       clipView.postsBoundsChangedNotifications = true
@@ -28,31 +40,43 @@ final class LineNumberRuler: NSRulerView {
     }
   }
 
-  /// Grow the gutter so the widest visible line number fits inside it.
+  /// Grow or shrink the gutter for the current hidden / numeric-label mode.
   /// Called on every text change.
   func updateRequiredThickness() {
     guard let textView = clientView as? NSTextView else { return }
     let lineCount = max(1, textView.string.components(separatedBy: "\n").count)
-    let required = Self.thickness(forLineCount: lineCount, labelSize: Self.labelFontSize)
+    let required = Self.thickness(
+      forLineCount: lineCount,
+      labelSize: Self.labelFontSize,
+      showsLineNumbers: showsLineNumbers
+    )
     if abs(ruleThickness - required) > 0.5 {
       ruleThickness = required
       invalidateHashMarks()
     }
   }
 
-  static func thickness(forLineCount lineCount: Int, labelSize: CGFloat) -> CGFloat {
+  static func thickness(
+    forLineCount lineCount: Int,
+    labelSize: CGFloat,
+    showsLineNumbers: Bool = false
+  ) -> CGFloat {
+    guard showsLineNumbers else {
+      return 0
+    }
     // Clamp before stringifying so a negative count's "-" doesn't inflate
     // the digit count.
     let effective = max(1, lineCount)
     let digits = String(effective).count
-    let font = NSFont.monospacedDigitSystemFont(ofSize: labelSize, weight: .regular)
+    let font = Self.labelFont(ofSize: labelSize)
     let sample = String(repeating: "8", count: digits) as NSString
     let digitWidth = sample.size(withAttributes: [.font: font]).width
     // Continuation rows render `wrapMarker` in place of a number. Ensure
     // the gutter is wide enough for either glyph.
-    let markerWidth = Self.wrapMarker.size(withAttributes: [.font: font]).width
-    // 2pt right inset + a little left breathing room.
-    return ceil(max(digitWidth, markerWidth)) + 6
+    let wrapWidth = Self.wrapMarker.size(withAttributes: [.font: font]).width
+    // Nvim-style signcolumn: one narrow sign cell on the left, one
+    // right-aligned number column on the right.
+    return Self.signColumnWidth(forLabelSize: labelSize) + ceil(max(digitWidth, wrapWidth)) + 6
   }
 
   /// Total laid-out display rows (line fragments + trailing blank
@@ -78,6 +102,23 @@ final class LineNumberRuler: NSRulerView {
     // growth doesn't lag one keystroke behind.
     let logical = max(1, textView.string.components(separatedBy: "\n").count)
     return max(logical, count)
+  }
+
+  /// Logical line index for the text row that begins at `location`.
+  ///
+  /// `NSLayoutManager.enumerateLineFragments` only visits glyph-bearing
+  /// rows, so blank lines have no fragment of their own. Counting newlines
+  /// before each fragment keeps gutter markers aligned after edits such as
+  /// Vim `o` on `## To Do`, which inserts an empty logical line before the
+  /// first checklist task.
+  static func logicalLineIndex(forFragmentStartingAt location: Int, in text: NSString) -> Int {
+    let clamped = min(max(0, location), text.length)
+    guard clamped > 0 else { return 0 }
+    var count = 0
+    for index in 0..<clamped where text.character(at: index) == newlineUnichar {
+      count += 1
+    }
+    return count
   }
 
   /// Glyph shown in place of a number on soft-wrapped continuation rows.
@@ -106,13 +147,14 @@ final class LineNumberRuler: NSRulerView {
       let layoutManager = textView.layoutManager
     else { return }
 
-    let labelFont = NSFont.monospacedDigitSystemFont(ofSize: Self.labelFontSize, weight: .regular)
+    let labelFont = Self.labelFont(ofSize: Self.labelFontSize)
     let context = DrawContext(
       textView: textView,
       layoutManager: layoutManager,
       textViewOriginInRuler: convert(NSPoint.zero, from: textView),
       visibleRect: textView.visibleRect,
       insetY: textView.textContainerInset.height,
+      showsLineNumbers: showsLineNumbers,
       labelFont: labelFont,
       attributes: [
         .font: labelFont,
@@ -138,17 +180,27 @@ final class LineNumberRuler: NSRulerView {
     drawLineNumbersAndWrapMarkers(in: context, text: text)
   }
 
-  private struct DrawContext {
+  struct DrawContext {
     let textView: NSTextView
     let layoutManager: NSLayoutManager
     let textViewOriginInRuler: NSPoint
     let visibleRect: NSRect
     let insetY: CGFloat
+    let showsLineNumbers: Bool
     let labelFont: NSFont
     let attributes: [NSAttributedString.Key: Any]
     let wrapAttributes: [NSAttributedString.Key: Any]
   }
 
+  static func labelFont(ofSize size: CGFloat) -> NSFont {
+    SpotNoteFont.editor(size: size)
+  }
+
+  private var numberColumnRightX: CGFloat { bounds.width - 2 }
+
+}
+
+extension LineNumberRuler {
   /// Draws `number` so its glyph baseline sits at `baselineY` (ruler coords).
   /// Uses the label font's ascender to translate baseline -> drawing origin.
   private func drawNumber(
@@ -161,7 +213,7 @@ final class LineNumberRuler: NSRulerView {
     let size = string.size(withAttributes: attrs)
     let originY = baselineY - font.ascender
     guard originY + size.height > bounds.minY, originY < bounds.maxY else { return }
-    string.draw(at: NSPoint(x: bounds.width - size.width - 2, y: originY), withAttributes: attrs)
+    string.draw(at: NSPoint(x: numberColumnRightX - size.width, y: originY), withAttributes: attrs)
   }
 
   /// Baseline y (in fragment-local coords) that matches what
@@ -182,6 +234,7 @@ final class LineNumberRuler: NSRulerView {
   }
 
   private func drawEmptyBufferNumber(in ctx: DrawContext) {
+    guard ctx.showsLineNumbers else { return }
     let baselineInFragment = Self.synthesizedBaseline(
       fragmentHeight: EditorMetrics.lineHeight,
       font: editorFont
@@ -205,15 +258,16 @@ final class LineNumberRuler: NSRulerView {
   /// snaps back to its natural position.
   private func drawLineNumbersAndWrapMarkers(in ctx: DrawContext, text: NSString) {
     let lm = ctx.layoutManager
+
     let all = NSRange(location: 0, length: lm.numberOfGlyphs)
     var lineNumber = 0
     var drewLabel = false
     lm.enumerateLineFragments(forGlyphRange: all) { frag, _, _, glyphs, stop in
       let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
-      let start =
-        chars.location == 0
-        || text.character(at: chars.location - 1) == Self.newlineUnichar
-      if start { lineNumber += 1 }
+      let start = self.isFirstVisibleFragment(chars: chars, text: text)
+      if start {
+        lineNumber = Self.logicalLineIndex(forFragmentStartingAt: chars.location, in: text) + 1
+      }
       if frag.origin.y >= ctx.visibleRect.maxY {
         stop.pointee = true
         return
@@ -222,25 +276,33 @@ final class LineNumberRuler: NSRulerView {
       let offset = lm.location(forGlyphAt: glyphs.location).y
       let baselineY = frag.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
       if start || !drewLabel {
-        self.drawNumber(
-          lineNumber,
+        self.drawLineLabel(
+          lineNumber: lineNumber,
           baselineY: baselineY,
-          font: ctx.labelFont,
-          attrs: ctx.attributes
+          ctx: ctx
         )
         drewLabel = true
-      } else {
+      } else if ctx.showsLineNumbers {
         self.drawWrapMarker(baselineY: baselineY, font: ctx.labelFont, attrs: ctx.wrapAttributes)
       }
     }
-    drawExtraLineFragmentLabel(previousLineNumber: lineNumber, ctx: ctx, text: text)
+    drawExtraLineFragmentLabel(ctx: ctx, text: text)
+  }
+
+  private func drawLineLabel(
+    lineNumber: Int,
+    baselineY: CGFloat,
+    ctx: DrawContext
+  ) {
+    if ctx.showsLineNumbers {
+      drawNumber(lineNumber, baselineY: baselineY, font: ctx.labelFont, attrs: ctx.attributes)
+    }
   }
 
   /// The trailing blank fragment for text ending in `\n` is a fresh
   /// logical line, never a wrap continuation -- always gets a number one
   /// greater than the last fragment's.
   private func drawExtraLineFragmentLabel(
-    previousLineNumber: Int,
     ctx: DrawContext,
     text: NSString
   ) {
@@ -250,12 +312,15 @@ final class LineNumberRuler: NSRulerView {
     else { return }
     let offset = Self.synthesizedBaseline(fragmentHeight: extra.height, font: editorFont)
     let baselineY = extra.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
-    drawNumber(
-      previousLineNumber + 1,
-      baselineY: baselineY,
-      font: ctx.labelFont,
-      attrs: ctx.attributes
-    )
+    let lineIndex = Self.logicalLineIndex(forFragmentStartingAt: text.length, in: text)
+    if ctx.showsLineNumbers {
+      drawNumber(
+        lineIndex + 1,
+        baselineY: baselineY,
+        font: ctx.labelFont,
+        attrs: ctx.attributes
+      )
+    }
   }
 
   private func drawWrapMarker(
@@ -267,99 +332,13 @@ final class LineNumberRuler: NSRulerView {
     let originY = baselineY - font.ascender
     guard originY + size.height > bounds.minY, originY < bounds.maxY else { return }
     Self.wrapMarker.draw(
-      at: NSPoint(x: bounds.width - size.width - 2, y: originY),
+      at: NSPoint(x: numberColumnRightX - size.width, y: originY),
       withAttributes: attrs
     )
   }
-}
 
-private struct LineFlashDrawStyle {
-  let font: NSFont
-  let defaultAttrs: [NSAttributedString.Key: Any]
-  let activeAttrs: [NSAttributedString.Key: Any]
-  let buffer: String
-}
-
-extension LineNumberRuler {
-  private func drawLineFlashHints(
-    in ctx: DrawContext,
-    textView: PlaceholderTextView,
-    text: NSString
-  ) {
-    let visibleHints =
-      textView.flashLabelBuffer.isEmpty
-      ? textView.flashHints
-      : textView.flashHints.filter { $0.label.hasPrefix(textView.flashLabelBuffer) }
-    let labelsByLocation = Dictionary(uniqueKeysWithValues: visibleHints.map { ($0.location, $0.label) })
-    guard !labelsByLocation.isEmpty else { return }
-    let style = lineFlashDrawStyle(buffer: textView.flashLabelBuffer)
-    let lm = ctx.layoutManager
-    let all = NSRange(location: 0, length: lm.numberOfGlyphs)
-    lm.enumerateLineFragments(forGlyphRange: all) { frag, _, _, glyphs, stop in
-      if frag.origin.y >= ctx.visibleRect.maxY {
-        stop.pointee = true
-        return
-      }
-      guard frag.maxY > ctx.visibleRect.minY else { return }
-      let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
-      guard let label = labelsByLocation[chars.location] else { return }
-      let offset = lm.location(forGlyphAt: glyphs.location).y
-      let baselineY = frag.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
-      self.drawFlashLabel(label, baselineY: baselineY, style: style)
-    }
-    drawExtraLineFragmentFlashLabel(labelsByLocation: labelsByLocation, ctx: ctx, text: text, style: style)
-  }
-
-  private func drawExtraLineFragmentFlashLabel(
-    labelsByLocation: [Int: String],
-    ctx: DrawContext,
-    text: NSString,
-    style: LineFlashDrawStyle
-  ) {
-    guard let label = labelsByLocation[text.length], text.hasSuffix("\n") else { return }
-    let extra = ctx.layoutManager.extraLineFragmentRect
-    guard !extra.isEmpty,
-      extra.maxY > ctx.visibleRect.minY,
-      extra.origin.y < ctx.visibleRect.maxY
-    else { return }
-    let offset = Self.synthesizedBaseline(fragmentHeight: extra.height, font: editorFont)
-    let baselineY = extra.origin.y + offset + ctx.insetY + ctx.textViewOriginInRuler.y
-    drawFlashLabel(label, baselineY: baselineY, style: style)
-  }
-
-  private func lineFlashDrawStyle(buffer: String) -> LineFlashDrawStyle {
-    let font = NSFontManager.shared.convert(editorFont, toHaveTrait: .boldFontMask)
-      .withSize(editorFont.pointSize)
-    return LineFlashDrawStyle(
-      font: font,
-      defaultAttrs: flashLabelAttributes(font: font, active: false),
-      activeAttrs: flashLabelAttributes(font: font, active: true),
-      buffer: buffer
-    )
-  }
-
-  private func flashLabelAttributes(
-    font: NSFont,
-    active: Bool
-  ) -> [NSAttributedString.Key: Any] {
-    [
-      .font: font,
-      .foregroundColor: active
-        ? NSColor(red: 0.980, green: 0.702, blue: 0.529, alpha: 1.0)
-        : NSColor(red: 0.651, green: 0.890, blue: 0.631, alpha: 1.0)
-    ]
-  }
-
-  private func attrs(for label: String, style: LineFlashDrawStyle) -> [NSAttributedString.Key: Any] {
-    !style.buffer.isEmpty && label.hasPrefix(style.buffer) ? style.activeAttrs : style.defaultAttrs
-  }
-
-  private func drawFlashLabel(_ label: String, baselineY: CGFloat, style: LineFlashDrawStyle) {
-    let labelString = label as NSString
-    let attrs = attrs(for: label, style: style)
-    let size = labelString.size(withAttributes: attrs)
-    let originY = baselineY - style.font.ascender
-    guard originY + size.height > bounds.minY, originY < bounds.maxY else { return }
-    labelString.draw(at: NSPoint(x: bounds.width - size.width - 2, y: originY), withAttributes: attrs)
+  private func isFirstVisibleFragment(chars: NSRange, text: NSString) -> Bool {
+    chars.location == 0
+      || text.character(at: chars.location - 1) == Self.newlineUnichar
   }
 }

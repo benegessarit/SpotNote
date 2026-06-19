@@ -9,16 +9,16 @@ enum EditorMetrics {
   static let verticalInset: CGFloat = 16
   /// Padding between the rounded card and the panel edge (shadow gutter).
   static let outerPadding: CGFloat = 4
-  /// Leading padding inside the rounded card. Paired with `textLeadingGap`
-  /// so the line number column matches the pre-statusline-removal HUD.
-  static let leadingInset: CGFloat = 28
-  /// Trailing padding inside the rounded card.
-  static let trailingInset: CGFloat = 16
-  /// Gap applied to the text view's leading text-container inset so the
-  /// caret doesn't abut the line-number gutter.
-  static let textLeadingGap: CGFloat = 18
-  /// Right-side breathing room now that the in-editor copy button is gone.
-  static let textTrailingGap: CGFloat = 12
+  /// Leading padding inside the rounded card. Keep this at zero so the
+  /// ruler itself owns the nvim-style sign column from the card edge.
+  static let leadingInset: CGFloat = 0
+  /// Trailing padding inside the rounded card. Kept narrow so the custom
+  /// overlay scroller reads close to the card's right border.
+  static let trailingInset: CGFloat = 8
+  /// Gap applied to the text view's leading text-container inset when line
+  /// numbers are hidden. Keeps text comfortably off the card edge without
+  /// reintroducing a checkbox gutter.
+  static let textLeadingGap: CGFloat = 32
   /// Font size used for the editor text.
   static let fontSize: CGFloat = 22
   /// Vim-normal-mode block cursor width. This intentionally reads like a
@@ -26,9 +26,6 @@ enum EditorMetrics {
   static let normalModeCursorWidth: CGFloat = 13
   /// Panel width.
   static let panelWidth: CGFloat = 760
-  /// Fixed height of the optional tutorial bar drawn above the editor
-  /// card. Sized for two rows of compact `KeyCap`-styled chord hints.
-  static let tutorialBarHeight: CGFloat = 58
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
   /// Minimum default row count for the roomy HUD. Keeps short inbox-style

@@ -74,10 +74,153 @@ struct MultilineEditorDailyNoteAppendTests {
     #expect(textView.string == "alpha\ndelta")
   }
 
-  private func makeTextView(text: String) -> PlaceholderTextView {
-    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 200))
+  @Test("append-to-daily-note serializes selected checklist lines as Markdown")
+  func appendDailyNoteSerializesChecklistLines() async throws {
+    let textView = makeTextView(
+      text: "alpha\nbeta\ngamma",
+      checklistLines: [1: .checked]
+    )
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var captured: [String] = []
+    textView.onAppendDailyNote = { text in
+      captured.append(text)
+      return URL(fileURLWithPath: "/tmp/06-15-2026.md")
+    }
+
+    textView.appendCurrentLinesToDailyNote(1)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured == ["[ x ] beta"])
+    #expect(textView.string == "alpha\ngamma")
+    #expect(textView.checklistLines.isEmpty)
+  }
+
+  @Test("append-to-completed-items sends current line and clears only after success")
+  func appendCompletedItemsClearsAfterSuccess() async throws {
+    let textView = makeTextView(
+      text: "alpha\nbeta\ngamma",
+      checklistLines: [1: .checked]
+    )
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var captured: [String] = []
+    textView.onAppendCompletedItems = { text in
+      captured.append(text)
+      return URL(fileURLWithPath: "/tmp/spotnote-completed.md")
+    }
+
+    textView.appendCurrentLinesToCompletedItems(1)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured == ["[ x ] beta"])
+    #expect(textView.string == "alpha\ngamma")
+    #expect(textView.checklistLines.isEmpty)
+  }
+
+  @Test("append-to-completed-items keeps text when durable write fails")
+  func appendCompletedItemsKeepsTextOnFailure() async throws {
+    struct StubFailure: Error {}
+    let textView = makeTextView(text: "alpha\nbeta\ngamma")
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var attempts = 0
+    textView.onAppendCompletedItems = { _ in
+      attempts += 1
+      throw StubFailure()
+    }
+
+    textView.appendCurrentLinesToCompletedItems(1)
+    try await waitUntil { attempts == 1 }
+
+    #expect(textView.string == "alpha\nbeta\ngamma")
+  }
+
+  @Test("append-to-completed-items does not claim success when clearing is refused")
+  func appendCompletedItemsReportsWhenClearingIsRefused() async throws {
+    let textView = makeTextView(text: "alpha\nbeta\ngamma")
+    let controller = VimController()
+    let rejector = RejectingTextViewDelegate()
+    textView.attachVimController(controller)
+    textView.delegate = rejector
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var captured: [String] = []
+    textView.onAppendCompletedItems = { text in
+      captured.append(text)
+      return URL(fileURLWithPath: "/tmp/spotnote-completed.md")
+    }
+
+    textView.appendCurrentLinesToCompletedItems(1)
+    try await waitUntil { captured.count == 1 && controller.message != nil }
+
+    #expect(captured == ["beta"])
+    #expect(textView.string == "alpha\nbeta\ngamma")
+    #expect(controller.message?.text == "Completed item logged; line changed")
+    #expect(controller.message?.kind == .error)
+  }
+
+  @Test("append-to-tray-note sends current line and clears only after success")
+  func appendTrayNoteClearsAfterSuccess() async throws {
+    let textView = makeTextView(
+      text: "alpha\nbeta\ngamma",
+      checklistLines: [1: .unchecked]
+    )
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var captured: [String] = []
+    textView.onAppendTrayNote = { text in
+      captured.append(text)
+      return URL(fileURLWithPath: "/tmp/tray.md")
+    }
+
+    textView.appendCurrentLinesToTrayNote(1)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured == ["beta"])
+    #expect(textView.string == "alpha\ngamma")
+    #expect(textView.checklistLines.isEmpty)
+  }
+
+  @Test("append-to-tray-note supports counted lines")
+  func appendTrayNoteSupportsCountedLines() async throws {
+    let textView = makeTextView(text: "alpha\nbeta\ngamma\ndelta")
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var captured: [String] = []
+    textView.onAppendTrayNote = { text in
+      captured.append(text)
+      return URL(fileURLWithPath: "/tmp/tray.md")
+    }
+
+    textView.appendCurrentLinesToTrayNote(2)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured == ["beta\ngamma"])
+    #expect(textView.string == "alpha\ndelta")
+  }
+
+  @Test("append-to-tray-note keeps text when durable write fails")
+  func appendTrayNoteKeepsTextOnFailure() async throws {
+    struct StubFailure: Error {}
+    let textView = makeTextView(text: "alpha\nbeta\ngamma")
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+    var attempts = 0
+    textView.onAppendTrayNote = { _ in
+      attempts += 1
+      throw StubFailure()
+    }
+
+    textView.appendCurrentLinesToTrayNote(1)
+    try await waitUntil { attempts == 1 }
+
+    #expect(textView.string == "alpha\nbeta\ngamma")
+  }
+
+  private func makeTextView(
+    text: String,
+    checklistLines: [Int: ChecklistLineState] = [:]
+  ) -> PlaceholderTextView {
+    let textView = PlaceholderTextView(
+      frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 200)
+    )
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
     textView.string = text
+    textView.checklistLines = checklistLines
     textView.textContainer?.lineFragmentPadding = 0
     textView.textContainer?.widthTracksTextView = true
     guard let storage = textView.textStorage,
@@ -92,6 +235,16 @@ struct MultilineEditorDailyNoteAppendTests {
     storage.addLayoutManager(fixed)
     fixed.addTextContainer(container)
     return textView
+  }
+
+  private final class RejectingTextViewDelegate: NSObject, NSTextViewDelegate {
+    func textView(
+      _ textView: NSTextView,
+      shouldChangeTextIn affectedCharRange: NSRange,
+      replacementString: String?
+    ) -> Bool {
+      false
+    }
   }
 
   private func waitUntil(condition: @MainActor @escaping () -> Bool) async throws {

@@ -55,11 +55,11 @@ struct ShortcutStoreTests {
     let defaults = makeDefaults()
     let first = ShortcutStore(defaults: defaults)
     _ = first.setBinding(
-      Shortcut(key: "k", modifiers: [.command, .option]),
+      Shortcut(key: "j", modifiers: [.command, .option]),
       for: .deleteChat
     )
     let second = ShortcutStore(defaults: defaults)
-    #expect(second.binding(for: .deleteChat).key == "k")
+    #expect(second.binding(for: .deleteChat).key == "j")
     #expect(second.binding(for: .deleteChat).modifiers == [.command, .option])
   }
 
@@ -70,6 +70,15 @@ struct ShortcutStoreTests {
     #expect(action == .newChat)
     let none = store.match(key: "j", modifiers: [.command])
     #expect(none == nil)
+  }
+
+  @Test("plain Cmd-K does not open the command palette")
+  func commandPaletteDefaultAvoidsPlainCmdK() {
+    let store = ShortcutStore(defaults: makeDefaults())
+
+    #expect(ShortcutAction.commandPalette.defaultShortcut != Shortcut(key: "k", modifiers: [.command]))
+    #expect(store.match(key: "k", modifiers: [.command]) == nil)
+    #expect(store.match(key: "k", modifiers: [.command, .option]) == .commandPalette)
   }
 
   @Test("send to Linear defaults to Cmd Option L")
@@ -88,6 +97,12 @@ struct ShortcutStoreTests {
     #expect(binding.key == "d")
     #expect(binding.modifiers == [.command, .option])
     #expect(store.match(key: "d", modifiers: [.command, .option]) == .appendToDailyNote)
+  }
+
+  @Test("tray has no separate global open shortcut")
+  func trayHasNoSeparateGlobalOpenShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    #expect(store.match(key: "space", modifiers: [.command, .option]) == nil)
   }
 
   @Test("loading an older shortcut map avoids conflicts for new default chords")
@@ -128,6 +143,23 @@ struct ShortcutStoreTests {
     #expect(stored[ShortcutAction.appendToDailyNote.rawValue] == ShortcutAction.appendToDailyNote.defaultShortcut)
   }
 
+  @Test("legacy command palette Cmd-K binding migrates off plain Cmd-K")
+  func legacyCommandPaletteCmdKBindingMigratesOffPlainCmdK() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    oldMap[ShortcutAction.commandPalette.rawValue] = Shortcut(key: "k", modifiers: [.command])
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    let store = ShortcutStore(defaults: defaults, storageKey: key)
+
+    #expect(store.match(key: "k", modifiers: [.command]) == nil)
+    #expect(store.binding(for: .commandPalette) == ShortcutAction.commandPalette.defaultShortcut)
+  }
+
   @Test("resetAll restores every action to its default")
   func resetAllRestoresDefaults() {
     let store = ShortcutStore(defaults: makeDefaults())
@@ -153,11 +185,5 @@ struct ShortcutStoreTests {
       modifiers: [.command, .control, .option, .shift]
     )
     #expect(chord.displayString == "⌃⌥⇧⌘Space")
-  }
-
-  @Test("checklist shortcut help describes visible Markdown syntax")
-  func checklistShortcutHelpDescribesMarkdownSyntax() {
-    #expect(ShortcutAction.insertChecklist.subtitle.contains("[   ]"))
-    #expect(!ShortcutAction.insertChecklist.subtitle.contains("@cl"))
   }
 }

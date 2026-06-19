@@ -100,7 +100,7 @@ public final class ThemePreferences: ObservableObject {
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     self.selectedThemeID = defaults.string(forKey: Key.selectedID) ?? ThemeCatalog.defaultID
-    self.showLineNumbers = Self.boolOrDefault(defaults, Key.showLineNumbers, default: true)
+    self.showLineNumbers = Self.boolOrDefault(defaults, Key.showLineNumbers, default: false)
     self.showMenuBarIcon = Self.boolOrDefault(defaults, Key.showMenuBarIcon, default: true)
     self.showHints = Self.boolOrDefault(defaults, Key.showHints, default: true)
     self.vimMode = Self.boolOrDefault(defaults, Key.vimMode, default: false)

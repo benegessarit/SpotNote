@@ -7,16 +7,81 @@ import Testing
 @MainActor
 @Suite("Multiline editor vim logical line motions")
 struct MultilineEditorVimLogicalLineMotionTests {
-  @Test("j steps one logical line at a time over checklist markers")
+  @Test("j steps one logical line at a time over icon-only checklist lines")
   func downOverChecklistMarkers() {
-    let textView = makeVimMotionTextView(text: "plain\n[ ] one\n[ ] two\n[x] three\nafter")
+    let textView = makeVimMotionTextView(
+      text: "plain\none\ntwo\nthree\nafter",
+      checklistLines: [1: .unchecked, 2: .unchecked, 3: .checked]
+    )
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
     textView.executeMotion(.down(1))
     #expect(textView.selectedRange.location == ("plain\n" as NSString).length)
 
     textView.executeMotion(.down(1))
-    #expect(textView.selectedRange.location == ("plain\n[ ] one\n" as NSString).length)
+    #expect(textView.selectedRange.location == ("plain\none\n" as NSString).length)
+  }
+
+  @Test("gg scrolls the document start to the top of a long visible note")
+  func ggScrollsDocumentStartToTop() {
+    let text = (0..<30).map { "line \($0)" }.joined(separator: "\n")
+    let textView = makeScrollableVimMotionTextView(text: text)
+    let scrollView = makeScrollView(containing: textView)
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+    scrollView.contentView.scroll(to: NSPoint(x: 0, y: EditorMetrics.lineHeight * 6))
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+
+    #expect(textView.selectedRange.location == 0)
+    #expect(scrollView.contentView.documentVisibleRect.minY == 0)
+  }
+
+  @Test("G scrolls the document end to the bottom of a long visible note")
+  func shiftGScrollsDocumentEndToBottom() {
+    let text = (0..<30).map { "line \($0)" }.joined(separator: "\n")
+    let textView = makeScrollableVimMotionTextView(text: text)
+    let scrollView = makeScrollView(containing: textView)
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    scrollView.contentView.scroll(to: .zero)
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+
+    textView.keyDown(with: keyEvent(characters: "G", ignoring: "g", keyCode: 5, modifiers: .shift))
+
+    let documentBottomY = scrollView.contentView.documentRect.maxY
+    let visibleBottomY = scrollView.contentView.documentVisibleRect.maxY
+    #expect(textView.selectedRange.location == (text as NSString).length)
+    #expect(abs(visibleBottomY - documentBottomY) < 0.001)
+  }
+
+  @Test("j preserves the column across icon-only checklist lines")
+  func downPreservesVisibleColumnAcrossChecklistMarkers() {
+    let textView = makeVimMotionTextView(
+      text: "plain\nPick AirBnb\n3 prospects",
+      checklistLines: [1: .unchecked]
+    )
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.executeMotion(.down(1))
+    #expect(textView.selectedRange.location == ("plain\n" as NSString).length)
+
+    textView.executeMotion(.down(1))
+    #expect(textView.selectedRange.location == ("plain\nPick AirBnb\n" as NSString).length)
+  }
+
+  @Test("k preserves the column across icon-only checklist lines")
+  func upPreservesVisibleColumnAcrossChecklistMarkers() {
+    let text = "Pick AirBnb\n3 prospects"
+    let textView = makeVimMotionTextView(text: text, checklistLines: [0: .unchecked])
+    textView.setSelectedRange(NSRange(location: ("Pick AirBnb\n" as NSString).length, length: 0))
+
+    textView.executeMotion(.up(1))
+    #expect(textView.selectedRange.location == 0)
   }
 
   @Test("j and k step through fenced code block lines")
@@ -145,6 +210,31 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.vimEngine?.mode == .insert)
   }
 
+  @Test("normal-mode block cursor paints only while AppKit blink is on")
+  func normalModeCursorRespectsBlinkState() throws {
+    let textView = makeVimMotionTextView(text: "alpha")
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    let onRep = try makeBitmapRep()
+    drawCursor(
+      for: textView,
+      in: NSRect(x: 4, y: 0, width: 1, height: EditorMetrics.lineHeight),
+      turnedOn: true,
+      rep: onRep
+    )
+    #expect(bitmapContainsMirageCursor(onRep))
+
+    let offRep = try makeBitmapRep()
+    drawCursor(
+      for: textView,
+      in: NSRect(x: 4, y: 0, width: 1, height: EditorMetrics.lineHeight),
+      turnedOn: false,
+      rep: offRep
+    )
+    #expect(!bitmapContainsMirageCursor(offRep))
+  }
+
   @Test("Flash jump moves to the first whole-document matching character")
   func flashJumpForward() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")
@@ -207,6 +297,17 @@ struct MultilineEditorVimLogicalLineMotionTests {
 
     #expect(targets.map(\.location) == [0, 4, 9, 12, 15])
     #expect(targets.map(\.label) == ["a", "s", "d", "f", "g"])
+  }
+
+  @Test("Flash search ignores capitalization")
+  func flashSearchIgnoresCapitalization() {
+    let targets = VimFlash.targets(
+      in: "Alpha alpha ALPHA",
+      from: 0,
+      request: VimFlashRequest(query: "al", direction: .forward, count: 1)
+    )
+
+    #expect(targets.map(\.location) == [0, 6, 12])
   }
 
   @Test("backward whole-document Flash labels targets from the end of the document")
@@ -390,62 +491,4 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(temporaryForegroundColor(at: firstTarget.location, in: textView) == nil)
   }
 
-  private func makeVimMotionTextView(
-    text: String,
-    width: CGFloat = EditorMetrics.panelWidth
-  ) -> PlaceholderTextView {
-    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
-    textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
-    textView.string = text
-    textView.textContainer?.lineFragmentPadding = 0
-    textView.textContainer?.widthTracksTextView = true
-    guard let storage = textView.textStorage,
-      let container = textView.textContainer
-    else { return textView }
-    let fixed = FixedLineHeightLayoutManager()
-    fixed.fixedLineHeight = EditorMetrics.lineHeight
-    fixed.editorFont = textView.font ?? .systemFont(ofSize: EditorMetrics.fontSize)
-    if let existing = storage.layoutManagers.first {
-      storage.removeLayoutManager(existing)
-    }
-    storage.addLayoutManager(fixed)
-    fixed.addTextContainer(container)
-    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
-    return textView
-  }
-
-  private func temporaryForegroundColor(at location: Int, in textView: PlaceholderTextView) -> NSColor? {
-    textView.layoutManager?.temporaryAttributes(
-      atCharacterIndex: location,
-      effectiveRange: nil
-    )[.foregroundColor] as? NSColor
-  }
-
-  private func colorComponents(_ color: NSColor?) -> [CGFloat] {
-    guard let color = color?.usingColorSpace(.deviceRGB) else { return [] }
-    return [color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent]
-  }
-
-  private func keyEvent(
-    characters: String,
-    ignoring: String,
-    keyCode: UInt16,
-    modifiers: NSEvent.ModifierFlags = []
-  ) -> NSEvent {
-    guard
-      let event = NSEvent.keyEvent(
-        with: .keyDown,
-        location: .zero,
-        modifierFlags: modifiers,
-        timestamp: 0,
-        windowNumber: 0,
-        context: nil,
-        characters: characters,
-        charactersIgnoringModifiers: ignoring,
-        isARepeat: false,
-        keyCode: keyCode
-      )
-    else { fatalError("failed to create key event") }
-    return event
-  }
 }

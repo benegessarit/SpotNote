@@ -296,17 +296,6 @@ private struct GeneralPane: View {
         SettingsDivider()
 
         SettingsToggleRow(
-          title: "Hints bar",
-          subtitle: "Show the keyboard shortcut hint strip above the editor.",
-          isOn: Binding(
-            get: { preferences.showHints },
-            set: { preferences.showHints = $0 }
-          )
-        )
-
-        SettingsDivider()
-
-        SettingsToggleRow(
           title: "Dim instead of hide",
           subtitle: "Keep the HUD visible at reduced opacity when it loses focus.",
           isOn: Binding(
@@ -357,7 +346,7 @@ private struct EditorPane: View {
 
         SettingsToggleRow(
           title: "Line numbers",
-          subtitle: "Show line numbers on the left side of the editor.",
+          subtitle: "Show numeric labels; the narrow marker gutter stays visible.",
           isOn: Binding(
             get: { preferences.showLineNumbers },
             set: { preferences.showLineNumbers = $0 }

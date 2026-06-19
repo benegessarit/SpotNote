@@ -31,11 +31,13 @@ public final class SpotlightWindowController {
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
   nonisolated static let defaultLoweredCenterRatio: CGFloat = 0.06
+  nonisolated static let defaultRightwardOffsetRatio: CGFloat = 0.30
 
   nonisolated static func restingOriginX(in screenFrame: NSRect, panelWidth: CGFloat) -> CGFloat {
     let centeredX = (screenFrame.midX - panelWidth / 2).rounded()
     let rightmostX = max(screenFrame.minX, screenFrame.maxX - panelWidth)
-    return min(max(centeredX, screenFrame.minX), rightmostX).rounded()
+    let shiftedX = centeredX + (rightmostX - centeredX) * defaultRightwardOffsetRatio
+    return min(max(shiftedX, screenFrame.minX), rightmostX).rounded()
   }
 
   nonisolated static func restingOriginY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
@@ -51,6 +53,7 @@ public final class SpotlightWindowController {
 
   private var panel: SpotlightPanel?
   private var fuzzyPreviewPanel: FuzzyPreviewPanel?
+  private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
   let preferences: ThemePreferences
   let session: ChatSession
@@ -61,6 +64,8 @@ public final class SpotlightWindowController {
   private let copyController = CopyController()
   private let handoffClient = ScratchpadHandoffClient()
   private let dailyNoteWriter = DailyNoteWriter()
+  private let completedItemsWriter = CompletedItemsWriter()
+  private let trayNoteWriter = TrayNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private let onWillShowHUD: () -> Void
@@ -124,12 +129,11 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel (find bar + tutorial
-  /// when visible). Used to map between `panel.top` and `editorTopY`.
+  /// Layout above the editor card inside the panel (find bar when visible).
+  /// Used to map between `panel.top` and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
     var height: CGFloat = 0
     if findController.isVisible { height += EditorMetrics.findBarHeight }
-    if preferences.showHints { height += EditorMetrics.tutorialBarHeight }
     return height
   }
 
@@ -175,13 +179,13 @@ public final class SpotlightWindowController {
     preferences: ThemePreferences,
     store: ChatStore,
     shortcuts: ShortcutStore,
-    vaultInbox: VaultInboxDocument? = nil,
+    vaultDocuments: [VaultNoteDocument]? = nil,
     onOpenSettings: @escaping () -> Void,
     onWillShowHUD: @escaping () -> Void = {},
     onDidHideHUD: @escaping () -> Void = {}
   ) {
     self.preferences = preferences
-    self.session = ChatSession(store: store, vaultInbox: vaultInbox)
+    self.session = ChatSession(store: store, vaultDocuments: vaultDocuments)
     self.shortcuts = shortcuts
     self.onOpenSettings = onOpenSettings
     self.onWillShowHUD = onWillShowHUD
@@ -191,6 +195,7 @@ public final class SpotlightWindowController {
     installModifierMonitor()
     observeNavigationPreview()
     observeFuzzyPreview()
+    observeToastMessages()
     installVimCommandRunner()
     Task { [session] in await session.bootstrap() }
   }
@@ -267,6 +272,70 @@ public final class SpotlightWindowController {
     }
   }
 
+  private func observeToastMessages() {
+    vimController.$message
+      .sink { [weak self] message in
+        MainActor.assumeIsolated { self?.syncToastPanel(message: message) }
+      }
+      .store(in: &cancellables)
+  }
+
+  private func syncToastPanel(message: VimController.Message? = nil) {
+    guard let message = message ?? vimController.message,
+      let panel,
+      panel.isVisible
+    else {
+      toastPanel?.orderOut(nil)
+      return
+    }
+    let toast = toastPanel ?? makeToastPanel(parent: panel)
+    toastPanel = toast
+    if toast.parent !== panel {
+      panel.addChildWindow(toast, ordered: .above)
+    }
+    let content = NSHostingView(
+      rootView: HermesToastView(message: message, theme: preferences.activeTheme)
+    )
+    let size = content.fittingSize
+    content.frame = NSRect(origin: .zero, size: size)
+    toast.contentView = content
+    let frame = toastFrame(for: panel, size: size)
+    if !Self.rect(toast.frame, isApproximatelyEqualTo: frame) {
+      toast.setFrame(frame, display: true)
+    }
+    if !toast.isVisible {
+      toast.orderFrontRegardless()
+    }
+  }
+
+  private func makeToastPanel(parent: NSPanel) -> HermesToastPanel {
+    let toast = HermesToastPanel(
+      contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+      styleMask: Self.panelStyleMask,
+      backing: .buffered,
+      defer: false
+    )
+    Self.configurePanel(toast)
+    toast.hasShadow = false
+    toast.ignoresMouseEvents = true
+    parent.addChildWindow(toast, ordered: .above)
+    return toast
+  }
+
+  private func toastFrame(for panel: NSPanel, size: NSSize) -> NSRect {
+    let panelFrame = panel.frame
+    let width = ceil(size.width)
+    let height = ceil(size.height)
+    let topInset = EditorMetrics.outerPadding + 7
+    let trailingInset = EditorMetrics.outerPadding + 8
+    return NSRect(
+      x: (panelFrame.maxX - trailingInset - width).rounded(),
+      y: (panelFrame.maxY - topInset - height).rounded(),
+      width: width,
+      height: height
+    )
+  }
+
   private func fuzzyPreviewFrame(for panel: NSPanel) -> NSRect? {
     let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
     guard let screenFrame else { return nil }
@@ -304,15 +373,27 @@ public final class SpotlightWindowController {
   }
 
   public func handleHotkey() {
-    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive {
+    handleVaultHotkey(.tasks)
+  }
+
+  private func handleVaultHotkey(_ state: VaultNoteState) {
+    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive, session.currentVaultState == state {
       close()
     } else {
-      focusOrShow()
+      openVaultState(state, announcing: false)
     }
   }
 
   public func openHUD() {
-    focusOrShow()
+    openVaultState(.tasks, announcing: false)
+  }
+
+  private func openVaultState(_ state: VaultNoteState, announcing: Bool) {
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      await self.session.switchVaultState(state, announcing: announcing)
+      self.focusOrShow()
+    }
   }
 
   /// Summons the HUD on the most recently edited note with the caret
@@ -347,6 +428,7 @@ public final class SpotlightWindowController {
 
   public func close() {
     fuzzyPreviewPanel?.orderOut(nil)
+    toastPanel?.orderOut(nil)
     panel?.orderOut(nil)
     // If a bona-fide SpotNote window (Settings) is visible, leave the
     // app active so the user can keep working there. Filter to
@@ -391,6 +473,7 @@ public final class SpotlightWindowController {
     panel.makeKeyAndOrderFront(nil)
     panel.orderFrontRegardless()
     syncFuzzyPreviewPanel()
+    syncToastPanel()
   }
 
   private func repositionForShow(_ panel: NSPanel) {
@@ -440,11 +523,17 @@ public final class SpotlightWindowController {
         onEscape: { [weak self] in
           self?.close()
         },
-        onSendLinearTask: { [handoffClient] title in
-          _ = try await handoffClient.sendLinearTask(title: title)
+        onSendLinearTask: { [handoffClient] request in
+          _ = try await handoffClient.sendLinearTask(request)
         },
         onAppendDailyNote: { [dailyNoteWriter] text in
           try await dailyNoteWriter.append(text)
+        },
+        onAppendCompletedItems: { [completedItemsWriter] text in
+          try await completedItemsWriter.append(text)
+        },
+        onAppendTrayNote: { [trayNoteWriter] text in
+          try await trayNoteWriter.append(text)
         }
       )
     )
@@ -569,6 +658,7 @@ public final class SpotlightWindowController {
     programmaticFrameToIgnore = frame
     panel.setFrame(frame, display: display, animate: animate)
     syncFuzzyPreviewPanel()
+    syncToastPanel()
   }
 
   private func shouldIgnoreProgrammaticMove(_ frame: NSRect) -> Bool {
@@ -632,6 +722,7 @@ extension SpotlightWindowController {
           self.pinnedTopY = newTop
           self.editorTopY = newTop - self.chromeAboveEditor
           self.syncFuzzyPreviewPanel()
+          self.syncToastPanel()
         }
       }
     )
@@ -728,16 +819,6 @@ extension SpotlightWindowController {
         #selector(PlaceholderTextView.insertTodayBadgeToken(_:)),
         with: nil
       )
-    case .insertChecklist:
-      _ = panel?.firstResponder?.tryToPerform(
-        #selector(PlaceholderTextView.insertChecklistToken(_:)),
-        with: nil
-      )
-    case .toggleChecklist:
-      _ = panel?.firstResponder?.tryToPerform(
-        #selector(PlaceholderTextView.toggleChecklistShortcut(_:)),
-        with: nil
-      )
     case .sendToLinear:
       _ = panel?.firstResponder?.tryToPerform(
         #selector(PlaceholderTextView.sendCurrentLineToLinearShortcut(_:)),
@@ -755,7 +836,6 @@ extension SpotlightWindowController {
     case .copyContent:
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
-    case .toggleTutorial: preferences.showHints.toggle()
     case .toggleHotkey, .appendToLastNote: break
     }
   }

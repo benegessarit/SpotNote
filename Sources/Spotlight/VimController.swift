@@ -198,7 +198,6 @@ enum VimCommand: Equatable {
   case deleteNote
   case setLineNumbers(Bool)
   case setVimMode(Bool)
-  case setHints(Bool)
   case setTheme(String)
   case setMaxLines(Int)
   case substitute(SubstituteRequest)
@@ -265,8 +264,7 @@ enum VimCommandParser {
   private static let setToggleTable: [String: VimCommand] = [
     "number": .setLineNumbers(true), "nu": .setLineNumbers(true),
     "nonumber": .setLineNumbers(false), "nonu": .setLineNumbers(false),
-    "vim": .setVimMode(true), "novim": .setVimMode(false),
-    "hints": .setHints(true), "nohints": .setHints(false)
+    "vim": .setVimMode(true), "novim": .setVimMode(false)
   ]
 
   private static func parseSetParameterized(
@@ -386,11 +384,6 @@ enum VimCommandReference {
           summary: "Toggle vim mode itself. `:set novim` exits vim entirely."
         ),
         Entry(
-          id: "hints",
-          usage: ":set hints\n:set nohints",
-          summary: "Show or hide the hints bar above the editor."
-        ),
-        Entry(
           id: "theme",
           usage: ":set theme <name>",
           summary: "Switch theme by name (e.g. `obsidian`, `parchment`)."
@@ -417,6 +410,11 @@ enum VimCommandReference {
           summary: "Jump caret to line n."
         ),
         Entry(
+          id: "todo-tray-jumps",
+          usage: "gD\ngT",
+          summary: "Jump to a fresh `## To Do` task line, or to the next open line in `## Tray`."
+        ),
+        Entry(
           id: "noh",
           usage: ":noh\n:nohlsearch",
           summary: "Clear the active search highlight and counter."
@@ -440,7 +438,7 @@ enum VimCommandReference {
         Entry(
           id: "help",
           usage: ":h\n:help",
-          summary: "Show the hints bar."
+          summary: "Show a short help reminder."
         )
       ]
     )

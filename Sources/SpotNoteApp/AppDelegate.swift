@@ -6,6 +6,8 @@ import Spotlight
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private static let headlessTestEnvironmentKey = "SPOTNOTE_HEADLESS_TEST"
+
   private lazy var preferences = ThemePreferences()
   private lazy var shortcutStore = ShortcutStore()
   private lazy var settings = SettingsWindowController(
@@ -31,7 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     preferences: preferences,
     store: chatStore,
     shortcuts: shortcutStore,
-    vaultInbox: VaultInboxDocument(),
+    vaultDocuments: [
+      VaultNoteDocument(state: .tasks)
+    ],
     onOpenSettings: { [weak self] in self?.showSettings() },
     onWillShowHUD: {
       DockIconSwitcher.applyVisibility(true)
@@ -46,11 +50,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var onboarding: OnboardingController?
   private var cancellables: Set<AnyCancellable> = []
 
+  private var isHeadlessTestLaunch: Bool {
+    Self.environmentFlag(Self.headlessTestEnvironmentKey)
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     MainMenu.install(onOpenSettings: { [weak self] in self?.showSettings() })
-
+    observeUpdateNotifications()
+    if isHeadlessTestLaunch {
+      // Agent/CI smoke launches should prove the bundle initializes without
+      // stealing focus, opening the HUD, registering global hotkeys, or
+      // changing Launch-at-Login state.
+      _ = spotlight
+      Self.writeHeadlessReadyMarker()
+      return
+    }
     enableLaunchAtLoginIfFirstRun()
+    installGlobalHotkeys()
+    DockIconSwitcher.apply(preferences.dockIconStyle)
+    // Force the Spotlight controller to initialize so its key monitor is
+    // installed before the user presses the toggle chord.
+    _ = spotlight
+    applyInitialHotkeyBindings()
+    observeShortcutBindings()
+    observeDockPreferences()
+    presentInitialSurface()
+  }
 
+  private func observeUpdateNotifications() {
     NotificationCenter.default.addObserver(
       forName: .spotNoteCheckForUpdates,
       object: nil,
@@ -58,7 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) { _ in
       MainActor.assumeIsolated { UpdateController.shared.checkForUpdates(nil) }
     }
+  }
 
+  private func installGlobalHotkeys() {
     hotkey = GlobalHotkey { [weak self] in
       guard let self else { return }
       if let onboarding = self.onboarding, onboarding.isActive {
@@ -72,13 +101,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       if self.onboarding?.isActive == true { return }
       self.spotlight.handleAppendToLastNote()
     }
-    DockIconSwitcher.apply(preferences.dockIconStyle)
-    // Force the Spotlight controller to initialize so its key monitor is
-    // installed before the user presses the toggle chord.
-    _ = spotlight
+  }
+
+  private func applyInitialHotkeyBindings() {
     applyToggleHotkey(shortcutStore.binding(for: .toggleHotkey))
     applyAppendHotkey(shortcutStore.binding(for: .appendToLastNote))
+  }
 
+  private func observeShortcutBindings() {
     shortcutStore.$bindings
       .map { $0[.toggleHotkey] ?? ShortcutAction.toggleHotkey.defaultShortcut }
       .removeDuplicates()
@@ -96,7 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { self?.applyAppendHotkey(shortcut) }
       }
       .store(in: &cancellables)
+  }
 
+  private func observeDockPreferences() {
     preferences.$showDockIcon
       .removeDuplicates()
       .dropFirst()
@@ -119,7 +151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { DockIconSwitcher.apply(style) }
       }
       .store(in: &cancellables)
+  }
 
+  private func presentInitialSurface() {
+    guard !isHeadlessTestLaunch else { return }
     let didPresentOnboarding = presentOnboardingIfNeeded()
     // SpotNote is a HUD-first app: opening the app should always surface the
     // note window. The previous Apple-event launch-kind check could overfire
@@ -161,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func presentOnboardingIfNeeded() -> Bool {
+    guard !isHeadlessTestLaunch else { return false }
     guard OnboardingController.shouldShow() else { return false }
     let controller = OnboardingController(
       theme: preferences.activeTheme,
@@ -199,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     _ sender: NSApplication,
     hasVisibleWindows flag: Bool
   ) -> Bool {
+    if isHeadlessTestLaunch { return true }
     if OnboardingController.shouldShow() {
       _ = presentOnboardingIfNeeded()
     } else if onboarding?.isActive == true {
@@ -243,5 +280,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private func applyAppendHotkey(_ shortcut: Shortcut) {
     if appendHotkey?.apply(shortcut) == true { return }
     _ = appendHotkey?.apply(ShortcutAction.appendToLastNote.defaultShortcut)
+  }
+
+  private static func environmentFlag(_ key: String) -> Bool {
+    guard let value = ProcessInfo.processInfo.environment[key] else { return false }
+    switch value.lowercased() {
+    case "1", "true", "yes", "on": return true
+    default: return false
+    }
+  }
+
+  private static func writeHeadlessReadyMarker() {
+    FileHandle.standardError.write(Data("SpotNote headless test launch ready\n".utf8))
   }
 }

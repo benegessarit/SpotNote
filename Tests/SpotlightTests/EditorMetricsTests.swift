@@ -82,7 +82,6 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.fontSize == 22)
     #expect(EditorMetrics.lineHeight >= 34)
     #expect(EditorMetrics.panelWidth >= 720)
-    #expect(EditorMetrics.textTrailingGap <= 18)
   }
 
   @Test("short notes open at roughly twice the old four-line HUD height")
@@ -98,19 +97,28 @@ struct EditorMetricsTests {
     #expect(openHeight >= oldFourLineHeight * 1.95)
   }
 
-  @Test("line number gutter keeps the old spacious left margin")
-  func lineNumberGutterKeepsOldLeftMargin() {
-    #expect(EditorMetrics.leadingInset == 28)
-    #expect(EditorMetrics.textLeadingGap == 18)
+  @Test("task editor keeps restored breathing room before text")
+  @MainActor
+  func taskEditorKeepsRestoredLeadingTextGap() {
+    #expect(EditorMetrics.leadingInset == 0)
+    #expect(LineNumberRuler.markerOnlyThickness(forLabelSize: LineNumberRuler.labelFontSize) == 0)
+    #expect(EditorMetrics.textLeadingGap >= 32)
   }
 
-  @Test("normal-mode cursor matches nvim-style peach block metrics")
+  @Test("editor leaves only a narrow right inset so the scrollbar hugs the card edge")
+  func narrowRightInsetForEdgeScroller() {
+    #expect(EditorMetrics.trailingInset <= 8)
+  }
+
+  @Test("normal-mode cursor matches the Mirage block metrics")
   @MainActor
-  func normalModeCursorMatchesNvimPeachBlock() throws {
+  func normalModeCursorMatchesMirageBlock() throws {
     #expect(EditorMetrics.normalModeCursorWidth >= 12)
-    let color = try #require(PlaceholderTextView.normalModeCursorColor.usingColorSpace(NSColorSpace.sRGB))
-    #expect(abs(color.redComponent - 0.9608) < 0.01)
-    #expect(abs(color.greenComponent - 0.8784) < 0.01)
-    #expect(abs(color.blueComponent - 0.8627) < 0.01)
+    let color = try #require(
+      PlaceholderTextView.normalModeCursorColor.usingColorSpace(NSColorSpace.sRGB)
+    )
+    #expect(abs(color.redComponent - (221 / 255)) < 0.01)
+    #expect(abs(color.greenComponent - (179 / 255)) < 0.01)
+    #expect(abs(color.blueComponent - 1.0) < 0.01)
   }
 }

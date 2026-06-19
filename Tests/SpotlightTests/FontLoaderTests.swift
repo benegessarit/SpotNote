@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 
 @testable import Spotlight
@@ -13,5 +14,32 @@ struct FontLoaderTests {
     FontLoader.registerBundledFonts()
     FontLoader.registerBundledFonts()
     #expect(Bool(true))
+  }
+
+  @Test("editor font requests IBM Plex Mono by PostScript name")
+  func editorFontRequestsIBMPlexMono() {
+    #expect(SpotNoteFont.editorFontName == "IBMPlexMono")
+  }
+
+  @Test("IBM Plex Mono regular is bundled as a Spotlight resource")
+  func ibmPlexMonoRegularIsBundled() throws {
+    let url = try #require(
+      Bundle.spotlightResources.url(
+        forResource: "IBMPlexMono-Regular",
+        withExtension: "ttf"
+      )
+    )
+    #expect(url.lastPathComponent == "IBMPlexMono-Regular.ttf")
+  }
+
+  @Test("editor font resolves to IBM Plex Mono when available on this Mac")
+  func editorFontResolvesToIBMPlexMono() {
+    let font = SpotNoteFont.editor(size: 22)
+    if NSFont(name: SpotNoteFont.editorFontName, size: 22) != nil {
+      #expect(font.fontName == "IBMPlexMono")
+      #expect(font.familyName == "IBM Plex Mono")
+    } else {
+      #expect(font.isFixedPitch)
+    }
   }
 }

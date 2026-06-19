@@ -52,6 +52,13 @@ enum CodeStyler {
       style: headingStyle(for: textView, theme: theme),
       processed: processed
     )
+    CodeStylerListMarkers.apply(
+      in: nsText,
+      fullRange: fullRange,
+      textStorage: textView.textStorage,
+      style: listMarkerStyle(for: textView, theme: theme),
+      processed: processed
+    )
     styleInline(
       in: nsText,
       fullRange: fullRange,
@@ -178,6 +185,18 @@ enum CodeStyler {
       baseFont: textView.font,
       bodyForeground: bodyForeground,
       headingForeground: CodeStylerHeading.foreground(base: bodyForeground, mode: theme.mode)
+    )
+  }
+
+  @MainActor
+  private static func listMarkerStyle(
+    for textView: NSTextView,
+    theme: Theme
+  ) -> CodeStylerListMarkers.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerListMarkers.Style(
+      baseFont: textView.font,
+      markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78)
     )
   }
 

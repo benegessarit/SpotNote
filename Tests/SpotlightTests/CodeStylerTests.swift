@@ -184,6 +184,27 @@ struct CodeStylerVisualTests {
     #expect(headingFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true)
   }
 
+  @Test("Markdown list dashes render with heavier visual weight without changing stored text")
+  func listDashesAreVisuallyWeighted() throws {
+    let text = "- call Elliot\nplain"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.mirage)
+
+    let markerFont = try #require(storageFont(at: 0, in: textView))
+    let bodyFont = try #require(storageFont(at: 2, in: textView))
+    let markerColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let bodyColor = try #require(storageColor(at: 2, in: textView)?.usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: markerFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(markerFont.pointSize >= bodyFont.pointSize + 1)
+    #expect(markerColor.alphaComponent < bodyColor.alphaComponent)
+    #expect(textView.textStorage?.string == text)
+  }
+
   private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
     textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
   }

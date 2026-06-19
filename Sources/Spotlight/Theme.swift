@@ -13,7 +13,7 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let placeholder: Color
 }
 
-/// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine skins.
+/// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine/Ayu skins.
 enum ThemeCatalog {
   // MARK: Dark
 
@@ -47,6 +47,16 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.431, green: 0.416, blue: 0.525)
   )
 
+  static let ayuMirage = Theme(
+    id: "ayu-mirage",
+    name: "Ayu Mirage",
+    mode: .dark,
+    background: Color(red: 31 / 255, green: 36 / 255, blue: 48 / 255),
+    border: Color(red: 255 / 255, green: 204 / 255, blue: 102 / 255).opacity(0.22),
+    text: Color(red: 204 / 255, green: 202 / 255, blue: 194 / 255),
+    placeholder: Color(red: 104 / 255, green: 104 / 255, blue: 104 / 255)
+  )
+
   static let mirage = Theme(
     id: "mirage",
     name: "Mirage",
@@ -55,6 +65,46 @@ enum ThemeCatalog {
     border: Color(red: 221 / 255, green: 179 / 255, blue: 255 / 255).opacity(0.22),
     text: Color(red: 166 / 255, green: 178 / 255, blue: 192 / 255),
     placeholder: Color(red: 87 / 255, green: 86 / 255, blue: 86 / 255)
+  )
+
+  static let dracula = Theme(
+    id: "dracula",
+    name: "Dracula",
+    mode: .dark,
+    background: Color(red: 40 / 255, green: 42 / 255, blue: 54 / 255),
+    border: Color(red: 189 / 255, green: 147 / 255, blue: 249 / 255).opacity(0.24),
+    text: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255),
+    placeholder: Color(red: 98 / 255, green: 114 / 255, blue: 164 / 255)
+  )
+
+  static let nvimDark = Theme(
+    id: "nvim-dark",
+    name: "Nvim Dark",
+    mode: .dark,
+    background: Color(red: 20 / 255, green: 22 / 255, blue: 27 / 255),
+    border: Color(red: 155 / 255, green: 158 / 255, blue: 164 / 255).opacity(0.22),
+    text: Color(red: 224 / 255, green: 226 / 255, blue: 234 / 255),
+    placeholder: Color(red: 79 / 255, green: 82 / 255, blue: 88 / 255)
+  )
+
+  static let neobonesDark = Theme(
+    id: "neobones-dark",
+    name: "Neobones Dark",
+    mode: .dark,
+    background: Color(red: 15 / 255, green: 25 / 255, blue: 31 / 255),
+    border: Color(red: 206 / 255, green: 221 / 255, blue: 215 / 255).opacity(0.20),
+    text: Color(red: 198 / 255, green: 213 / 255, blue: 207 / 255),
+    placeholder: Color(red: 51 / 255, green: 70 / 255, blue: 82 / 255)
+  )
+
+  static let nightfox = Theme(
+    id: "nightfox",
+    name: "Nightfox",
+    mode: .dark,
+    background: Color(red: 25 / 255, green: 35 / 255, blue: 48 / 255),
+    border: Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255).opacity(0.20),
+    text: Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255),
+    placeholder: Color(red: 87 / 255, green: 88 / 255, blue: 96 / 255)
   )
 
   static let obsidian = Theme(
@@ -170,16 +220,17 @@ enum ThemeCatalog {
   )
 
   static let darkThemes: [Theme] = [
-    catppuccinFrappe, catppuccinMocha, rosePineMoonlight, obsidian, ink, graphite, midnight, charcoal
+    catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula, nvimDark,
+    neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
   ]
   static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes
 
   /// Default theme applied on first launch.
-  static let defaultID = catppuccinFrappe.id
+  static let defaultID = mirage.id
 
   /// Looks up a theme by id, falling back to the default.
   static func theme(withID id: String) -> Theme {
-    all.first { $0.id == id } ?? catppuccinFrappe
+    all.first { $0.id == id } ?? mirage
   }
 }

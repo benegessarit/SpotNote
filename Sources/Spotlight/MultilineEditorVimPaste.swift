@@ -31,6 +31,12 @@ extension PlaceholderTextView {
     }
     let cursor = min(selectedRange.location, nsString.length)
     let currentLine = nsString.lineRange(for: NSRange(location: cursor, length: 0))
+    if isVisiblyEmptyLine(currentLine, in: nsString) {
+      performVimPaste(text, replacing: currentLine)
+      setSelectedRange(NSRange(location: min(currentLine.location, (string as NSString).length), length: 0))
+      needsDisplay = true
+      return
+    }
     let insertion = currentLine.location + currentLine.length
     let prefix = currentLineEndsWithNewline(currentLine, in: nsString) ? "" : "\n"
     performVimPaste(prefix + text, at: insertion)
@@ -40,7 +46,10 @@ extension PlaceholderTextView {
   }
 
   private func performVimPaste(_ text: String, at insertion: Int) {
-    let range = NSRange(location: insertion, length: 0)
+    performVimPaste(text, replacing: NSRange(location: insertion, length: 0))
+  }
+
+  private func performVimPaste(_ text: String, replacing range: NSRange) {
     isPasting = true
     defer { isPasting = false }
     guard shouldChangeText(in: range, replacementString: text) else { return }
@@ -56,5 +65,15 @@ extension PlaceholderTextView {
     guard line.length > 0 else { return false }
     let last = nsString.character(at: line.location + line.length - 1)
     return last == 0x0A || last == 0x0D
+  }
+
+  private func isVisiblyEmptyLine(_ line: NSRange, in nsString: NSString) -> Bool {
+    var end = line.location + line.length
+    while end > line.location {
+      let ch = nsString.character(at: end - 1)
+      guard ch == 0x0A || ch == 0x0D else { break }
+      end -= 1
+    }
+    return end == line.location
   }
 }

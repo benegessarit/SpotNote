@@ -103,18 +103,21 @@ struct SpotlightWindowControllerTests {
     #expect(alpha < 1.0)
   }
 
-  @Test("default HUD origin is horizontally centered")
-  func defaultHUDOriginIsHorizontallyCentered() {
+  @Test("default HUD origin is shifted thirty percent from center toward the right edge")
+  func defaultHUDOriginIsShiftedRightOfCenter() {
     let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
     let panelWidth: CGFloat = 400
     let centeredX = (screen.midX - panelWidth / 2).rounded()
+    let rightmostX = screen.maxX - panelWidth
+    let expectedX = (centeredX + (rightmostX - centeredX) * 0.30).rounded()
 
     let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
 
-    #expect(x == centeredX)
+    #expect(x == expectedX)
+    #expect(x > centeredX)
   }
 
-  @Test("default HUD origin stays on-screen after centering")
+  @Test("default HUD origin stays on-screen after shifting right")
   func defaultHUDOriginDoesNotOverflowRightEdge() {
     let screen = NSRect(x: 100, y: 0, width: 640, height: 700)
     let panelWidth: CGFloat = 620

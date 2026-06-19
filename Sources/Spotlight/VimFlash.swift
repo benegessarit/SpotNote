@@ -94,12 +94,16 @@ enum VimFlash {
       let offset = utf16Offset(of: index, in: text)
       guard candidateRange.contains(offset),
         isCandidate(offset, relativeTo: clampedLocation, request: request),
-        text[index...].hasPrefix(request.query)
+        hasCaseInsensitivePrefix(request.query, at: index, in: text)
       else { continue }
       matches.append(offset)
       if matches.count == limit { break }
     }
     return matches
+  }
+
+  private static func hasCaseInsensitivePrefix(_ query: String, at index: String.Index, in text: String) -> Bool {
+    text[index...].range(of: query, options: [.anchored, .caseInsensitive]) != nil
   }
 
   private static func candidateRange(in text: String, from location: Int, scope: VimFlashScope) -> Range<Int> {

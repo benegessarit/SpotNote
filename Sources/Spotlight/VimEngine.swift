@@ -45,8 +45,9 @@ enum VimAction: Equatable, Sendable {
   case findPrevious
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
-  case sendCurrentLineToLinear(count: Int)
+  case sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int)
   case appendCurrentLineToDailyNote(count: Int)
+  case appendCurrentLineToTrayNote(count: Int)
   case jumpToTraySection
   case jumpToToDoSection
   case gotoLine(Int)
@@ -134,8 +135,11 @@ final class VimEngine {
     case "g":
       pendingBuffer = ""
       if key == "g" { return .moveCursor(.documentStart) }
-      if key == "l" { return .sendCurrentLineToLinear(count: count) }
-      if key == "d" { return .appendCurrentLineToDailyNote(count: count) }
+      if key == "d" { return .sendCurrentTaskToLinear(status: .done, count: count) }
+      if key == "p" { return .sendCurrentTaskToLinear(status: .planned, count: count) }
+      if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
+      if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
+      if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
       if key == "D" {
         mode = .insert
         return .jumpToToDoSection
@@ -177,6 +181,16 @@ final class VimEngine {
     if let action = visualEntryAction(for: key) { return action }
     if let action = editingAction(for: key, count: count) { return action }
     return promptOrSearchAction(for: key)
+  }
+
+  private func editingAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "x": return .deleteChar(count: count)
+    case "D": return .deleteToEndOfLine
+    case "p": return .pasteAfter(count: count)
+    case "u": return .undo(count: count)
+    default: return nil
+    }
   }
 
   // MARK: - Visual line mode
@@ -316,16 +330,6 @@ final class VimEngine {
 }
 
 extension VimEngine {
-  func editingAction(for key: String, count: Int) -> VimAction? {
-    switch key {
-    case "x": return .deleteChar(count: count)
-    case "D": return .deleteToEndOfLine
-    case "p": return .pasteAfter(count: count)
-    case "u": return .undo(count: count)
-    default: return nil
-    }
-  }
-
   func visualEntryAction(for key: String) -> VimAction? {
     switch key {
     case "v":

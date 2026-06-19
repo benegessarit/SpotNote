@@ -145,26 +145,30 @@ struct VimEngineTests {
     #expect(second == .moveCursor(.documentStart))
   }
 
-  @Test("gl sends the current line to Linear")
-  func glSendsCurrentLineToLinear() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "l", hasModifiers: false) == .sendCurrentLineToLinear(count: 1))
+  @Test("g-status motions send the current bullet to Linear")
+  func gStatusMotionsSendCurrentBulletToLinear() {
+    let cases: [(String, LinearTaskTargetStatus)] = [
+      ("d", .done),
+      ("p", .planned),
+      ("t", .triage),
+      ("s", .started),
+      ("l", .later)
+    ]
+
+    for (key, status) in cases {
+      let engine = VimEngine()
+      #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+      #expect(engine.handle(key: key, hasModifiers: false) == .sendCurrentTaskToLinear(status: status, count: 1))
+      #expect(engine.mode == .normal)
+    }
   }
 
-  @Test("3gl sends three lines to Linear")
-  func countGlSendsMultipleLinesToLinear() {
+  @Test("counted g-status motions send counted bullets to Linear")
+  func countedGStatusMotionsSendCountedBulletsToLinear() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "l", hasModifiers: false) == .sendCurrentLineToLinear(count: 3))
-  }
-
-  @Test("gd appends the current line to today's daily note")
-  func gdAppendsCurrentLineToDailyNote() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "d", hasModifiers: false) == .appendCurrentLineToDailyNote(count: 1))
+    #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
   }
 
   @Test("gD jumps to the To Do section")
@@ -175,47 +179,43 @@ struct VimEngineTests {
     #expect(engine.mode == .insert)
   }
 
-  @Test("gT jumps to the Tray section")
-  func gShiftTJumpsToTraySection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test("3gd appends three lines to today's daily note")
-  func countGdAppendsMultipleLinesToDailyNote() {
-    let engine = VimEngine()
-    _ = engine.handle(key: "3", hasModifiers: false)
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "d", hasModifiers: false) == .appendCurrentLineToDailyNote(count: 3))
-  }
-
   @Test("s opens a whole-document forward Flash jump prompt")
   func flashForwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .document))
+    #expect(
+      engine.handle(key: "s", hasModifiers: false)
+        == .enterFlash(.forward, count: 1, scope: .document)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("S opens a whole-document backward Flash jump prompt")
   func flashBackwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "S", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .document))
+    #expect(
+      engine.handle(key: "S", hasModifiers: false)
+        == .enterFlash(.backward, count: 1, scope: .document)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("f opens a same-line forward Flash jump prompt")
   func flashSameLineForwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "f", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .currentLine))
+    #expect(
+      engine.handle(key: "f", hasModifiers: false)
+        == .enterFlash(.forward, count: 1, scope: .currentLine)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("F opens a same-line backward Flash jump prompt")
   func flashSameLineBackwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "F", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .currentLine))
+    #expect(
+      engine.handle(key: "F", hasModifiers: false)
+        == .enterFlash(.backward, count: 1, scope: .currentLine)
+    )
     #expect(engine.mode == .normal)
   }
 
@@ -230,7 +230,10 @@ struct VimEngineTests {
   func countedFlashPrompt() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
-    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 3, scope: .document))
+    #expect(
+      engine.handle(key: "s", hasModifiers: false)
+        == .enterFlash(.forward, count: 3, scope: .document)
+    )
     #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }
 

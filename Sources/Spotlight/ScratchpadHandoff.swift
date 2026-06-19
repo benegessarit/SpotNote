@@ -14,8 +14,19 @@ struct ScratchpadHandoffClient: Sendable {
   var endpoint: URL = Self.defaultEndpoint
   var session: URLSessionProtocol = URLSession.shared
 
-  func sendLinearTask(title: String, id: String = Self.linearTaskID()) async throws -> ScratchpadHandoffReceipt {
-    let payload = try Self.payload(forLinearTask: title, id: id)
+  func sendLinearTask(
+    _ request: LinearTaskHandoffRequest,
+    id: String = Self.linearTaskID()
+  ) async throws -> ScratchpadHandoffReceipt {
+    let payload = try Self.payload(forLinearTask: request, id: id)
+    return try await send(payload: payload)
+  }
+
+  func sendLinearTask(
+    title: String,
+    id: String = Self.linearTaskID()
+  ) async throws -> ScratchpadHandoffReceipt {
+    let payload = try Self.payload(forLinearTask: LinearTaskHandoffRequest(title: title), id: id)
     return try await send(payload: payload)
   }
 
@@ -34,12 +45,20 @@ struct ScratchpadHandoffClient: Sendable {
   }
 
   static func payload(forLinearTask rawTitle: String, id: String) throws -> ScratchpadHandoffPayload {
-    let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    try payload(forLinearTask: LinearTaskHandoffRequest(title: rawTitle), id: id)
+  }
+
+  static func payload(
+    forLinearTask request: LinearTaskHandoffRequest,
+    id: String
+  ) throws -> ScratchpadHandoffPayload {
+    let title = request.title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !title.isEmpty else { throw ScratchpadHandoffError.emptyText }
+    let normalizedRequest = request.withTitle(title)
     return ScratchpadHandoffPayload(
       id: id,
       intent: "linear_issue",
-      text: LinearTaskHandoffPrompt.render(title: title),
+      text: LinearTaskHandoffPrompt.render(request: normalizedRequest),
       source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Linear task")
     )
   }
@@ -76,6 +95,37 @@ struct ScratchpadHandoffPayload: Codable, Equatable, Sendable {
 
 struct ScratchpadHandoffReceipt: Equatable, Sendable {
   let captureID: String?
+}
+
+enum LinearTaskTargetStatus: String, Equatable, Sendable {
+  case done = "Done"
+  case planned = "Planned"
+  case triage = "Triage"
+  case started = "Started"
+  case later = "Later"
+}
+
+struct LinearTaskHandoffRequest: Equatable, Sendable {
+  let title: String
+  let targetStatus: LinearTaskTargetStatus
+  let labels: [String]
+  let dueDate: String?
+
+  init(
+    title: String,
+    targetStatus: LinearTaskTargetStatus = .triage,
+    labels: [String] = [],
+    dueDate: String? = nil
+  ) {
+    self.title = title
+    self.targetStatus = targetStatus
+    self.labels = labels
+    self.dueDate = dueDate
+  }
+
+  func withTitle(_ title: String) -> Self {
+    Self(title: title, targetStatus: targetStatus, labels: labels, dueDate: dueDate)
+  }
 }
 
 enum ScratchpadHandoffError: Error, Equatable {
@@ -152,26 +202,129 @@ enum LinearTaskTitleNormalizer {
   }
 }
 
+enum LinearTaskMetadataParser {
+  static func request(
+    from rawText: String,
+    targetStatus: LinearTaskTargetStatus,
+    today: Date = Date(),
+    calendar: Calendar = Calendar.current
+  ) -> LinearTaskHandoffRequest? {
+    guard let cleaned = LinearTaskTitleNormalizer.title(fromSpotNoteLine: rawText) else {
+      return nil
+    }
+    let labels = labels(in: cleaned)
+    let dueDate = dueDate(in: cleaned, today: today, calendar: calendar)
+    let title = strippedMetadata(from: cleaned)
+    guard !title.isEmpty else { return nil }
+    return LinearTaskHandoffRequest(
+      title: title,
+      targetStatus: targetStatus,
+      labels: deduped(labels),
+      dueDate: dueDate
+    )
+  }
+
+  private static func labels(in text: String) -> [String] {
+    matches(pattern: #"(?<!\S)#([A-Za-z][A-Za-z0-9_-]*)"#, in: text).compactMap { match in
+      guard let range = Range(match.range(at: 1), in: text) else { return nil }
+      return String(text[range])
+    }
+  }
+
+  private static func dueDate(in text: String, today: Date, calendar: Calendar) -> String? {
+    guard
+      let match = matches(
+        pattern: #"(?i)(?:^|\s)due:(today|tomorrow|\d{2}-\d{2}-\d{4})(?=\s|$)"#,
+        in: text
+      ).first,
+      let valueRange = Range(match.range(at: 1), in: text)
+    else { return nil }
+    let value = String(text[valueRange]).lowercased()
+    if value == "today" {
+      return isoDateString(for: today, calendar: calendar)
+    }
+    if value == "tomorrow", let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) {
+      return isoDateString(for: tomorrow, calendar: calendar)
+    }
+    let parts = value.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 3 else { return nil }
+    return String(format: "%04d-%02d-%02d", parts[2], parts[0], parts[1])
+  }
+
+  private static func strippedMetadata(from text: String) -> String {
+    let withoutLabels = replacing(pattern: #"(?<!\S)#[A-Za-z][A-Za-z0-9_-]*"#, in: text)
+    let withoutDue = replacing(
+      pattern: #"(?i)(?:^|\s)due:(today|tomorrow|\d{2}-\d{2}-\d{4})(?=\s|$)"#,
+      in: withoutLabels
+    )
+    return
+      withoutDue
+      .split(whereSeparator: { $0.isWhitespace })
+      .joined(separator: " ")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private static func matches(pattern: String, in text: String) -> [NSTextCheckingResult] {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+    return regex.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+  }
+
+  private static func replacing(pattern: String, in text: String) -> String {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+    return regex.stringByReplacingMatches(
+      in: text,
+      range: NSRange(location: 0, length: (text as NSString).length),
+      withTemplate: " "
+    )
+  }
+
+  private static func isoDateString(for date: Date, calendar: Calendar) -> String {
+    let parts = calendar.dateComponents([.year, .month, .day], from: date)
+    return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+  }
+
+  private static func deduped(_ labels: [String]) -> [String] {
+    var seen: Set<String> = []
+    var result: [String] = []
+    for label in labels where !label.isEmpty {
+      let key = label.lowercased()
+      guard !seen.contains(key) else { continue }
+      seen.insert(key)
+      result.append(label)
+    }
+    return result
+  }
+}
+
 enum LinearTaskHandoffPrompt {
-  static func render(title: String) -> String {
-    """
-    SpotNote Linear task handoff.
+  static func render(request: LinearTaskHandoffRequest) -> String {
+    let labelLine =
+      request.labels.isEmpty
+      ? "none"
+      : request.labels.joined(separator: ", ")
+    let dueDateLine = request.dueDate ?? "none"
+    return """
+      SpotNote Linear task handoff.
 
-    Create exactly one new Linear issue in David's personal Linear workspace.
-    Required issue shape:
-    - Team: David
-    - State/status: Triage
-    - Priority: none / 0
-    - Assignee: none
-    - Labels: none unless Linear requires an existing default
-    - Title: use the exact task title below
+      Create exactly one new Linear issue in David's personal Linear workspace.
+      Required issue shape:
+      - Team: David
+      - State/status: \(request.targetStatus.rawValue)
+      - Priority: none / 0
+      - Assignee: none
+      - Labels to apply if assignable: \(labelLine)
+      - Due date: \(dueDateLine)
+      - Title: use the exact task title below
 
-    Do not preserve SpotNote checklist markers such as [   ], [ ], [ x ], [x], bullets, or ! priority markers.
-    Do not search for or update an existing issue; this motion explicitly creates a new Triage task.
-    Reply with the created Linear identifier and URL, or the blocker if creation fails.
+      Treat labels as optional best-effort metadata, not as required issue shape.
+      Do not preserve SpotNote checklist markers such as [   ], [ ], [ x ], [x], bullets, #labels, due:* metadata, or ! priority markers.
+      Do not search for or update an existing issue; this motion explicitly creates a new issue.
+      If the requested state/status or due date cannot be applied, reply with the blocker.
+      Do not block issue creation on a missing label; create the issue without missing labels and mention any skipped labels in the reply.
+      Reply with the created Linear identifier and URL, or the blocker if creation fails.
 
-    Task title:
-    \(title)
-    """
+      Task title:
+      \(request.title)
+      """
   }
 }
