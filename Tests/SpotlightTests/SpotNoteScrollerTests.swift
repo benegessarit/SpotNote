@@ -6,8 +6,8 @@ import Testing
 @MainActor
 @Suite("SpotNote scroller styling")
 struct SpotNoteScrollerTests {
-  @Test("scroll view style uses the minimal overlay scroller")
-  func scrollViewStyleUsesMinimalOverlayScroller() {
+  @Test("scroll view style uses the minimal overlay scroller and hides it at rest")
+  func scrollViewStyleUsesMinimalOverlayScrollerAndHidesAtRest() {
     let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
 
     SpotNoteScrollViewStyle.apply(to: scrollView)
@@ -15,7 +15,7 @@ struct SpotNoteScrollerTests {
     #expect(scrollView.verticalScroller is SpotNoteScroller)
     #expect(scrollView.hasVerticalScroller)
     #expect(scrollView.scrollerStyle == .overlay)
-    #expect(!scrollView.autohidesScrollers)
+    #expect(scrollView.autohidesScrollers)
     #expect(!scrollView.automaticallyAdjustsContentInsets)
     #expect(scrollView.contentInsets.top == 0)
     #expect(scrollView.contentInsets.left == 0)

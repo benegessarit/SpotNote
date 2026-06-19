@@ -25,7 +25,7 @@ enum SpotNoteScrollViewStyle {
     scroll.automaticallyAdjustsContentInsets = false
     scroll.contentInsets = NSEdgeInsetsZero
     scroll.scrollerInsets = NSEdgeInsetsZero
-    scroll.autohidesScrollers = false
+    scroll.autohidesScrollers = true
     scroll.hasHorizontalScroller = false
     scroll.wantsLayer = true
     scroll.layer?.masksToBounds = true
