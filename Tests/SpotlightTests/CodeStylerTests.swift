@@ -117,7 +117,7 @@ struct CodeStylerVisualTests {
 
     let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let headingColor = try #require(
-      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
 
     #expect(colorDistance(headingColor, bodyColor) >= 0.24)
@@ -186,7 +186,7 @@ struct CodeStylerVisualTests {
     let trayFont = try #require(storageFont(at: lineStart(4, in: text), in: textView))
     let bodyColor = try #require(storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB))
     let toDoColor = try #require(storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB))
-    let trayColor = try #require(storageColor(at: lineStart(4, in: text), in: textView)?.usingColorSpace(.sRGB))
+    let trayColor = try #require(storageColor(at: lineStart(4, in: text) + 2, in: textView)?.usingColorSpace(.sRGB))
 
     #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
     #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
@@ -217,7 +217,7 @@ struct CodeStylerVisualTests {
       storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB)
     )
     let headingColor = try #require(
-      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
     let draculaText = try #require(NSColor(ThemeCatalog.dracula.text).usingColorSpace(.sRGB))
 
@@ -242,7 +242,7 @@ struct CodeStylerVisualTests {
 
     let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let headingColor = try #require(
-      storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
     let expectedBody = try #require(NSColor(newTheme.text).usingColorSpace(.sRGB))
     let expectedHeading = try #require(NSColor(newTheme.headingText).usingColorSpace(.sRGB))

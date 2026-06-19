@@ -1,7 +1,7 @@
 import AppKit
 
 extension PlaceholderTextView {
-  /// `gT` -- jump to the in-note `## Tray` section, creating it at the
+  /// `gT` -- jump to the in-note `## TRAY` section, creating it at the
   /// bottom when absent, and leave the editor in insert mode on the next
   /// open line in that section.
   @discardableResult
@@ -11,9 +11,9 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gD` -- jump to the in-note `## To Do` section, creating it at the
+  /// `gD` -- jump to the in-note `## TODO` section, creating it at the
   /// top when absent, and leave the editor in insert mode on a fresh task
-  /// bullet before any later section such as `## Tray`.
+  /// bullet before any later section such as `## TRAY`.
   @discardableResult
   func jumpToToDoSectionForVim() -> Bool {
     let target = ensureToDoInsertionLocation()
@@ -31,7 +31,7 @@ extension PlaceholderTextView {
 
   private func ensureTrayInsertionLocation() -> Int {
     let nsString = string as NSString
-    guard let heading = headingRange(named: "## Tray", in: nsString) else {
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.tray, in: nsString) else {
       return appendMissingTraySection(to: nsString)
     }
     return ensureOpenLineAfterTrayHeading(heading, in: nsString)
@@ -39,11 +39,14 @@ extension PlaceholderTextView {
 
   private func ensureToDoInsertionLocation() -> Int {
     var nsString = string as NSString
-    if headingRange(named: "## To Do", in: nsString) == nil {
-      replaceTextForSectionJump(in: NSRange(location: 0, length: 0), with: "## To Do\n")
+    if headingRange(matching: SpotNoteSectionHeadings.toDo, in: nsString) == nil {
+      replaceTextForSectionJump(
+        in: NSRange(location: 0, length: 0),
+        with: SpotNoteSectionHeadings.toDo.canonicalLine
+      )
       nsString = string as NSString
     }
-    guard let heading = headingRange(named: "## To Do", in: nsString) else {
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.toDo, in: nsString) else {
       return nsString.length
     }
     return ensureOpenBulletLineAfterToDoHeading(heading, in: nsString)
@@ -52,11 +55,11 @@ extension PlaceholderTextView {
   private func appendMissingTraySection(to nsString: NSString) -> Int {
     let prefix: String
     if nsString.length == 0 {
-      prefix = "## Tray\n"
+      prefix = SpotNoteSectionHeadings.tray.canonicalLine
     } else if nsString.character(at: nsString.length - 1) == 0x0A {
-      prefix = "\n## Tray\n"
+      prefix = "\n" + SpotNoteSectionHeadings.tray.canonicalLine
     } else {
-      prefix = "\n\n## Tray\n"
+      prefix = "\n\n" + SpotNoteSectionHeadings.tray.canonicalLine
     }
     let range = NSRange(location: nsString.length, length: 0)
     replaceTextForSectionJump(in: range, with: prefix)
@@ -136,13 +139,15 @@ extension PlaceholderTextView {
     return location + 2
   }
 
-  private func headingRange(named headingName: String, in nsString: NSString) -> NSRange? {
+  private func headingRange(
+    matching heading: SpotNoteSectionHeadings.Definition,
+    in nsString: NSString
+  ) -> NSRange? {
     var location = 0
     while location < nsString.length {
       let line = nsString.lineRange(for: NSRange(location: location, length: 0))
       let content = lineContent(in: line, text: nsString)
-      let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmed.localizedCaseInsensitiveCompare(headingName) == .orderedSame {
+      if heading.matches(content) {
         return line
       }
       let next = line.location + line.length

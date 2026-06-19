@@ -209,7 +209,7 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test("gD jumps to the To Do section")
+  @Test("gD jumps to the TODO section")
   func gShiftDJumpsToToDoSection() {
     let engine = VimEngine()
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)

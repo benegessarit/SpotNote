@@ -45,6 +45,30 @@ enum CodeStyler {
       layoutManager: layoutManager,
       palette: palette
     )
+    styleStorageBackedMarkdown(
+      in: nsText,
+      fullRange: fullRange,
+      textView: textView,
+      theme: theme,
+      processed: processed
+    )
+    styleInline(
+      in: nsText,
+      fullRange: fullRange,
+      layoutManager: layoutManager,
+      palette: palette,
+      processed: processed
+    )
+  }
+
+  @MainActor
+  private static func styleStorageBackedMarkdown(
+    in nsText: NSString,
+    fullRange: NSRange,
+    textView: NSTextView,
+    theme: Theme,
+    processed: [NSRange]
+  ) {
     CodeStylerHeading.apply(
       in: nsText,
       fullRange: fullRange,
@@ -59,11 +83,11 @@ enum CodeStyler {
       style: listMarkerStyle(for: textView, theme: theme),
       processed: processed
     )
-    styleInline(
+    CodeStylerSections.apply(
       in: nsText,
       fullRange: fullRange,
-      layoutManager: layoutManager,
-      palette: palette,
+      textStorage: textView.textStorage,
+      style: sectionStyle(for: theme),
       processed: processed
     )
   }
@@ -198,6 +222,13 @@ enum CodeStyler {
       baseFont: textView.font,
       markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78),
       doneMarkerForeground: NSColor(theme.headingText)
+    )
+  }
+
+  private static func sectionStyle(for theme: Theme) -> CodeStylerSections.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerSections.Style(
+      trayBodyForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.82 : 0.76)
     )
   }
 

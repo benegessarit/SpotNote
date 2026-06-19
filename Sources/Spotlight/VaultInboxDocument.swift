@@ -38,7 +38,7 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   var defaultMarkdown: String {
     switch self {
-    case .tasks: return "## To Do\n"
+    case .tasks: return SpotNoteSectionHeadings.toDo.canonicalLine
     }
   }
 
@@ -52,9 +52,9 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
     let body = NotePayload.trimmingTrailingLineWhitespace(
       in: droppingLeadingNewlines(from: markdown)
     )
-    if startsWithMarkdownHeading(body, "## To Do") { return body }
-    guard !body.isEmpty else { return "## To Do\n" }
-    return "## To Do\n" + body
+    if startsWithMarkdownHeading(body, SpotNoteSectionHeadings.toDo) { return body }
+    guard !body.isEmpty else { return SpotNoteSectionHeadings.toDo.canonicalLine }
+    return SpotNoteSectionHeadings.toDo.canonicalLine + body
   }
 
   private static func droppingLeadingNewlines(from markdown: String) -> String {
@@ -65,10 +65,12 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
     return String(markdown[index...])
   }
 
-  private static func startsWithMarkdownHeading(_ markdown: String, _ heading: String) -> Bool {
+  private static func startsWithMarkdownHeading(
+    _ markdown: String,
+    _ heading: SpotNoteSectionHeadings.Definition
+  ) -> Bool {
     let firstLine = markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-    return firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-      .localizedCaseInsensitiveCompare(heading) == .orderedSame
+    return heading.matches(String(firstLine))
   }
 }
 

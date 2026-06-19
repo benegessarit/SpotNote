@@ -175,7 +175,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
 
-    #expect(textView.string == "Tasks\nalpha\n\n## Tray\n")
+    #expect(textView.string == "Tasks\nalpha\n\n## TRAY\n")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }
@@ -205,8 +205,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
 
-    #expect(textView.string == "## To Do\n- email\n- cure\n- \n## Tray\nrandom")
-    #expect(textView.selectedRange.location == ("## To Do\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.string == "## TODO\n- email\n- cure\n- \n## Tray\nrandom")
+    #expect(textView.selectedRange.location == ("## TODO\n- email\n- cure\n- " as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }
 

@@ -61,7 +61,7 @@ struct ChatSessionTests {
     await session.bootstrap()
 
     #expect(session.currentID == vaultInbox.id)
-    #expect(session.currentText == "## To Do\nEmail down @ 120\nWrite pass email for Cure51")
+    #expect(session.currentText == "## TODO\nEmail down @ 120\nWrite pass email for Cure51")
     #expect(session.currentChecklistLines == [1: .unchecked, 2: .unchecked])
     #expect(session.chats.first?.id == vaultInbox.id)
   }
@@ -76,15 +76,15 @@ struct ChatSessionTests {
     let session = ChatSession(store: store, vaultInbox: vaultInbox)
 
     await session.bootstrap()
-    #expect(session.currentText == "## To Do\nold inbox\ndone item")
+    #expect(session.currentText == "## TODO\nold inbox\ndone item")
     #expect(session.currentChecklistLines == [1: .unchecked, 2: .checked])
 
-    session.currentText = "## To Do\nupdated inbox   \ndone item\t"
+    session.currentText = "## TODO\nupdated inbox   \ndone item\t"
     session.persistIfNeeded()
     await session.flush()
 
     let saved = try String(contentsOf: inboxURL, encoding: .utf8)
-    #expect(saved == "## To Do\n[   ] updated inbox\n[ x ] done item")
+    #expect(saved == "## TODO\n[   ] updated inbox\n[ x ] done item")
   }
 
   @Test("bootstrap ignores tray.md as a live editor note")
@@ -104,9 +104,9 @@ struct ChatSessionTests {
 
     await session.bootstrap()
     #expect(session.currentVaultState == .tasks)
-    #expect(session.currentText == "## To Do\nexisting task")
+    #expect(session.currentText == "## TODO\nexisting task")
     #expect(session.currentChecklistLines == [1: .unchecked])
-    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## To Do\n[   ] existing task")
+    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## TODO\n[   ] existing task")
   }
 
   @Test("undo delete restores checklist state")

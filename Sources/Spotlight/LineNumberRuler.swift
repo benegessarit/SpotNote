@@ -111,7 +111,7 @@ final class LineNumberRuler: NSRulerView {
   /// `NSLayoutManager.enumerateLineFragments` only visits glyph-bearing
   /// rows, so blank lines have no fragment of their own. Counting newlines
   /// before each fragment keeps gutter markers aligned after edits such as
-  /// Vim `o` on `## To Do`, which inserts an empty logical line before the
+  /// Vim `o` on `## TODO`, which inserts an empty logical line before the
   /// first checklist task.
   static func logicalLineIndex(forFragmentStartingAt location: Int, in text: NSString) -> Int {
     let clamped = min(max(0, location), text.length)

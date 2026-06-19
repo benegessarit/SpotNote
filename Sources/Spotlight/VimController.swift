@@ -412,7 +412,7 @@ enum VimCommandReference {
         Entry(
           id: "todo-tray-jumps",
           usage: "gD\ngT",
-          summary: "Jump to a fresh `## To Do` task line, or to the next open line in `## Tray`."
+          summary: "Jump to a fresh `## TODO` task line, or to the next open line in `## TRAY`."
         ),
         Entry(
           id: "noh",
