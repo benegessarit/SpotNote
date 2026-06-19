@@ -47,6 +47,25 @@ def window(text: str, marker: str, length: int, label: str) -> str:
 def check_app_delegate() -> None:
     app = read("Sources/SpotNoteApp/AppDelegate.swift")
 
+    launch_setup = window(app, "func applicationDidFinishLaunching", 950, "launch setup")
+    require_order(
+        launch_setup,
+        [
+            "MainMenu.install",
+            "observeUpdateNotifications()",
+            "if isHeadlessTestLaunch",
+            "_ = spotlight",
+            "writeHeadlessReadyMarker()",
+            "return",
+            "enableLaunchAtLoginIfFirstRun()",
+            "installGlobalHotkeys()",
+            "presentInitialSurface()",
+        ],
+        "headless launch returns before user-visible launch side effects",
+    )
+    require_contains(app, "SPOTNOTE_HEADLESS_TEST", "headless smoke environment flag")
+    require_contains(app, "SpotNote headless test launch ready", "headless smoke readiness marker")
+
     launch_block = window(app, "let didPresentOnboarding = presentOnboardingIfNeeded()", 650, "launch path")
     require_order(
         launch_block,

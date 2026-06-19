@@ -92,5 +92,19 @@ rm -rf "$APP"
 "$ROOT/scripts/verify-source-of-truth.sh" --installed
 migrate_legacy_chats
 RESTORE_ON_FAILURE=0
-/usr/bin/open -a "$APP"
-printf 'OK: installed and launched %s from %s\n' "$APP" "$ROOT"
+case "${SPOTNOTE_FINAL_LAUNCH_MODE:-normal}" in
+  normal)
+    /usr/bin/open -a "$APP"
+    printf 'OK: installed and launched %s from %s\n' "$APP" "$ROOT"
+    ;;
+  headless)
+    "$ROOT/scripts/headless-smoke.sh" --installed
+    printf 'OK: installed and headless-smoked %s from %s\n' "$APP" "$ROOT"
+    ;;
+  skip|none)
+    printf 'OK: installed %s from %s; final launch skipped\n' "$APP" "$ROOT"
+    ;;
+  *)
+    fail "unknown SPOTNOTE_FINAL_LAUNCH_MODE=${SPOTNOTE_FINAL_LAUNCH_MODE}; expected normal, headless, skip, or none"
+    ;;
+esac

@@ -15,13 +15,16 @@ The local David build intentionally differs from upstream SpotNote:
 - Catppuccin and Rosé Pine themes are present in `Sources/Spotlight/Theme.swift`.
 - Linear handoff is routed through `Sources/Spotlight/ScratchpadHandoff.swift` to the local Hermes ingress endpoint.
 - Hermes feedback uses `Sources/Spotlight/HermesToastView.swift` plus `Sources/Spotlight/Resources/HermesLogo.png`.
-- The first/default note is the vault-backed Markdown inbox at `~/Documents/knowledge/Captures/spotnote-inbox.md`; JSON chat persistence is secondary app-local library state, not the launch buffer.
+- The first/default note is the vault-backed Markdown inbox at `~/Documents/knowledge/Captures/spotnote-inbox.md`; JSON chat persistence is secondary app-local library state, not the launch buffer. The tasks inbox is normalized with `## To Do` at the top, and `## Tray` remains a lower in-note section.
 - The old Vim statusline is removed entirely: no `vimBarHeight` constant and no `VimStatusLine.swift` source file should exist.
 - Native Flash-style Vim jumps are restored without terminal embedding or statusline chrome: `VimFlash.swift`, `MultilineEditorFlash.swift`, and `MultilineEditorFlashRendering.swift` own `s`/`S` whole-document jumps, `f`/`F` same-line jumps, and `K` row/gutter labels.
-- The line-number gutter matches the old spacing with `EditorMetrics.leadingInset == 28` and `EditorMetrics.textLeadingGap == 18`; do not only move the whole editor group when fixing number/text spacing.
+- The editor and numeric gutter font should resolve to IBM Plex Mono via `SpotNoteFont.editorFontName == "IBMPlexMono"`; do not silently fall back to Inter or generic system font for the HUD text surface.
+- Task checkboxes/sign markers are retired from the live editor. Old Markdown `[ ]` / `[x]` storage markers may still parse for compatibility, but SpotNote should not render, reserve, or toggle checkbox gutter chrome. Task completion/status now flows through Linear motions.
+- Markdown outline behavior belongs in `MarkdownOutline.swift` and `PlaceholderTextView`: Enter and Vim normal-mode `o`/`O` continue `- ` bullets with the current indentation, Tab indents a bullet by one two-space level, Shift-Tab outdents by one level, and pressing Enter on an empty bullet exits the list. In Vim normal mode, `gD` jumps to a fresh `## To Do` task bullet and `gT` jumps to the open line after the last non-empty `## Tray` item, ignoring internal blank spacer lines.
+- With line numbers hidden, the editor reserves no task/checkbox gutter (`LineNumberRuler.thickness(...) == 0`) and uses `EditorMetrics.textLeadingGap == 17` for near-card-edge text placement.
 - The editor text is the slightly-smaller nvim-like scale: `EditorMetrics.fontSize == 22`, with line numbers matching that same value.
 - Short notes open roomy/tall: `EditorMetrics.roomyVisibleLinesFloor == 9`, which makes the four-line inbox panel about 2x the old height.
-- The HUD opens horizontally centered and vertically centered slightly below the screen midline, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsHorizontallyCentered` and `defaultHUDOriginIsSlightlyBelowMidline`.
+- The HUD opens 30% of the safe travel from horizontal center toward the right edge, and vertically centered slightly below the screen midline, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsShiftedRightOfCenter` and `defaultHUDOriginIsSlightlyBelowMidline`.
 - The editor card has no top-right copy icon; keep copy available through keyboard/menu actions instead of visible chrome.
 
 ## Safe edit flow
@@ -53,13 +56,26 @@ The local David build intentionally differs from upstream SpotNote:
 
 `install-release.sh` refuses dirty installs by default, backs up the current app under `~/Library/Application Support/SpotNote/AppBackups/`, installs `build/SpotNote.app`, verifies codesigning, and checks the custom binary fingerprints before launching.
 
+For agent/CI launch checks that must not steal David's active Space, use the explicit headless smoke path instead of opening the HUD:
+
+```bash
+./scripts/headless-smoke.sh release
+SPOTNOTE_FINAL_LAUNCH_MODE=headless ./scripts/install-release.sh
+```
+
+Headless launch uses `SPOTNOTE_HEADLESS_TEST=1`, initializes the app bundle, verifies no visible SpotNote windows were created, then exits/cleans up. Normal user launch remains HUD-first.
+
 ## Manual smoke after install
 
 - Launch/toggle SpotNote with `⌘⇧Space`.
-- Confirm the panel opens horizontally centered and slightly below the screen midline.
+- Confirm the panel opens right of center and slightly below the screen midline.
+- Confirm editor text and line numbers render in IBM Plex Mono.
+- Confirm `- ` bullets continue with Enter/normal-mode `o`, Tab indents, and Shift-Tab outdents.
+- Confirm the inbox starts with `## To Do`; in Vim normal mode, `gD` creates/jumps to a fresh task bullet above `## Tray`, and `gT` jumps below the last non-empty `## Tray` item, not to an internal spacer blank.
+- Confirm there is no task checkbox/sign gutter and `gg` does not shift text into old checkbox space.
 - Confirm no bottom Vim statusline appears.
 - In Vim normal mode, confirm `s` starts inline Flash labels, `f` limits labels to the current line, and `K` replaces gutter line numbers with row labels.
-- Type a line, then use `⌘⌥L` or Vim normal-mode `gl` to send it to Linear; the line should delete only after successful handoff and show a Hermes toast.
+- Type a task, optionally with `#Label` and `due:today` / `due:tomorrow` / `due:MM-dd-yyyy`, then use Vim normal-mode `gd`/`gp`/`gt`/`gs`/`gl` for Done/Planned/Triage/Started/Later Linear handoff. The bullet should delete only after successful handoff and show a Hermes toast.
 
 ## Boundaries
 
