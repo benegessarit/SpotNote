@@ -23,6 +23,9 @@ struct SpotNoteScrollerTests {
     #expect(scrollView.contentInsets.right == 0)
     #expect(SpotNoteScrollViewStyle.reservedVerticalLaneWidth <= 10)
     #expect(SpotNoteScroller.thumbTrailingInset <= 1.5)
+    #expect(SpotNoteScroller.normalThumbAlpha <= 0.28)
+    #expect(SpotNoteScroller.highlightedThumbAlpha <= 0.44)
+    #expect(SpotNoteScroller.highlightTrackAlpha <= 0.05)
     #expect(!scrollView.hasHorizontalScroller)
     #expect(
       SpotNoteScroller.scrollerWidth(for: .regular, scrollerStyle: .overlay)

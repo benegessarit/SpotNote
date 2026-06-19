@@ -64,10 +64,24 @@ enum CodeStylerHeading {
     to range: NSRange,
     in storage: NSTextStorage
   ) {
-    let current = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
-    let currentColor = storage.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
-    guard current != font || !colorsMatch(currentColor, foreground) else { return }
+    var fontRange = NSRange(location: NSNotFound, length: 0)
+    var colorRange = NSRange(location: NSNotFound, length: 0)
+    let current = storage.attribute(.font, at: range.location, effectiveRange: &fontRange) as? NSFont
+    let currentColor =
+      storage.attribute(
+        .foregroundColor,
+        at: range.location,
+        effectiveRange: &colorRange
+      ) as? NSColor
+    let fontAlreadyCoversRange = current == font && contains(fontRange, range)
+    let colorAlreadyCoversRange = colorsMatch(currentColor, foreground) && contains(colorRange, range)
+    guard !fontAlreadyCoversRange || !colorAlreadyCoversRange else { return }
     storage.addAttributes([.font: font, .foregroundColor: foreground], range: range)
+  }
+
+  private static func contains(_ outer: NSRange, _ inner: NSRange) -> Bool {
+    guard outer.location != NSNotFound else { return false }
+    return inner.location >= outer.location && NSMaxRange(inner) <= NSMaxRange(outer)
   }
 
   private static func bodyFont(matching font: NSFont?) -> NSFont {

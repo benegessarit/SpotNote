@@ -58,6 +58,11 @@ struct LineNumberRulerTests {
     #expect(LineNumberRuler.labelFontSize == EditorMetrics.fontSize)
   }
 
+  @Test("line number gutter labels stay faded behind the text")
+  func gutterLabelsStayFadedBehindText() {
+    #expect(LineNumberRuler.defaultTextAlpha <= 0.46)
+  }
+
   @Test("marker-only thickness stays stable as line count grows")
   func markerOnlyThicknessIgnoresDigitBuckets() {
     let single = LineNumberRuler.thickness(forLineCount: 1, labelSize: 15)

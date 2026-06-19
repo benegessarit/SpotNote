@@ -47,6 +47,9 @@ final class SpotNoteScroller: NSScroller {
   private static let trackWidth: CGFloat = 2
   private static let thumbWidth: CGFloat = 5
   static let thumbTrailingInset: CGFloat = 1.5
+  static let normalThumbAlpha: CGFloat = 0.24
+  static let highlightedThumbAlpha: CGFloat = 0.40
+  static let highlightTrackAlpha: CGFloat = 0.04
   private static let verticalInset: CGFloat = 2
 
   override static var isCompatibleWithOverlayScrollers: Bool { true }
@@ -61,7 +64,7 @@ final class SpotNoteScroller: NSScroller {
   override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
     guard flag else { return }
     let track = centeredRect(width: Self.trackWidth, in: slotRect).insetBy(dx: 0, dy: 4)
-    NSColor(white: 1, alpha: 0.08).setFill()
+    NSColor(white: 1, alpha: Self.highlightTrackAlpha).setFill()
     NSBezierPath(
       roundedRect: track,
       xRadius: Self.trackWidth / 2,
@@ -78,7 +81,7 @@ final class SpotNoteScroller: NSScroller {
       width: Self.thumbWidth,
       height: max(Self.thumbWidth * 2, knob.height - Self.verticalInset * 2)
     )
-    let alpha: CGFloat = isHighlighted ? 0.68 : 0.46
+    let alpha = isHighlighted ? Self.highlightedThumbAlpha : Self.normalThumbAlpha
     NSColor(white: 0.72, alpha: alpha).setFill()
     NSBezierPath(
       roundedRect: thumb,

@@ -1,7 +1,9 @@
 import AppKit
 
 final class LineNumberRuler: NSRulerView {
-  var textColor = NSColor.secondaryLabelColor.withAlphaComponent(0.8)
+  static let defaultTextAlpha: CGFloat = 0.42
+
+  var textColor = NSColor.secondaryLabelColor.withAlphaComponent(defaultTextAlpha)
   var editorFont: NSFont
   var showsLineNumbers: Bool {
     didSet {

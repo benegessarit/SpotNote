@@ -124,6 +124,33 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
+  @Test("Markdown heading markers recolor every hash after stale attribute fragments")
+  func markdownHeadingMarkersRecolorEveryHashAfterStaleFragments() throws {
+    let theme = ThemeCatalog.mirage
+    let text = "## Tray\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+    CodeStyler.apply(to: textView, theme: theme)
+    textView.textStorage?.addAttribute(
+      .foregroundColor,
+      value: NSColor(theme.text),
+      range: NSRange(location: 1, length: 1)
+    )
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let firstHashColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let secondHashColor = try #require(storageColor(at: 1, in: textView)?.usingColorSpace(.sRGB))
+    let headingTextColor = try #require(storageColor(at: 3, in: textView)?.usingColorSpace(.sRGB))
+    let expectedHeading = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(firstHashColor, expectedHeading) < 0.01)
+    #expect(colorDistance(secondHashColor, expectedHeading) < 0.01)
+    #expect(colorDistance(headingTextColor, expectedHeading) < 0.01)
+    #expect(textView.textStorage?.string == text)
+  }
+
   @Test("style refresh with the caret in a heading preserves heading-only bold")
   func styleRefreshWithCaretInHeadingPreservesHeadingOnlyBold() throws {
     let theme = ThemeCatalog.mirage

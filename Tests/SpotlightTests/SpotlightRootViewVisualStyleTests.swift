@@ -7,7 +7,7 @@ struct SpotlightRootViewVisualStyleTests {
   @Test("editor card glass tint stays translucent")
   @MainActor
   func editorCardGlassTintStaysTranslucent() {
-    #expect(SpotlightRootView.darkGlassTintOpacity <= 0.66)
-    #expect(SpotlightRootView.lightGlassTintOpacity <= 0.60)
+    #expect(SpotlightRootView.darkGlassTintOpacity <= 0.52)
+    #expect(SpotlightRootView.lightGlassTintOpacity <= 0.48)
   }
 }
