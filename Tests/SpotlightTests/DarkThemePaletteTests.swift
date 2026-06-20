@@ -31,6 +31,19 @@ struct DarkThemePaletteTests {
     }
   }
 
+  @Test("resolved cursor honors an explicit cursor and otherwise falls back to the heading accent")
+  func resolvedCursorMatchesSpecOrFallsBackToAccent() throws {
+    // Fahrenheit declares its official cursor (#bbbbbb); resolvedCursor must use it.
+    let fahrenheitCursor = try #require(NSColor(ThemeCatalog.fahrenheit.resolvedCursor).usingColorSpace(.sRGB))
+    let expectedCursor = try #require(NSColor(Color(testHex: 0xBBBBBB)).usingColorSpace(.sRGB))
+    #expect(colorDistance(fahrenheitCursor, expectedCursor) < 0.01)
+
+    // A theme with no explicit cursor falls back to its heading accent, so the
+    // cursor tracks the theme instead of one global color.
+    #expect(ThemeCatalog.mirage.cursor == nil)
+    #expect(ThemeCatalog.mirage.resolvedCursor == ThemeCatalog.mirage.headingText)
+  }
+
   @Test("Markdown headings render with the selected theme heading color")
   func markdownHeadingsUseThemeHeadingColor() throws {
     let text = "plain\n## To Do\nnext"
@@ -53,6 +66,7 @@ struct DarkThemePaletteTests {
 
   private func expectedDarkThemeColors() -> [ExpectedThemeColors] {
     [
+      ExpectedThemeColors(id: "fahrenheit", body: Color(testHex: 0xFFFFCE), heading: Color(testHex: 0xFD9F4D)),
       ExpectedThemeColors(id: "catppuccin-frappe", body: Color(testHex: 0xC6D0F5), heading: Color(testHex: 0xCA9EE6)),
       ExpectedThemeColors(id: "catppuccin-mocha", body: Color(testHex: 0xCDD6F4), heading: Color(testHex: 0xCBA6F7)),
       ExpectedThemeColors(id: "rose-pine-moonlight", body: Color(testHex: 0xE0DEF4), heading: Color(testHex: 0xC4A7E7)),

@@ -435,7 +435,9 @@ struct MultilineEditor: NSViewRepresentable {
     if textView.string.isEmpty, textView.textColor != newTextColor {
       textView.textColor = newTextColor
     }
-    textView.insertionPointColor = PlaceholderTextView.normalModeCursorColor
+    let cursorColor = NSColor(theme.resolvedCursor)
+    textView.insertionPointColor = cursorColor
+    textView.editorCursorColor = cursorColor
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
@@ -606,6 +608,10 @@ final class PlaceholderTextView: NSTextView {
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
   var editorHeadingTextColor: NSColor?
+  /// Active theme's cursor color; falls back to `normalModeCursorColor` when the
+  /// style pass hasn't run yet.
+  var editorCursorColor: NSColor?
+  /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,
     green: 179 / 255,
@@ -1675,7 +1681,7 @@ final class PlaceholderTextView: NSTextView {
       let blockRect = normalModeCursorDisplayRect(for: rect, turnedOn: flag)
       if flag {
         lastInsertionPointDisplayRect = blockRect
-        Self.normalModeCursorColor.withAlphaComponent(0.82).setFill()
+        (editorCursorColor ?? Self.normalModeCursorColor).withAlphaComponent(0.82).setFill()
         blockRect.fill()
       } else {
         invalidateInsertionPointRect(blockRect)

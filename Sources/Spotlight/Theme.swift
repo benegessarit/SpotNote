@@ -12,11 +12,58 @@ public struct Theme: Equatable, Identifiable, Sendable {
   let text: Color
   let headingText: Color
   let placeholder: Color
+  /// Block/insertion cursor color. `nil` falls back to the heading accent so a
+  /// theme's cursor tracks its own palette instead of one global color; set it
+  /// explicitly to honor a theme's official cursor (e.g. Fahrenheit's #bbbbbb).
+  let cursor: Color?
+
+  // #lizard forgives -- a plain field-assignment initializer; wide only because
+  // Theme has many color roles. The `cursor` default keeps every existing theme
+  // literal unchanged.
+  init(
+    id: String,
+    name: String,
+    mode: Mode,
+    background: Color,
+    border: Color,
+    text: Color,
+    headingText: Color,
+    placeholder: Color,
+    cursor: Color? = nil
+  ) {
+    self.id = id
+    self.name = name
+    self.mode = mode
+    self.background = background
+    self.border = border
+    self.text = text
+    self.headingText = headingText
+    self.placeholder = placeholder
+    self.cursor = cursor
+  }
+
+  /// Resolved cursor color: the explicit `cursor` when set, else the heading accent.
+  var resolvedCursor: Color { cursor ?? headingText }
 }
 
 /// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine/Ayu skins.
 enum ThemeCatalog {
   // MARK: Dark
+
+  /// Fahrenheit -- the cmuxthemes.com "dark warm orange" palette. Official spec:
+  /// foreground #ffffce, background #000000, cursor #bbbbbb. The heading accent
+  /// uses the palette's bright orange (ANSI 11, #fd9f4d).
+  static let fahrenheit = Theme(
+    id: "fahrenheit",
+    name: "Fahrenheit",
+    mode: .dark,
+    background: Color(red: 0, green: 0, blue: 0),
+    border: Color(red: 253 / 255, green: 159 / 255, blue: 77 / 255).opacity(0.24),
+    text: Color(red: 255 / 255, green: 255 / 255, blue: 206 / 255),
+    headingText: Color(red: 253 / 255, green: 159 / 255, blue: 77 / 255),
+    placeholder: Color(red: 107 / 255, green: 102 / 255, blue: 80 / 255),
+    cursor: Color(red: 187 / 255, green: 187 / 255, blue: 187 / 255)
+  )
 
   static let catppuccinFrappe = Theme(
     id: "catppuccin-frappe",
@@ -241,8 +288,8 @@ enum ThemeCatalog {
   )
 
   static let darkThemes: [Theme] = [
-    catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula, nvimDark,
-    neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
+    fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula,
+    nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
   ]
   static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes
