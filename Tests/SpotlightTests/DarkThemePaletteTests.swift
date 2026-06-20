@@ -42,6 +42,19 @@ struct DarkThemePaletteTests {
     // cursor tracks the theme instead of one global color.
     #expect(ThemeCatalog.mirage.cursor == nil)
     #expect(ThemeCatalog.mirage.resolvedCursor == ThemeCatalog.mirage.headingText)
+
+    // Upstream-named themes pin their official cursor (verified against the
+    // canonical palettes), not the heading accent.
+    let officialCursors: [(String, UInt32)] = [
+      ("catppuccin-mocha", 0xF5E0DC),  // Rosewater
+      ("dracula", 0xF8F8F2),  // Foreground
+      ("rose-pine-moonlight", 0x56526E)  // Highlight High
+    ]
+    for (id, hex) in officialCursors {
+      let actual = try #require(NSColor(ThemeCatalog.theme(withID: id).resolvedCursor).usingColorSpace(.sRGB))
+      let expected = try #require(NSColor(Color(testHex: hex)).usingColorSpace(.sRGB))
+      #expect(colorDistance(actual, expected) < 0.01, "\(id) cursor should match its official spec")
+    }
   }
 
   @Test("Markdown headings render with the selected theme heading color")

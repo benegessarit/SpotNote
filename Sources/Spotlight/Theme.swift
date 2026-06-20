@@ -73,7 +73,8 @@ enum ThemeCatalog {
     border: Color(red: 0.792, green: 0.651, blue: 0.957).opacity(0.24),
     text: Color(red: 0.776, green: 0.816, blue: 0.961),
     headingText: Color(red: 202 / 255, green: 158 / 255, blue: 230 / 255),
-    placeholder: Color(red: 0.514, green: 0.545, blue: 0.655)
+    placeholder: Color(red: 0.514, green: 0.545, blue: 0.655),
+    cursor: Color(red: 242 / 255, green: 213 / 255, blue: 207 / 255)  // Rosewater
   )
 
   static let catppuccinMocha = Theme(
@@ -84,7 +85,8 @@ enum ThemeCatalog {
     border: Color(red: 0.690, green: 0.611, blue: 0.914).opacity(0.24),
     text: Color(red: 0.804, green: 0.839, blue: 0.957),
     headingText: Color(red: 203 / 255, green: 166 / 255, blue: 247 / 255),
-    placeholder: Color(red: 0.498, green: 0.518, blue: 0.612)
+    placeholder: Color(red: 0.498, green: 0.518, blue: 0.612),
+    cursor: Color(red: 245 / 255, green: 224 / 255, blue: 220 / 255)  // Rosewater
   )
 
   static let rosePineMoonlight = Theme(
@@ -95,7 +97,8 @@ enum ThemeCatalog {
     border: Color(red: 0.769, green: 0.678, blue: 0.859).opacity(0.22),
     text: Color(red: 0.878, green: 0.871, blue: 0.957),
     headingText: Color(red: 196 / 255, green: 167 / 255, blue: 231 / 255),
-    placeholder: Color(red: 0.431, green: 0.416, blue: 0.525)
+    placeholder: Color(red: 0.431, green: 0.416, blue: 0.525),
+    cursor: Color(red: 86 / 255, green: 82 / 255, blue: 110 / 255)  // Highlight High
   )
 
   static let ayuMirage = Theme(
@@ -128,7 +131,8 @@ enum ThemeCatalog {
     border: Color(red: 189 / 255, green: 147 / 255, blue: 249 / 255).opacity(0.24),
     text: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255),
     headingText: Color(red: 189 / 255, green: 147 / 255, blue: 249 / 255),
-    placeholder: Color(red: 98 / 255, green: 114 / 255, blue: 164 / 255)
+    placeholder: Color(red: 98 / 255, green: 114 / 255, blue: 164 / 255),
+    cursor: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255)  // Foreground
   )
 
   static let nvimDark = Theme(
@@ -139,7 +143,8 @@ enum ThemeCatalog {
     border: Color(red: 155 / 255, green: 158 / 255, blue: 164 / 255).opacity(0.22),
     text: Color(red: 224 / 255, green: 226 / 255, blue: 234 / 255),
     headingText: Color(red: 166 / 255, green: 219 / 255, blue: 255 / 255),
-    placeholder: Color(red: 79 / 255, green: 82 / 255, blue: 88 / 255)
+    placeholder: Color(red: 79 / 255, green: 82 / 255, blue: 88 / 255),
+    cursor: Color(red: 224 / 255, green: 226 / 255, blue: 234 / 255)  // Foreground
   )
 
   static let neobonesDark = Theme(
@@ -150,7 +155,8 @@ enum ThemeCatalog {
     border: Color(red: 206 / 255, green: 221 / 255, blue: 215 / 255).opacity(0.20),
     text: Color(red: 198 / 255, green: 213 / 255, blue: 207 / 255),
     headingText: Color(red: 146 / 255, green: 160 / 255, blue: 226 / 255),
-    placeholder: Color(red: 51 / 255, green: 70 / 255, blue: 82 / 255)
+    placeholder: Color(red: 51 / 255, green: 70 / 255, blue: 82 / 255),
+    cursor: Color(red: 206 / 255, green: 221 / 255, blue: 215 / 255)  // Near-foreground
   )
 
   static let nightfox = Theme(
@@ -161,7 +167,8 @@ enum ThemeCatalog {
     border: Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255).opacity(0.20),
     text: Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255),
     headingText: Color(red: 113 / 255, green: 156 / 255, blue: 214 / 255),
-    placeholder: Color(red: 87 / 255, green: 88 / 255, blue: 96 / 255)
+    placeholder: Color(red: 87 / 255, green: 88 / 255, blue: 96 / 255),
+    cursor: Color(red: 205 / 255, green: 206 / 255, blue: 207 / 255)  // Foreground
   )
 
   static let obsidian = Theme(
@@ -229,7 +236,8 @@ enum ThemeCatalog {
     border: Color(red: 0.533, green: 0.224, blue: 0.765).opacity(0.16),
     text: Color(red: 0.298, green: 0.310, blue: 0.412),
     headingText: Color(red: 87 / 255, green: 56 / 255, blue: 138 / 255),
-    placeholder: Color(red: 0.549, green: 0.561, blue: 0.631)
+    placeholder: Color(red: 0.549, green: 0.561, blue: 0.631),
+    cursor: Color(red: 220 / 255, green: 138 / 255, blue: 120 / 255)  // Rosewater
   )
 
   static let parchment = Theme(
