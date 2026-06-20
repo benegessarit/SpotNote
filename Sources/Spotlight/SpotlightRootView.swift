@@ -132,10 +132,10 @@ struct SpotlightRootView: View {
     session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
   }
 
-  // ~20% more transparent than the previous 0.22 tint, letting more of the
-  // blurred HUD material show through (0.22 * 0.8 = 0.176).
-  static let darkGlassTintOpacity = 0.176
-  static let lightGlassTintOpacity = 0.176
+  // A more opaque tint so the panel reads clearly over a busy desktop -- the
+  // high-contrast Fahrenheit (black) theme in particular wants less bleed-through.
+  static let darkGlassTintOpacity = 0.40
+  static let lightGlassTintOpacity = 0.40
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
