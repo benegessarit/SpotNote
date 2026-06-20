@@ -195,9 +195,24 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.vimEngine?.mode == .insert)
   }
 
-  @Test("gD creates HABITS above an existing Tray section")
-  func gShiftDCreatesHabitsAboveTray() {
+  @Test("gH creates HABITS above an existing Tray section")
+  func gShiftHCreatesHabitsAboveTray() {
     let textView = makeVimMotionTextView(text: "- email\n- cure\n\n## Tray\nrandom")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "H", ignoring: "h", keyCode: 4, modifiers: .shift))
+
+    #expect(textView.string == "## HABITS\n- email\n- cure\n- \n## Tray\nrandom")
+    #expect(textView.selectedRange.location == ("## HABITS\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
+  @Test("gD creates a TODO section between HABITS and TRAY")
+  func gShiftDCreatesTodoBetweenHabitsAndTray() {
+    let textView = makeVimMotionTextView(text: "## HABITS\n- a\n## TRAY\nx")
     textView.vimModeEnabled = true
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -205,8 +220,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
 
-    #expect(textView.string == "## HABITS\n- email\n- cure\n- \n## Tray\nrandom")
-    #expect(textView.selectedRange.location == ("## HABITS\n- email\n- cure\n- " as NSString).length)
+    #expect(textView.string == "## HABITS\n- a\n## TODO\n- \n## TRAY\nx")
     #expect(textView.vimEngine?.mode == .insert)
   }
 

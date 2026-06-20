@@ -34,6 +34,20 @@ struct MultilineEditorVimPasteTests {
     #expect(textView.selectedRange == NSRange(location: ("alpha\n" as NSString).length, length: 0))
   }
 
+  @Test("dd copies the deleted line to the system clipboard")
+  func ddCopiesDeletedLineToClipboard() {
+    let pasteboard = NSPasteboard.withUniqueName()
+    pasteboard.clearContents()
+    let textView = makeTextView(text: "alpha\nbeta\ngamma", pasteboard: pasteboard)
+    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
+
+    #expect(textView.string == "alpha\ngamma")
+    #expect(pasteboard.string(forType: .string) == "beta\n")
+  }
+
   @Test("V yank then p into a blank spacer line consumes that spacer")
   func visualLineYankPasteIntoBlankSpacerConsumesSpacer() {
     let pasteboard = NSPasteboard.withUniqueName()

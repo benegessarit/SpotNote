@@ -410,9 +410,11 @@ enum VimCommandReference {
           summary: "Jump caret to line n."
         ),
         Entry(
-          id: "habits-tray-jumps",
-          usage: "gD\ngT",
-          summary: "Jump to a fresh `## HABITS` line, or to the next open line in `## TRAY`."
+          id: "section-jumps",
+          usage: "gH\ngD\ngT",
+          summary:
+            "Jump to a fresh bullet in `## HABITS` (gH), `## TODO` (gD), or `## TRAY` (gT)"
+            + " and start typing; the section is created if it doesn't exist yet."
         ),
         Entry(
           id: "noh",

@@ -1323,6 +1323,13 @@ final class PlaceholderTextView: NSTextView {
       range.length += 1
     }
     let cursorAfter = min(range.location, max(0, nsString.length - range.length))
+    // dd yanks the deleted line(s) to the system clipboard (so they can be
+    // pasted with `p` or into any other app), mirroring vim's delete-to-register.
+    let deleted = nsString.substring(with: range)
+    if !deleted.isEmpty {
+      vimPasteboard.clearContents()
+      vimPasteboard.setString(deleted, forType: .string)
+    }
     insertText("", replacementRange: range)
     setSelectedRange(NSRange(location: cursorAfter, length: 0))
   }

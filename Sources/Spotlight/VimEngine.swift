@@ -51,6 +51,7 @@ enum VimAction: Equatable, Sendable {
   case appendCurrentLineToTrayNote(count: Int)
   case jumpToTraySection
   case jumpToHabitsSection
+  case jumpToToDoSection
   case gotoLine(Int)
   case enterVisual
   case extendVisual(Motion)
@@ -167,25 +168,23 @@ final class VimEngine {
     if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
     if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
     if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
-    if key == "D" { return jumpToHabitsSectionInsertAction() }
-    if key == "T" { return jumpToTraySectionInsertAction() }
+    // Consistent section jumps (capital g-prefix): each jumps to its `## …`
+    // section and drops into insert on a fresh bullet.
+    if key == "H" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
+    if key == "D" { return jumpToSectionInsertAction(.jumpToToDoSection) }
+    if key == "T" { return jumpToSectionInsertAction(.jumpToTraySection) }
     return .none
   }
 
   private func handlePendingT(key: String) -> VimAction {
     pendingBuffer = ""
-    if key == "t" { return jumpToTraySectionInsertAction() }
+    if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
     return .none
   }
 
-  private func jumpToTraySectionInsertAction() -> VimAction {
+  private func jumpToSectionInsertAction(_ action: VimAction) -> VimAction {
     mode = .insert
-    return .jumpToTraySection
-  }
-
-  private func jumpToHabitsSectionInsertAction() -> VimAction {
-    mode = .insert
-    return .jumpToHabitsSection
+    return action
   }
 
   private func handleSingle(key: String) -> VimAction {

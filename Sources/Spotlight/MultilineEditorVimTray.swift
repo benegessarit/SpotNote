@@ -11,12 +11,22 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gD` -- jump to the in-note `## HABITS` section, creating it at the
+  /// `gH` -- jump to the in-note `## HABITS` section, creating it at the
   /// top when absent, and leave the editor in insert mode on a fresh habit
   /// bullet before any later section such as `## TRAY`.
   @discardableResult
   func jumpToHabitsSectionForVim() -> Bool {
     let target = ensureHabitsInsertionLocation()
+    revealVimSectionJumpTarget(target)
+    return true
+  }
+
+  /// `gD` -- jump to the in-note `## TODO` section, creating it (between
+  /// `## HABITS` and `## TRAY`) when absent, and leave the editor in insert
+  /// mode on a fresh to-do bullet.
+  @discardableResult
+  func jumpToToDoSectionForVim() -> Bool {
+    let target = ensureToDoInsertionLocation()
     revealVimSectionJumpTarget(target)
     return true
   }
@@ -49,7 +59,31 @@ extension PlaceholderTextView {
     guard let heading = headingRange(matching: SpotNoteSectionHeadings.habits, in: nsString) else {
       return nsString.length
     }
-    return ensureOpenBulletLineAfterHabitsHeading(heading, in: nsString)
+    return ensureOpenBulletLineAfter(heading, in: nsString)
+  }
+
+  private func ensureToDoInsertionLocation() -> Int {
+    var nsString = string as NSString
+    if headingRange(matching: SpotNoteSectionHeadings.todo, in: nsString) == nil {
+      let insertion = todoSectionInsertionPoint(in: nsString)
+      let needsLeadingNewline = insertion > 0 && nsString.character(at: insertion - 1) != 0x0A
+      let text = (needsLeadingNewline ? "\n" : "") + SpotNoteSectionHeadings.todo.canonicalLine
+      replaceTextForSectionJump(in: NSRange(location: insertion, length: 0), with: text)
+      nsString = string as NSString
+    }
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.todo, in: nsString) else {
+      return nsString.length
+    }
+    return ensureOpenBulletLineAfter(heading, in: nsString)
+  }
+
+  /// TODO sits between HABITS and TRAY: insert before TRAY when present, else at
+  /// the end of the note.
+  private func todoSectionInsertionPoint(in nsString: NSString) -> Int {
+    if let tray = headingRange(matching: SpotNoteSectionHeadings.tray, in: nsString) {
+      return tray.location
+    }
+    return nsString.length
   }
 
   private func appendMissingTraySection(to nsString: NSString) -> Int {
@@ -110,7 +144,7 @@ extension PlaceholderTextView {
     return character == 0x0A || character == 0x0D
   }
 
-  private func ensureOpenBulletLineAfterHabitsHeading(_ heading: NSRange, in nsString: NSString) -> Int {
+  private func ensureOpenBulletLineAfter(_ heading: NSRange, in nsString: NSString) -> Int {
     var location = heading.location + heading.length
     while location < nsString.length {
       let line = nsString.lineRange(for: NSRange(location: location, length: 0))
