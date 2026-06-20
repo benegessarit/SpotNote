@@ -36,7 +36,7 @@ final class GlobalHotkey {
     unregister()
     let hkID = EventHotKeyID(signature: OSType(0x534E_5448), id: hotkeyID)  // 'SNTH'
     Self.handlersByID[hotkeyID] = handler
-    RegisterEventHotKey(
+    let status = RegisterEventHotKey(
       keyCode,
       Self.carbonModifiers(shortcut.modifiers),
       hkID,
@@ -44,6 +44,14 @@ final class GlobalHotkey {
       0,
       &hotKeyRef
     )
+    // Registration can fail (e.g. the chord is already claimed by another
+    // app). Report it honestly so the caller can fall back to the previous
+    // binding instead of leaving a dead handler entry that never fires.
+    guard status == noErr, hotKeyRef != nil else {
+      Self.handlersByID[hotkeyID] = nil
+      hotKeyRef = nil
+      return false
+    }
     return true
   }
 
