@@ -103,18 +103,17 @@ struct SpotlightWindowControllerTests {
     #expect(alpha < 1.0)
   }
 
-  @Test("default HUD origin is shifted thirty percent from center toward the right edge")
-  func defaultHUDOriginIsShiftedRightOfCenter() {
+  @Test("default HUD origin hugs the right edge with an inset")
+  func defaultHUDOriginHugsRightEdge() {
     let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
     let panelWidth: CGFloat = 400
-    let centeredX = (screen.midX - panelWidth / 2).rounded()
     let rightmostX = screen.maxX - panelWidth
-    let expectedX = (centeredX + (rightmostX - centeredX) * 0.30).rounded()
 
     let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
 
-    #expect(x == expectedX)
-    #expect(x > centeredX)
+    #expect(x == rightmostX - SpotlightWindowController.defaultEdgeInset)
+    #expect(x + panelWidth < screen.maxX, "leaves a gap on the right")
+    #expect(x > screen.midX, "sits in the right half")
   }
 
   @Test("default HUD origin stays on-screen after shifting right")
@@ -128,18 +127,28 @@ struct SpotlightWindowControllerTests {
     #expect(x + panelWidth <= screen.maxX)
   }
 
-  @Test("default HUD origin is vertically centered slightly below the midline")
-  func defaultHUDOriginIsSlightlyBelowMidline() {
+  @Test("default HUD origin hugs the bottom edge with an inset")
+  func defaultHUDOriginHugsBottomEdge() {
     let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
     let panelHeight: CGFloat = 360
-    let expectedCenterY = (screen.midY - screen.height * 0.06).rounded()
 
     let y = SpotlightWindowController.restingOriginY(in: screen, panelHeight: panelHeight)
-    let centerY = y + panelHeight / 2
 
-    #expect(centerY == expectedCenterY)
-    #expect(centerY < screen.midY)
-    #expect(centerY > screen.midY - screen.height * 0.10)
+    // The origin is the panel's bottom edge: pinned near the bottom and growing
+    // upward, so the bottom-right corner stays anchored.
+    #expect(y == screen.minY + SpotlightWindowController.defaultEdgeInset)
+    #expect(y + panelHeight < screen.maxY, "grows upward, stays on screen")
+  }
+
+  @Test("a tall panel stays on-screen when bottom-anchored")
+  func tallPanelClampsWithinScreen() {
+    let screen = NSRect(x: 0, y: 0, width: 1_000, height: 400)
+    let panelHeight: CGFloat = 380
+
+    let y = SpotlightWindowController.restingOriginY(in: screen, panelHeight: panelHeight)
+
+    #expect(y >= screen.minY)
+    #expect(y + panelHeight <= screen.maxY)
   }
 
   @Test("construction is cheap and side-effect-free beyond font registration")

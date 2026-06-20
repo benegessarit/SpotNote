@@ -30,25 +30,23 @@ public final class SpotlightWindowController {
     .canJoinAllApplications, .canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
-  nonisolated static let defaultLoweredCenterRatio: CGFloat = 0.06
-  nonisolated static let defaultRightwardOffsetRatio: CGFloat = 0.30
+  /// Gap kept between the panel and the screen's right and bottom edges at rest.
+  nonisolated static let defaultEdgeInset: CGFloat = 24
 
+  /// X origin: the panel hugs the right edge of the visible frame, inset by
+  /// `defaultEdgeInset` (clamped on-screen for narrow displays).
   nonisolated static func restingOriginX(in screenFrame: NSRect, panelWidth: CGFloat) -> CGFloat {
-    let centeredX = (screenFrame.midX - panelWidth / 2).rounded()
     let rightmostX = max(screenFrame.minX, screenFrame.maxX - panelWidth)
-    let shiftedX = centeredX + (rightmostX - centeredX) * defaultRightwardOffsetRatio
-    return min(max(shiftedX, screenFrame.minX), rightmostX).rounded()
+    return min(max(rightmostX - defaultEdgeInset, screenFrame.minX), rightmostX).rounded()
   }
 
+  /// Y origin (the panel's *bottom* edge): the panel hugs the bottom of the
+  /// visible frame, inset by `defaultEdgeInset`. The panel is bottom-anchored and
+  /// grows upward, so the bottom-right corner stays put as content reflows.
+  /// Clamped so a very tall panel never runs off the top of the screen.
   nonisolated static func restingOriginY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
-    let loweredCenterY = (screenFrame.midY - screenFrame.height * defaultLoweredCenterRatio).rounded()
-    let centeredY = (loweredCenterY - panelHeight / 2).rounded()
     let highestY = max(screenFrame.minY, screenFrame.maxY - panelHeight)
-    return min(max(centeredY, screenFrame.minY), highestY).rounded()
-  }
-
-  nonisolated static func restingTopY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
-    restingOriginY(in: screenFrame, panelHeight: panelHeight) + panelHeight
+    return min(screenFrame.minY + defaultEdgeInset, highestY).rounded()
   }
 
   private var panel: SpotlightPanel?
@@ -71,25 +69,15 @@ public final class SpotlightWindowController {
   private let onDidHideHUD: () -> Void
   private var observers: [NSObjectProtocol] = []
   private weak var previouslyActiveApp: NSRunningApplication?
-  /// Screen-space Y of the panel's intended top edge, cached on first
-  /// placement and reused thereafter. Without this, AppKit's first
-  /// `makeKeyAndOrderFront` landed the panel ~1pt lower than subsequent
-  /// reshows (subpixel arithmetic on `visibleFrame.midY + h * 0.18`
-  /// rounded one way for the first orderFront and another after the
-  /// window was cached in the Dock server), which made the panel appear
-  /// to "jump up" the first time it was re-toggled.
-  private var pinnedTopY: CGFloat?
-  /// Three-state machine that drives `setPanelHeight`:
-  /// - `.none` -- top-anchored at `pinnedTopY` (the rest position).
-  /// - `.pendingFirstResize` -- the navigation overlay just appeared;
-  ///   the next resize keeps the panel top-anchored so the editor
-  ///   doesn't visibly jump, and afterwards captures the new bottom
-  ///   edge as the anchor for subsequent cycles.
-  /// - `.bottomPinned(y)` -- every later resize while the overlay is
-  ///   still visible keeps the panel's bottom at `y`, so chats with
-  ///   different line counts grow/shrink the editor upward instead of
-  ///   shifting the navigation list around.
-  /// Driven by a Combine sink on `session.$navigationPreview`.
+  /// Screen-space Y of the panel's pinned *bottom* edge (the rest origin),
+  /// cached on first placement and reused thereafter so the bottom-right corner
+  /// stays put and the panel doesn't "jump" between reshows.
+  private var pinnedBottomY: CGFloat?
+  /// Drives `setPanelHeight`. The HUD is bottom-anchored at the bottom-right
+  /// corner, so the rest state is `.bottomPinned(pinnedBottomY)`: the panel's
+  /// bottom edge stays fixed and content (editor + navigation overlay) grows
+  /// upward as line counts change. The `.none`/`.pendingFirstResize` cases are
+  /// retained for the solver's API but are no longer entered by the controller.
   private enum NavAnchorState {
     case none
     case pendingFirstResize
@@ -224,14 +212,14 @@ public final class SpotlightWindowController {
     session.$navigationPreview
       .map { $0 != nil }
       .removeDuplicates()
-      .sink { [weak self] visible in
+      .sink { [weak self] _ in
         MainActor.assumeIsolated {
           guard let self else { return }
-          if visible {
-            self.navAnchor = .pendingFirstResize
-          } else {
-            self.editorTopY = nil
-            self.navAnchor = .none
+          // The panel is bottom-anchored, so the overlay simply grows the panel
+          // upward from the fixed bottom edge; keep the bottom pin on both
+          // appear and dismiss.
+          if let bottom = self.pinnedBottomY {
+            self.navAnchor = .bottomPinned(bottom)
           }
         }
       }
@@ -486,16 +474,19 @@ public final class SpotlightWindowController {
     guard let screen = NSScreen.main else { return }
     let screenFrame = screen.visibleFrame
     let height = expectedPanelHeight
-    let top: CGFloat
-    if let cached = pinnedTopY {
-      top = cached
+    let bottom: CGFloat
+    if let cached = pinnedBottomY {
+      bottom = cached
     } else {
-      top = Self.restingTopY(in: screenFrame, panelHeight: height)
-      pinnedTopY = top
+      bottom = Self.restingOriginY(in: screenFrame, panelHeight: height)
+      pinnedBottomY = bottom
     }
     let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    // Bottom-anchored at the bottom-right corner: the origin (bottom edge) is
+    // fixed and the panel grows upward as content reflows.
+    navAnchor = .bottomPinned(bottom)
     setPanelFrame(
-      NSRect(x: x, y: top - height, width: panel.frame.width, height: height),
+      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
       display: false
     )
   }
@@ -589,20 +580,19 @@ public final class SpotlightWindowController {
   private func pinnedOrigin(for panel: NSPanel) -> NSPoint? {
     guard let screen = NSScreen.main else { return nil }
     let screenFrame = screen.visibleFrame
-    let top: CGFloat
-    if let cached = pinnedTopY {
-      top = cached
+    let bottom: CGFloat
+    if let cached = pinnedBottomY {
+      bottom = cached
     } else {
       let initialHeight = EditorMetrics.panelHeight(
         forLines: 1,
         maxLines: preferences.maxVisibleLines
       )
-      top = Self.restingTopY(in: screenFrame, panelHeight: initialHeight)
-      pinnedTopY = top
+      bottom = Self.restingOriginY(in: screenFrame, panelHeight: initialHeight)
+      pinnedBottomY = bottom
     }
     let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
-    let y = top - panel.frame.height
-    return NSPoint(x: x, y: y)
+    return NSPoint(x: x, y: bottom)
   }
 
   private func correctDriftIfNeeded(_ panel: NSPanel) {
@@ -631,7 +621,7 @@ public final class SpotlightWindowController {
       newHeight: height,
       chromeAbove: chromeAbove,
       cachedEditorTopY: editorTopY,
-      pinnedTopY: pinnedTopY
+      pinnedTopY: pinnedBottomY
     )
     let newY = resolved.newOriginY
     if let updated = resolved.editorTopY { editorTopY = updated }
@@ -721,9 +711,9 @@ extension SpotlightWindowController {
         MainActor.assumeIsolated {
           guard let self, let panel else { return }
           if self.shouldIgnoreProgrammaticMove(panel.frame) { return }
-          let newTop = panel.frame.origin.y + panel.frame.size.height
-          self.pinnedTopY = newTop
-          self.editorTopY = newTop - self.chromeAboveEditor
+          let newBottom = panel.frame.origin.y
+          self.pinnedBottomY = newBottom
+          self.navAnchor = .bottomPinned(newBottom)
           self.syncFuzzyPreviewPanel()
           self.syncToastPanel()
         }
