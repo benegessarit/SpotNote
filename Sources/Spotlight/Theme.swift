@@ -235,7 +235,7 @@ enum ThemeCatalog {
     background: Color(red: 0.937, green: 0.945, blue: 0.961),
     border: Color(red: 0.533, green: 0.224, blue: 0.765).opacity(0.16),
     text: Color(red: 0.298, green: 0.310, blue: 0.412),
-    headingText: Color(red: 87 / 255, green: 56 / 255, blue: 138 / 255),
+    headingText: Color(red: 136 / 255, green: 57 / 255, blue: 239 / 255),  // Mauve (official Latte accent)
     placeholder: Color(red: 0.549, green: 0.561, blue: 0.631),
     cursor: Color(red: 220 / 255, green: 138 / 255, blue: 120 / 255)  // Rosewater
   )
