@@ -64,7 +64,6 @@ public final class SpotlightWindowController {
   private let copyController = CopyController()
   private let handoffClient = ScratchpadHandoffClient()
   private let dailyNoteWriter = DailyNoteWriter()
-  private let completedItemsWriter = CompletedItemsWriter()
   private let trayNoteWriter = TrayNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
@@ -426,6 +425,13 @@ public final class SpotlightWindowController {
     }
   }
 
+  /// Awaits every pending debounced write across the chat store *and* the
+  /// vault-backed documents (the `## To Do` inbox). Call on app termination
+  /// so a last edit isn't lost -- flushing the chat store alone is not enough.
+  public func flush() async {
+    await session.flush()
+  }
+
   public func close() {
     fuzzyPreviewPanel?.orderOut(nil)
     toastPanel?.orderOut(nil)
@@ -528,9 +534,6 @@ public final class SpotlightWindowController {
         },
         onAppendDailyNote: { [dailyNoteWriter] text in
           try await dailyNoteWriter.append(text)
-        },
-        onAppendCompletedItems: { [completedItemsWriter] text in
-          try await completedItemsWriter.append(text)
         },
         onAppendTrayNote: { [trayNoteWriter] text in
           try await trayNoteWriter.append(text)

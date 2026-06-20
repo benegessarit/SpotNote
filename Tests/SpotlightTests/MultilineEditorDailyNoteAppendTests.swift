@@ -95,67 +95,6 @@ struct MultilineEditorDailyNoteAppendTests {
     #expect(textView.checklistLines.isEmpty)
   }
 
-  @Test("append-to-completed-items sends current line and clears only after success")
-  func appendCompletedItemsClearsAfterSuccess() async throws {
-    let textView = makeTextView(
-      text: "alpha\nbeta\ngamma",
-      checklistLines: [1: .checked]
-    )
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var captured: [String] = []
-    textView.onAppendCompletedItems = { text in
-      captured.append(text)
-      return URL(fileURLWithPath: "/tmp/spotnote-completed.md")
-    }
-
-    textView.appendCurrentLinesToCompletedItems(1)
-    try await waitUntil { captured.count == 1 }
-
-    #expect(captured == ["[ x ] beta"])
-    #expect(textView.string == "alpha\ngamma")
-    #expect(textView.checklistLines.isEmpty)
-  }
-
-  @Test("append-to-completed-items keeps text when durable write fails")
-  func appendCompletedItemsKeepsTextOnFailure() async throws {
-    struct StubFailure: Error {}
-    let textView = makeTextView(text: "alpha\nbeta\ngamma")
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var attempts = 0
-    textView.onAppendCompletedItems = { _ in
-      attempts += 1
-      throw StubFailure()
-    }
-
-    textView.appendCurrentLinesToCompletedItems(1)
-    try await waitUntil { attempts == 1 }
-
-    #expect(textView.string == "alpha\nbeta\ngamma")
-  }
-
-  @Test("append-to-completed-items does not claim success when clearing is refused")
-  func appendCompletedItemsReportsWhenClearingIsRefused() async throws {
-    let textView = makeTextView(text: "alpha\nbeta\ngamma")
-    let controller = VimController()
-    let rejector = RejectingTextViewDelegate()
-    textView.attachVimController(controller)
-    textView.delegate = rejector
-    textView.setSelectedRange(NSRange(location: ("alpha\n" as NSString).length, length: 0))
-    var captured: [String] = []
-    textView.onAppendCompletedItems = { text in
-      captured.append(text)
-      return URL(fileURLWithPath: "/tmp/spotnote-completed.md")
-    }
-
-    textView.appendCurrentLinesToCompletedItems(1)
-    try await waitUntil { captured.count == 1 && controller.message != nil }
-
-    #expect(captured == ["beta"])
-    #expect(textView.string == "alpha\nbeta\ngamma")
-    #expect(controller.message?.text == "Completed item logged; line changed")
-    #expect(controller.message?.kind == .error)
-  }
-
   private func makeTextView(
     text: String,
     checklistLines: [Int: ChecklistLineState] = [:]
@@ -180,16 +119,6 @@ struct MultilineEditorDailyNoteAppendTests {
     storage.addLayoutManager(fixed)
     fixed.addTextContainer(container)
     return textView
-  }
-
-  private final class RejectingTextViewDelegate: NSObject, NSTextViewDelegate {
-    func textView(
-      _ textView: NSTextView,
-      shouldChangeTextIn affectedCharRange: NSRange,
-      replacementString: String?
-    ) -> Bool {
-      false
-    }
   }
 
   private func waitUntil(condition: @MainActor @escaping () -> Bool) async throws {

@@ -49,13 +49,7 @@ enum CodeStylerHeading {
   }
 
   private static func lineContentRange(for lineRange: NSRange, in nsText: NSString) -> NSRange {
-    var end = lineRange.location + lineRange.length
-    while end > lineRange.location {
-      let ch = nsText.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return NSRange(location: lineRange.location, length: max(0, end - lineRange.location))
+    NSRange(location: lineRange.location, length: nsText.lineContentEnd(of: lineRange) - lineRange.location)
   }
 
   private static func applyTextAttributes(

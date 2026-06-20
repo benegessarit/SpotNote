@@ -247,10 +247,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillTerminate(_ notification: Notification) {
-    let store = chatStore
+    let spotlight = self.spotlight
     let semaphore = DispatchSemaphore(value: 0)
     Task {
-      await store.flush()
+      // Flush the chat store *and* the vault-backed inbox documents; the
+      // vault inbox is owned by the window controller's session, so flushing
+      // the chat store alone would drop a final `## To Do` edit on quit.
+      await spotlight.flush()
       semaphore.signal()
     }
     _ = semaphore.wait(timeout: .now() + .milliseconds(800))

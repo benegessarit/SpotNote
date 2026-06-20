@@ -57,9 +57,6 @@ struct MultilineEditor: NSViewRepresentable {
   /// Appends current/counted lines to today's vault daily note. The editor
   /// clears the original lines only after this durable write succeeds.
   var onAppendDailyNote: ((String) async throws -> URL)?
-  /// Appends current/counted lines to the completed-items capture file, then
-  /// clears the original lines only after this durable write succeeds.
-  var onAppendCompletedItems: ((String) async throws -> URL)?
   /// Appends current/counted lines to the misc thoughts dump (`tray.md`), then
   /// clears the original lines only after this durable write succeeds.
   var onAppendTrayNote: ((String) async throws -> URL)?
@@ -86,7 +83,6 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
     textView.onAppendDailyNote = onAppendDailyNote
-    textView.onAppendCompletedItems = onAppendCompletedItems
     textView.onAppendTrayNote = onAppendTrayNote
     return scroll
   }
@@ -143,7 +139,6 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
     textView.onAppendDailyNote = onAppendDailyNote
-    textView.onAppendCompletedItems = onAppendCompletedItems
     textView.onAppendTrayNote = onAppendTrayNote
     textView.onChecklistLinesChange = onChecklistLinesChange
     applyStyleAndRefreshAttributesIfNeeded(on: textView)
@@ -519,7 +514,7 @@ struct MultilineEditor: NSViewRepresentable {
     var location = 0
     while location < length {
       let lineRange = text.lineRange(for: NSRange(location: location, length: 0))
-      let contentEnd = lineContentEnd(lineRange, in: text)
+      let contentEnd = text.lineContentEnd(of: lineRange)
       let contentRange = NSRange(
         location: lineRange.location,
         length: max(0, contentEnd - lineRange.location)
@@ -558,16 +553,6 @@ struct MultilineEditor: NSViewRepresentable {
       || current.maximumLineHeight != desiredStyle.maximumLineHeight
       || current.firstLineHeadIndent != desiredStyle.firstLineHeadIndent
       || current.headIndent != desiredStyle.headIndent
-  }
-
-  private func lineContentEnd(_ line: NSRange, in text: NSString) -> Int {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = text.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return end
   }
 
   func applyCodeStyling(on textView: NSTextView) {
@@ -646,7 +631,6 @@ final class PlaceholderTextView: NSTextView {
   var onEscape: (() -> Void)?
   var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
   var onAppendDailyNote: ((String) async throws -> URL)?
-  var onAppendCompletedItems: ((String) async throws -> URL)?
   var onAppendTrayNote: ((String) async throws -> URL)?
   var checklistLines: [Int: ChecklistLineState] = [:]
   var onChecklistLinesChange: (([Int: ChecklistLineState]) -> Void)?
@@ -797,7 +781,7 @@ final class PlaceholderTextView: NSTextView {
       let lineEnd = lineRange.location + lineRange.length
       let target: Int?
       if affectedRange.length == 0 {
-        let lineIsVisiblyEmpty = lineContentEnd(lineRange, in: before) == lineRange.location
+        let lineIsVisiblyEmpty = before.lineContentEnd(of: lineRange) == lineRange.location
         let insertsBeforeLine =
           affectedRange.location < lineRange.location
           || (affectedRange.location == lineRange.location && !lineIsVisiblyEmpty)
@@ -1020,7 +1004,7 @@ final class PlaceholderTextView: NSTextView {
   private func markdownListBodyStart(containing location: Int, in nsString: NSString) -> Int? {
     guard nsString.length > 0 else { return nil }
     let line = logicalLineRange(containing: min(location, nsString.length), in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     guard contentEnd >= line.location else { return nil }
     let lineText = nsString.substring(
       with: NSRange(location: line.location, length: contentEnd - line.location)
@@ -1071,7 +1055,7 @@ final class PlaceholderTextView: NSTextView {
   }
 
   private func visibleColumn(for location: Int, in line: NSRange, text nsString: NSString) -> Int {
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     let clampedLocation = min(max(line.location, location), contentEnd)
     return max(0, clampedLocation - line.location)
   }
@@ -1081,7 +1065,7 @@ final class PlaceholderTextView: NSTextView {
     in line: NSRange,
     text nsString: NSString
   ) -> Int {
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     return min(line.location + max(0, column), contentEnd)
   }
 
@@ -1091,7 +1075,7 @@ final class PlaceholderTextView: NSTextView {
     guard nsString.length > 0 else { return }
     let cursor = min(selectedRange.location, nsString.length)
     let line = logicalLineRange(containing: cursor, in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     let currentColumn = visibleColumn(for: cursor, in: line, text: nsString)
     let finalColumn = visibleColumn(for: contentEnd, in: line, text: nsString)
     let targetColumn = min(max(0, currentColumn + delta), finalColumn)
@@ -1123,7 +1107,7 @@ final class PlaceholderTextView: NSTextView {
     guard nsString.length > 0 else { return }
     let cursor = min(selectedRange.location, nsString.length)
     let line = logicalLineRange(containing: cursor, in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     let lineText = nsString.substring(
       with: NSRange(location: line.location, length: contentEnd - line.location)
     )
@@ -1150,7 +1134,7 @@ final class PlaceholderTextView: NSTextView {
     let currentLineText = nsString.substring(
       with: NSRange(
         location: currentLine.location,
-        length: lineContentEnd(currentLine, in: nsString) - currentLine.location
+        length: nsString.lineContentEnd(of: currentLine) - currentLine.location
       )
     )
     let outlinePrefix = MarkdownOutline.continuationPrefix(in: currentLineText)
@@ -1217,7 +1201,7 @@ final class PlaceholderTextView: NSTextView {
     let nsString = string as NSString
     let cursor = min(selectedRange.location, nsString.length)
     let line = logicalLineRange(containing: cursor, in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     let lineRange = NSRange(location: line.location, length: contentEnd - line.location)
     let lineText = nsString.substring(with: lineRange)
     if let replacement = MarkdownOutline.standaloneMarkerCycleReplacement(for: lineText) {
@@ -1252,7 +1236,7 @@ final class PlaceholderTextView: NSTextView {
     let nsString = string as NSString
     let cursor = min(selectedRange.location, nsString.length)
     let line = logicalLineRange(containing: cursor, in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     let lineRange = NSRange(location: line.location, length: contentEnd - line.location)
     let lineText = nsString.substring(with: lineRange)
     let replacement =
@@ -1307,16 +1291,6 @@ final class PlaceholderTextView: NSTextView {
     return current
   }
 
-  private func lineContentEnd(_ line: NSRange, in nsString: NSString) -> Int {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = nsString.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return end
-  }
-
   func executeDeleteMotion(_ motion: Motion) {
     let before = selectedRange.location
     executeMotion(motion)
@@ -1358,10 +1332,6 @@ final class PlaceholderTextView: NSTextView {
 
   @objc func appendCurrentLineToDailyNoteShortcut(_ sender: Any?) {
     appendCurrentLinesToDailyNote(1)
-  }
-
-  @objc func appendCurrentLineToCompletedItemsShortcut(_ sender: Any?) {
-    appendCurrentLinesToCompletedItems(1)
   }
 
   func sendCurrentLinesToLinear(_ count: Int) {
@@ -1412,27 +1382,6 @@ final class PlaceholderTextView: NSTextView {
         failure: "Daily note append failed"
       ),
       commit: { _ = try await onAppendDailyNote($0) }
-    )
-  }
-
-  func appendCurrentLinesToCompletedItems(_ count: Int) {
-    guard let onAppendCompletedItems else {
-      vimController?.showMessage("Completed-items handoff unavailable", kind: .error, icon: .hermes)
-      return
-    }
-    commitSelectedLines(
-      count: count,
-      preparing: { [weak self] original, range in
-        self?.dailyNotePayload(for: original, selectedRange: range)
-      },
-      messages: LineCommitMessages(
-        empty: "No completed item on this line",
-        progress: "Logging completed item",
-        success: "Completed item logged",
-        changed: "Completed item logged; line changed",
-        failure: "Completed item log failed"
-      ),
-      commit: { _ = try await onAppendCompletedItems($0) }
     )
   }
 
@@ -1653,12 +1602,7 @@ final class PlaceholderTextView: NSTextView {
   private func lineText(at index: Int, ranges: [NSRange], in text: NSString) -> String {
     guard index >= 0, index < ranges.count else { return "" }
     let range = ranges[index]
-    var length = range.length
-    while length > 0 {
-      let ch = text.character(at: range.location + length - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      length -= 1
-    }
+    let length = text.lineContentEnd(of: range) - range.location
     return text.substring(with: NSRange(location: range.location, length: length))
   }
 
@@ -1685,7 +1629,7 @@ final class PlaceholderTextView: NSTextView {
     }
     let cursor = min(selectedRange.location, nsString.length)
     let line = logicalLineRange(containing: cursor, in: nsString)
-    let contentEnd = lineContentEnd(line, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
     var location = line.location
     while location < contentEnd {
       let ch = nsString.character(at: location)

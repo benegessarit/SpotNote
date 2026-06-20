@@ -68,12 +68,6 @@ extension PlaceholderTextView {
   }
 
   private func isVisiblyEmptyLine(_ line: NSRange, in nsString: NSString) -> Bool {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = nsString.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return end == line.location
+    nsString.lineContentEnd(of: line) == line.location
   }
 }

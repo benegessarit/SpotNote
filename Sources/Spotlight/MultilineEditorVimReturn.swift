@@ -115,13 +115,7 @@ extension PlaceholderTextView {
   }
 
   private func vimReturnLineContent(in line: NSRange, text: NSString) -> VimReturnLine? {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = text.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    guard end >= line.location else { return nil }
+    let end = text.lineContentEnd(of: line)
     let range = NSRange(location: line.location, length: end - line.location)
     return VimReturnLine(range: range, text: text.substring(with: range))
   }

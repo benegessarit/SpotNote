@@ -158,23 +158,11 @@ extension PlaceholderTextView {
   }
 
   private func lineContent(in line: NSRange, text: NSString) -> String {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = text.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return text.substring(with: NSRange(location: line.location, length: end - line.location))
+    text.substring(with: lineContentRange(line, in: text))
   }
 
   private func lineContentRange(_ line: NSRange, in text: NSString) -> NSRange {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = text.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
-    }
-    return NSRange(location: line.location, length: end - line.location)
+    NSRange(location: line.location, length: text.lineContentEnd(of: line) - line.location)
   }
 
   private func isMarkdownHeading(_ line: String) -> Bool {

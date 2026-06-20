@@ -121,7 +121,6 @@ struct SpotlightRootToastTests {
       onEscape: {},
       onSendLinearTask: { _ in },
       onAppendDailyNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-daily.md") },
-      onAppendCompletedItems: { _ in URL(fileURLWithPath: "/tmp/spotnote-completed.md") },
       onAppendTrayNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-tray.md") }
     )
   }

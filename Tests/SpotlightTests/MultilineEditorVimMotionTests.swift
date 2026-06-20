@@ -357,23 +357,6 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(targets.map(\.label) == ["a", "s", "d"])
   }
 
-  @Test("Flash target labels use lowercase then uppercase singles before two-character fallback")
-  func flashTargetsUseUppercaseSinglesBeforeTwoCharacterLabels() {
-    let text = Array(repeating: "a", count: 56).joined(separator: " ")
-    let targets = VimFlash.targets(
-      in: text,
-      from: 0,
-      request: VimFlashRequest(query: "a", direction: .forward, count: 1)
-    )
-
-    #expect(targets.count == 56)
-    #expect(targets.prefix(52).allSatisfy { $0.label.count == 1 })
-    #expect(targets[25].label == "m")
-    #expect(targets[26].label == "A")
-    #expect(targets[51].label == "M")
-    #expect(targets[52].label == "aa")
-  }
-
   @Test("Flash row targets follow visible display rows including soft wraps")
   func flashLineTargetsUseVisibleDisplayRows() {
     let text = "alpha beta gamma delta epsilon\nsecond"

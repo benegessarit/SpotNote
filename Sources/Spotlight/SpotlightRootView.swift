@@ -30,7 +30,6 @@ struct SpotlightRootView: View {
   let onEscape: () -> Void
   let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
   let onAppendDailyNote: (String) async throws -> URL
-  let onAppendCompletedItems: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
 
   private var theme: Theme { preferences.activeTheme }
@@ -133,8 +132,10 @@ struct SpotlightRootView: View {
     session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
   }
 
-  static let darkGlassTintOpacity = 0.22
-  static let lightGlassTintOpacity = 0.22
+  // ~20% more transparent than the previous 0.22 tint, letting more of the
+  // blurred HUD material show through (0.22 * 0.8 = 0.176).
+  static let darkGlassTintOpacity = 0.176
+  static let lightGlassTintOpacity = 0.176
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
@@ -170,7 +171,6 @@ struct SpotlightRootView: View {
       onEscape: onEscape,
       onSendLinearTask: onSendLinearTask,
       onAppendDailyNote: onAppendDailyNote,
-      onAppendCompletedItems: onAppendCompletedItems,
       onAppendTrayNote: onAppendTrayNote,
       onHeightChange: onHeightChange
     )

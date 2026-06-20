@@ -66,12 +66,7 @@ extension PlaceholderTextView {
     guard nsString.length > 0 else { return 0 }
     let probe = min(location, max(0, nsString.length - 1))
     let line = nsString.lineRange(for: NSRange(location: probe, length: 0))
-    var contentEnd = line.location + line.length
-    while contentEnd > line.location {
-      let ch = nsString.character(at: contentEnd - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      contentEnd -= 1
-    }
+    let contentEnd = nsString.lineContentEnd(of: line)
     return contentEnd > line.location ? contentEnd - 1 : line.location
   }
 

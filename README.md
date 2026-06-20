@@ -53,4 +53,4 @@ make install
 
 ## Contributing
 
-Read [`RULES.md`](./RULES.md) before opening a PR. It covers Swift 6 conventions, concurrency, Metal discipline, the linter thresholds CI enforces, and the commit-message format.
+Read [`RULES.md`](./RULES.md) before opening a PR. It covers Swift 6 conventions, concurrency, compositing/visual-effects, the linter thresholds CI enforces, and the commit-message format.
