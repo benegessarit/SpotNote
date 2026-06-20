@@ -10,6 +10,10 @@ public actor ChatStore {
   private let debounce: Duration
   private var chats: [UUID: Chat] = [:]
   private var pendingWrites: [UUID: Task<Void, Never>] = [:]
+  /// Monotonic per-chat write token. Lets a resumed debounce task detect that
+  /// a newer edit superseded it after its sleep completed, so it never clears
+  /// a newer task's slot.
+  private var writeGeneration: [UUID: Int] = [:]
 
   public init(directory: URL, debounce: Duration = .milliseconds(300)) throws {
     try FileManager.default.createDirectory(
@@ -119,6 +123,7 @@ public actor ChatStore {
   public func delete(id: UUID) throws {
     pendingWrites[id]?.cancel()
     pendingWrites[id] = nil
+    writeGeneration[id] = nil
     chats[id] = nil
     let url = fileURL(for: id)
     if FileManager.default.fileExists(atPath: url.path) {
@@ -129,9 +134,15 @@ public actor ChatStore {
   /// Awaits every pending debounced write. Call before app termination
   /// or when the user triggers an explicit navigation that should
   /// observe current on-disk state.
+  ///
+  /// Re-snapshots after each drain: a write scheduled while we were awaiting
+  /// an earlier one would be invisible to a single snapshot, so loop until no
+  /// debounced writes remain in flight.
   public func flush() async {
-    let tasks = Array(pendingWrites.values)
-    for task in tasks { await task.value }
+    while !pendingWrites.isEmpty {
+      let tasks = Array(pendingWrites.values)
+      for task in tasks { await task.value }
+    }
   }
 
   // MARK: - Private
@@ -152,14 +163,20 @@ public actor ChatStore {
 
   private func scheduleWrite(id: UUID) {
     pendingWrites[id]?.cancel()
+    let generation = (writeGeneration[id] ?? 0) + 1
+    writeGeneration[id] = generation
     let window = debounce
     pendingWrites[id] = Task { [weak self] in
       do { try await Task.sleep(for: window) } catch { return }
-      await self?.performDebouncedWrite(id: id)
+      await self?.performDebouncedWrite(id: id, generation: generation)
     }
   }
 
-  private func performDebouncedWrite(id: UUID) {
+  private func performDebouncedWrite(id: UUID, generation: Int) {
+    // A newer edit may have superseded this task after its sleep completed
+    // but before it resumed. Only clear the slot if it still belongs to us,
+    // so we never wipe a newer pending write that flush would then miss.
+    guard writeGeneration[id] == generation else { return }
     pendingWrites[id] = nil
     guard let chat = chats[id] else { return }
     try? persistNow(chat)
