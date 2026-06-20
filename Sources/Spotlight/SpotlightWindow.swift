@@ -31,7 +31,7 @@ public final class SpotlightWindowController {
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
   /// Gap kept between the panel and the screen's right and bottom edges at rest.
-  nonisolated static let defaultEdgeInset: CGFloat = 24
+  nonisolated static let defaultEdgeInset: CGFloat = 8
 
   /// X origin: the panel hugs the right edge of the visible frame, inset by
   /// `defaultEdgeInset` (clamped on-screen for narrow displays).

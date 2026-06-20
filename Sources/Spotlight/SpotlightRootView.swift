@@ -132,10 +132,10 @@ struct SpotlightRootView: View {
     session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
   }
 
-  // A more opaque tint so the panel reads clearly over a busy desktop -- the
-  // high-contrast Fahrenheit (black) theme in particular wants less bleed-through.
-  static let darkGlassTintOpacity = 0.40
-  static let lightGlassTintOpacity = 0.40
+  // Near-opaque tint: the panel should read as a solid surface with only a hint
+  // of the blurred material behind it, not a translucent glass pane.
+  static let darkGlassTintOpacity = 0.90
+  static let lightGlassTintOpacity = 0.90
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
