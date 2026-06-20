@@ -24,7 +24,7 @@ The local David build intentionally differs from upstream SpotNote:
 - With line numbers hidden, the editor reserves no task/checkbox gutter (`LineNumberRuler.thickness(...) == 0`) and uses `EditorMetrics.textLeadingGap == 17` for near-card-edge text placement.
 - The editor text is the slightly-smaller nvim-like scale: `EditorMetrics.fontSize == 22`, with line numbers matching that same value.
 - Short notes open roomy/tall: `EditorMetrics.roomyVisibleLinesFloor == 9`, which makes the four-line inbox panel about 2x the old height.
-- The HUD opens 30% of the safe travel from horizontal center toward the right edge, and vertically centered slightly below the screen midline, guarded by `SpotlightWindowControllerTests.defaultHUDOriginIsShiftedRightOfCenter` and `defaultHUDOriginIsSlightlyBelowMidline`.
+- The HUD opens in the bottom-right corner of the visible frame, inset by `SpotlightWindowController.defaultEdgeInset` (24pt) from the right and bottom edges, and is bottom-anchored so it grows upward as content reflows. Guarded by `SpotlightWindowControllerTests.defaultHUDOriginHugsRightEdge` and `defaultHUDOriginHugsBottomEdge`.
 - The editor card has no top-right copy icon; keep copy available through keyboard/menu actions instead of visible chrome.
 
 ## Safe edit flow
@@ -68,7 +68,7 @@ Headless launch uses `SPOTNOTE_HEADLESS_TEST=1`, initializes the app bundle, ver
 ## Manual smoke after install
 
 - Launch/toggle SpotNote with `⌘⇧Space`.
-- Confirm the panel opens right of center and slightly below the screen midline.
+- Confirm the panel opens in the bottom-right corner (inset from the right/bottom edges) and grows upward as you type.
 - Confirm editor text and line numbers render in IBM Plex Mono.
 - Confirm `- ` bullets continue with Enter/normal-mode `o`, Tab indents, and Shift-Tab outdents.
 - Confirm the inbox starts with `## HABITS`; in Vim normal mode, `gD` creates/jumps to a fresh habit bullet above `## TRAY`, and `tt`/`gT` jumps below the last non-empty `## TRAY` item, not to an internal spacer blank.
