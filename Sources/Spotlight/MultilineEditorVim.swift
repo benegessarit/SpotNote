@@ -375,9 +375,19 @@ enum VimSubstitution {
     if replaceAll {
       var working = line
       var count = 0
-      while let range = working.range(of: pattern) {
+      var searchStartOffset = 0
+      while true {
+        let start = working.index(working.startIndex, offsetBy: searchStartOffset)
+        guard let range = working.range(of: pattern, range: start..<working.endIndex) else { break }
+        let matchStartOffset = working.distance(from: working.startIndex, to: range.lowerBound)
         working.replaceSubrange(range, with: replacement)
         count += 1
+        // Resume scanning just past the inserted replacement so a
+        // replacement that itself contains the pattern (e.g. :s/a/aa/g)
+        // cannot re-match at the same spot forever. The offset strictly
+        // advances past replaced text, or the line shrinks on deletion,
+        // so the loop always terminates.
+        searchStartOffset = matchStartOffset + replacement.count
       }
       return (working, count)
     }
