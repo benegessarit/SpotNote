@@ -85,7 +85,7 @@ struct DarkThemePaletteTests {
       ExpectedThemeColors(id: "rose-pine-moonlight", body: Color(testHex: 0xE0DEF4), heading: Color(testHex: 0xC4A7E7)),
       ExpectedThemeColors(id: "ayu-mirage", body: Color(testHex: 0xCCCAC2), heading: Color(testHex: 0xFFCC66)),
       ExpectedThemeColors(id: "mirage", body: Color(testHex: 0xA6B2C0), heading: Color(testHex: 0xDDB3FF)),
-      ExpectedThemeColors(id: "dracula", body: Color(testHex: 0xF8F8F2), heading: Color(testHex: 0xBD93F9)),
+      ExpectedThemeColors(id: "dracula", body: Color(testHex: 0xF8F8F2), heading: Color(testHex: 0xFF79C6)),
       ExpectedThemeColors(id: "nvim-dark", body: Color(testHex: 0xE0E2EA), heading: Color(testHex: 0xA6DBFF)),
       ExpectedThemeColors(id: "neobones-dark", body: Color(testHex: 0xC6D5CF), heading: Color(testHex: 0x92A0E2)),
       ExpectedThemeColors(id: "nightfox", body: Color(testHex: 0xCDCECF), heading: Color(testHex: 0x719CD6)),

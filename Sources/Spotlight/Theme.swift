@@ -128,9 +128,9 @@ enum ThemeCatalog {
     name: "Dracula",
     mode: .dark,
     background: Color(red: 40 / 255, green: 42 / 255, blue: 54 / 255),
-    border: Color(red: 189 / 255, green: 147 / 255, blue: 249 / 255).opacity(0.24),
+    border: Color(red: 255 / 255, green: 121 / 255, blue: 198 / 255).opacity(0.24),  // Pink
     text: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255),
-    headingText: Color(red: 189 / 255, green: 147 / 255, blue: 249 / 255),
+    headingText: Color(red: 255 / 255, green: 121 / 255, blue: 198 / 255),  // Pink (Dracula accent)
     placeholder: Color(red: 98 / 255, green: 114 / 255, blue: 164 / 255),
     cursor: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255)  // Foreground
   )
