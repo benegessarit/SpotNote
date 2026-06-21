@@ -52,20 +52,28 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
     let body = NotePayload.trimmingTrailingLineWhitespace(
       in: droppingLeadingNewlines(from: markdown)
     )
-    let canonicalBody = canonicalizingFirstHeading(in: body, to: SpotNoteSectionHeadings.habits)
-    if startsWithMarkdownHeading(canonicalBody, SpotNoteSectionHeadings.habits) { return canonicalBody }
-    guard !canonicalBody.isEmpty else { return SpotNoteSectionHeadings.habits.canonicalLine }
-    return SpotNoteSectionHeadings.habits.canonicalLine + canonicalBody
+    // Normalize every recognized heading to its Title-Case canonical (so the note
+    // isn't a mix of `## HABITS` / `# todo` / `## Tray`). Give a truly
+    // header-less inbox a default Habits section so the HUD has structure, but
+    // NEVER prepend when the note already starts with one of its own sections
+    // (e.g. Big Things) -- the note's existing headers are respected as-is.
+    let normalized = normalizingSectionHeadings(in: body)
+    if startsWithRecognizedHeading(normalized) { return normalized }
+    guard !normalized.isEmpty else { return SpotNoteSectionHeadings.habits.canonicalLine }
+    return SpotNoteSectionHeadings.habits.canonicalLine + normalized
   }
 
-  private static func canonicalizingFirstHeading(
-    in markdown: String,
-    to heading: SpotNoteSectionHeadings.Definition
-  ) -> String {
-    let lines = markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-    guard let firstLine = lines.first, heading.matches(String(firstLine)) else { return markdown }
-    let remainder = lines.count > 1 ? "\n" + lines[1] : ""
-    return heading.canonical + remainder
+  private static func normalizingSectionHeadings(in markdown: String) -> String {
+    markdown
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map { SpotNoteSectionHeadings.canonicalHeading(for: String($0)) ?? String($0) }
+      .joined(separator: "\n")
+  }
+
+  private static func startsWithRecognizedHeading(_ markdown: String) -> Bool {
+    let firstLine =
+      markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+    return SpotNoteSectionHeadings.canonicalHeading(for: String(firstLine)) != nil
   }
 
   private static func droppingLeadingNewlines(from markdown: String) -> String {
@@ -74,14 +82,6 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
       index = markdown.index(after: index)
     }
     return String(markdown[index...])
-  }
-
-  private static func startsWithMarkdownHeading(
-    _ markdown: String,
-    _ heading: SpotNoteSectionHeadings.Definition
-  ) -> Bool {
-    let firstLine = markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-    return heading.matches(String(firstLine))
   }
 }
 

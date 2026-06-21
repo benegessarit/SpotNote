@@ -110,8 +110,10 @@ require_grep "roomyVisibleLinesFloor = 9" "Sources/Spotlight/EditorMetrics.swift
 require_grep "appendCurrentLineToTrayNote" "Sources/Spotlight/VimEngine.swift"
 require_grep "jumpToHabitsSection" "Sources/Spotlight/VimEngine.swift"
 require_grep "jumpToToDoSection" "Sources/Spotlight/VimEngine.swift"
-require_grep "## HABITS" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
-require_grep "## TODO" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+require_grep "## Habits" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+require_grep "## Todo" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+require_grep "## Tray" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+require_grep "## Big Things" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
 require_grep "gH jumps to the HABITS section" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "gD jumps to the TODO section" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "gT ignores internal Tray blank lines" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
@@ -165,8 +167,8 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
   done
   /usr/bin/grep -F -- "Sent to tray.md" <<<"$STRINGS" >/dev/null \
     || fail "installed binary missing tray.md append confirmation string"
-  /usr/bin/grep -F -- "## HABITS" <<<"$STRINGS" >/dev/null \
-    || fail "installed binary missing HABITS heading contract string"
+  /usr/bin/grep -F -- "## Habits" <<<"$STRINGS" >/dev/null \
+    || fail "installed binary missing Habits heading contract string"
   if /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$APP/Contents/Info.plist" 2>/dev/null | /usr/bin/grep -F -- "true" >/dev/null; then
     fail "installed app still sets LSUIElement=true; LaunchServices will open it as an invisible background status item"
   fi

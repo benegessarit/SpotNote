@@ -61,7 +61,7 @@ struct ChatSessionTests {
     await session.bootstrap()
 
     #expect(session.currentID == vaultInbox.id)
-    #expect(session.currentText == "## HABITS\nEmail down @ 120\nWrite pass email for Cure51")
+    #expect(session.currentText == "## Habits\nEmail down @ 120\nWrite pass email for Cure51")
     #expect(session.currentChecklistLines == [1: .unchecked, 2: .unchecked])
     #expect(session.chats.first?.id == vaultInbox.id)
   }
@@ -76,19 +76,19 @@ struct ChatSessionTests {
     let session = ChatSession(store: store, vaultInbox: vaultInbox)
 
     await session.bootstrap()
-    #expect(session.currentText == "## HABITS\nold inbox\ndone item")
+    #expect(session.currentText == "## Habits\nold inbox\ndone item")
     #expect(session.currentChecklistLines == [1: .unchecked, 2: .checked])
 
-    session.currentText = "## HABITS\nupdated inbox   \ndone item\t"
+    session.currentText = "## Habits\nupdated inbox   \ndone item\t"
     session.persistIfNeeded()
     await session.flush()
 
     let saved = try String(contentsOf: inboxURL, encoding: .utf8)
-    #expect(saved == "## HABITS\n[   ] updated inbox\n[ x ] done item")
+    #expect(saved == "## Habits\n[   ] updated inbox\n[ x ] done item")
   }
 
-  @Test("bootstrap migrates legacy TODO headings to HABITS")
-  func bootstrapMigratesLegacyTodoHeadingToHabits() async throws {
+  @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting Habits")
+  func bootstrapNormalizesTodoHeadingCase() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
     let inboxURL = dir.appending(path: "spotnote-inbox.md", directoryHint: .notDirectory)
@@ -98,9 +98,9 @@ struct ChatSessionTests {
 
     await session.bootstrap()
 
-    #expect(session.currentText == "## HABITS\nold inbox")
+    #expect(session.currentText == "## Todo\nold inbox")
     #expect(session.currentChecklistLines == [1: .unchecked])
-    #expect(try String(contentsOf: inboxURL, encoding: .utf8) == "## HABITS\n[ ] old inbox")
+    #expect(try String(contentsOf: inboxURL, encoding: .utf8) == "## Todo\n[ ] old inbox")
   }
 
   @Test("bootstrap ignores tray.md as a live editor note")
@@ -120,9 +120,9 @@ struct ChatSessionTests {
 
     await session.bootstrap()
     #expect(session.currentVaultState == .tasks)
-    #expect(session.currentText == "## HABITS\nexisting task")
+    #expect(session.currentText == "## Habits\nexisting task")
     #expect(session.currentChecklistLines == [1: .unchecked])
-    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## HABITS\n[   ] existing task")
+    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## Habits\n[   ] existing task")
   }
 
   @Test("undo delete restores checklist state")

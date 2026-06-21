@@ -413,7 +413,7 @@ enum VimCommandReference {
           id: "section-jumps",
           usage: "gH\ngD\ngT",
           summary:
-            "Jump to a fresh bullet in `## HABITS` (gH), `## TODO` (gD), or `## TRAY` (gT)"
+            "Jump to a fresh bullet in `## Habits` (gH), `## Todo` (gD), or `## Tray` (gT)"
             + " and start typing; the section is created if it doesn't exist yet."
         ),
         Entry(

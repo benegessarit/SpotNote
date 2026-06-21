@@ -1,9 +1,9 @@
 import AppKit
 
 extension PlaceholderTextView {
-  /// `gT` -- jump to the in-note `## TRAY` section, creating it at the
-  /// bottom when absent, and leave the editor in insert mode on the next
-  /// open line in that section.
+  /// `gT` -- jump to the in-note `## Tray` section, creating it at the
+  /// bottom when absent, and leave the editor in insert mode on a fresh
+  /// bullet at the end of that section.
   @discardableResult
   func jumpToTraySectionForVim() -> Bool {
     let target = ensureTrayInsertionLocation()
@@ -11,9 +11,9 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gH` -- jump to the in-note `## HABITS` section, creating it at the
-  /// top when absent, and leave the editor in insert mode on a fresh habit
-  /// bullet before any later section such as `## TRAY`.
+  /// `gH` -- jump to the in-note `## Habits` section, creating it just below the
+  /// (jump-less) `## Big Things` section -- or at the top when there is none --
+  /// and leave the editor in insert mode on a fresh habit bullet.
   @discardableResult
   func jumpToHabitsSectionForVim() -> Bool {
     let target = ensureHabitsInsertionLocation()
@@ -21,8 +21,8 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gD` -- jump to the in-note `## TODO` section, creating it (between
-  /// `## HABITS` and `## TRAY`) when absent, and leave the editor in insert
+  /// `gD` -- jump to the in-note `## Todo` section, creating it (between
+  /// `## Habits` and `## Tray`) when absent, and leave the editor in insert
   /// mode on a fresh to-do bullet.
   @discardableResult
   func jumpToToDoSectionForVim() -> Bool {
@@ -54,16 +54,38 @@ extension PlaceholderTextView {
   private func ensureHabitsInsertionLocation() -> Int {
     var nsString = string as NSString
     if headingRange(matching: SpotNoteSectionHeadings.habits, in: nsString) == nil {
-      replaceTextForSectionJump(
-        in: NSRange(location: 0, length: 0),
-        with: SpotNoteSectionHeadings.habits.canonicalLine
-      )
+      let insertion = habitsSectionInsertionPoint(in: nsString)
+      let needsLeadingNewline = insertion > 0 && nsString.character(at: insertion - 1) != 0x0A
+      let text = (needsLeadingNewline ? "\n" : "") + SpotNoteSectionHeadings.habits.canonicalLine
+      replaceTextForSectionJump(in: NSRange(location: insertion, length: 0), with: text)
       nsString = string as NSString
     }
     guard let heading = headingRange(matching: SpotNoteSectionHeadings.habits, in: nsString) else {
       return nsString.length
     }
     return ensureOpenBulletLineAfter(heading, in: nsString)
+  }
+
+  /// Habits sits just below the (jump-less) Big Things section, or at the very
+  /// top of the note when there is no Big Things section.
+  private func habitsSectionInsertionPoint(in nsString: NSString) -> Int {
+    guard let bigThings = headingRange(matching: SpotNoteSectionHeadings.bigThings, in: nsString)
+    else { return 0 }
+    return endOfSection(after: bigThings, in: nsString)
+  }
+
+  /// Location just past the content of the section starting at `heading` -- the
+  /// start of the next heading, or the end of the note.
+  private func endOfSection(after heading: NSRange, in nsString: NSString) -> Int {
+    var location = heading.location + heading.length
+    while location < nsString.length {
+      let line = nsString.lineRange(for: NSRange(location: location, length: 0))
+      if isMarkdownHeading(lineContent(in: line, text: nsString)) { return line.location }
+      let next = line.location + line.length
+      guard next > location else { break }
+      location = next
+    }
+    return nsString.length
   }
 
   private func ensureToDoInsertionLocation() -> Int {
