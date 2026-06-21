@@ -1210,13 +1210,6 @@ final class PlaceholderTextView: NSTextView {
     let contentEnd = nsString.lineContentEnd(of: line)
     let lineRange = NSRange(location: line.location, length: contentEnd - line.location)
     let lineText = nsString.substring(with: lineRange)
-    if let replacement = MarkdownOutline.standaloneMarkerCycleReplacement(for: lineText) {
-      guard shouldChangeText(in: lineRange, replacementString: replacement) else { return true }
-      replaceCharacters(in: lineRange, with: replacement)
-      didChangeText()
-      setInsertionPoint(line.location + (replacement as NSString).length)
-      return true
-    }
     guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return false }
 
     if MarkdownOutline.isBareListItem(lineText) {
