@@ -210,6 +210,20 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.vimEngine?.mode == .insert)
   }
 
+  @Test("gD finds an existing single-hash # TODO heading instead of duplicating it")
+  func gShiftDFindsSingleHashTodoHeading() {
+    let textView = makeVimMotionTextView(text: "## HABITS\n- a\n# TODO\n- x\n\n## TRAY")
+    textView.vimModeEnabled = true
+    textView.attachVimController(VimController())
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
+    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+
+    #expect(textView.string == "## HABITS\n- a\n# TODO\n- x\n- \n## TRAY")
+    #expect(textView.vimEngine?.mode == .insert)
+  }
+
   @Test("gD creates a TODO section between HABITS and TRAY")
   func gShiftDCreatesTodoBetweenHabitsAndTray() {
     let textView = makeVimMotionTextView(text: "## HABITS\n- a\n## TRAY\nx")
