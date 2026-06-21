@@ -145,7 +145,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
 
-    #expect(textView.string == "Tasks\n## Tray\nfirst\nsecond\n")
+    #expect(textView.string == "Tasks\n## Tray\nfirst\nsecond\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }
@@ -160,7 +160,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
 
-    #expect(textView.string == "Tasks\n## Tray\nfirst\n\nsecond\n\nthird\n")
+    #expect(textView.string == "Tasks\n## Tray\nfirst\n\nsecond\n\nthird\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }
@@ -175,7 +175,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
 
-    #expect(textView.string == "Tasks\nalpha\n\n## TRAY\n")
+    #expect(textView.string == "Tasks\nalpha\n\n## TRAY\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }

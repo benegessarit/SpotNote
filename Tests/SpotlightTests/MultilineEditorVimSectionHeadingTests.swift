@@ -15,7 +15,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
     textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
 
-    #expect(textView.string == "Tasks\n## TRAY\nfirst\nsecond\n")
+    #expect(textView.string == "Tasks\n## TRAY\nfirst\nsecond\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
     #expect(textView.vimEngine?.mode == .insert)
   }

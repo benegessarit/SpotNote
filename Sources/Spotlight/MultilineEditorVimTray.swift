@@ -40,11 +40,15 @@ extension PlaceholderTextView {
   }
 
   private func ensureTrayInsertionLocation() -> Int {
-    let nsString = string as NSString
-    guard let heading = headingRange(matching: SpotNoteSectionHeadings.tray, in: nsString) else {
-      return appendMissingTraySection(to: nsString)
+    var nsString = string as NSString
+    if headingRange(matching: SpotNoteSectionHeadings.tray, in: nsString) == nil {
+      _ = appendMissingTraySection(to: nsString)
+      nsString = string as NSString
     }
-    return ensureOpenLineAfterTrayHeading(heading, in: nsString)
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.tray, in: nsString) else {
+      return nsString.length
+    }
+    return ensureOpenBulletLineAfter(heading, in: nsString)
   }
 
   private func ensureHabitsInsertionLocation() -> Int {
@@ -100,77 +104,46 @@ extension PlaceholderTextView {
     return nsString.length + (prefix as NSString).length
   }
 
-  private func ensureOpenLineAfterTrayHeading(_ heading: NSRange, in nsString: NSString) -> Int {
-    let scan = scanSectionAfterHeading(heading, in: nsString)
-    if let target = existingTrayOpenLine(from: scan, in: nsString) { return target }
-    return insertOpenTrayLine(at: scan.sectionEnd, in: nsString)
-  }
-
-  private func scanSectionAfterHeading(_ heading: NSRange, in nsString: NSString) -> SectionScan {
-    var location = heading.location + heading.length
-    var scan = SectionScan(sectionEnd: nsString.length)
-
-    while location < nsString.length {
-      let line = nsString.lineRange(for: NSRange(location: location, length: 0))
-      let content = lineContent(in: line, text: nsString)
-      if isMarkdownHeading(content) { return scan.ending(at: line.location) }
-      scan.record(line: line, content: content)
-
-      let next = line.location + line.length
-      guard next > location else { break }
-      location = next
-    }
-    return scan
-  }
-
-  private func existingTrayOpenLine(from scan: SectionScan, in nsString: NSString) -> Int? {
-    if let lastContentLineEnd = scan.lastContentLineEnd {
-      if lastContentLineEnd < scan.sectionEnd { return lastContentLineEnd }
-      return scan.sectionEnd >= nsString.length && endsWithNewline(nsString) ? nsString.length : nil
-    }
-    if let firstBlankLine = scan.firstBlankLine { return firstBlankLine }
-    return scan.sectionEnd >= nsString.length && endsWithNewline(nsString) ? nsString.length : nil
-  }
-
-  private func insertOpenTrayLine(at insertion: Int, in nsString: NSString) -> Int {
-    let insertsAtEnd = insertion >= nsString.length
-    replaceTextForSectionJump(in: NSRange(location: insertion, length: 0), with: "\n")
-    return insertsAtEnd ? insertion + 1 : insertion
-  }
-
-  private func endsWithNewline(_ nsString: NSString) -> Bool {
-    guard nsString.length > 0 else { return false }
-    let character = nsString.character(at: nsString.length - 1)
-    return character == 0x0A || character == 0x0D
-  }
-
+  /// Appends a fresh `- ` bullet at the END of the section under `heading`
+  /// (after its last non-empty line, ignoring internal blank spacer lines),
+  /// reusing a trailing blank line when one is already present. Returns the
+  /// caret location just past the inserted "- ". Shared by gH / gD / gT.
   private func ensureOpenBulletLineAfter(_ heading: NSRange, in nsString: NSString) -> Int {
     var location = heading.location + heading.length
+    var insertion = heading.location + heading.length
     while location < nsString.length {
       let line = nsString.lineRange(for: NSRange(location: location, length: 0))
       let content = lineContent(in: line, text: nsString)
       if isMarkdownHeading(content) { break }
-      if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        replaceTextForSectionJump(in: lineContentRange(line, in: nsString), with: "- ")
-        return line.location + 2
+      if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        insertion = line.location + line.length
       }
       let next = line.location + line.length
       guard next > location else { break }
       location = next
     }
+    return insertBulletLine(at: insertion, in: nsString)
+  }
 
-    if location >= nsString.length {
-      let insertion = nsString.length
+  private func insertBulletLine(at insertion: Int, in nsString: NSString) -> Int {
+    if insertion >= nsString.length {
       let replacement =
         nsString.length > 0 && nsString.character(at: nsString.length - 1) != 0x0A
         ? "\n- "
         : "- "
-      replaceTextForSectionJump(in: NSRange(location: insertion, length: 0), with: replacement)
-      return insertion + (replacement as NSString).length
+      replaceTextForSectionJump(in: NSRange(location: nsString.length, length: 0), with: replacement)
+      return nsString.length + (replacement as NSString).length
     }
-
-    replaceTextForSectionJump(in: NSRange(location: location, length: 0), with: "- \n")
-    return location + 2
+    let line = nsString.lineRange(for: NSRange(location: insertion, length: 0))
+    let content = lineContent(in: line, text: nsString)
+    let isReusableBlankLine =
+      !isMarkdownHeading(content) && content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    if isReusableBlankLine {
+      replaceTextForSectionJump(in: lineContentRange(line, in: nsString), with: "- ")
+      return line.location + 2
+    }
+    replaceTextForSectionJump(in: NSRange(location: insertion, length: 0), with: "- \n")
+    return insertion + 2
   }
 
   private func headingRange(
@@ -208,23 +181,5 @@ extension PlaceholderTextView {
     guard shouldChangeText(in: range, replacementString: replacement) else { return }
     replaceCharacters(in: range, with: replacement)
     didChangeText()
-  }
-
-  private struct SectionScan {
-    var firstBlankLine: Int?
-    var lastContentLineEnd: Int?
-    var sectionEnd: Int
-
-    mutating func record(line: NSRange, content: String) {
-      if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        if lastContentLineEnd == nil, firstBlankLine == nil { firstBlankLine = line.location }
-      } else {
-        lastContentLineEnd = line.location + line.length
-      }
-    }
-
-    func ending(at location: Int) -> SectionScan {
-      SectionScan(firstBlankLine: firstBlankLine, lastContentLineEnd: lastContentLineEnd, sectionEnd: location)
-    }
   }
 }
