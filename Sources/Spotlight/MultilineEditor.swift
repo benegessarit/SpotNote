@@ -54,6 +54,10 @@ struct MultilineEditor: NSViewRepresentable {
   /// ingress, which creates the Linear issue without embedding Linear
   /// credentials in SpotNote.
   var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  /// Logs the current `## Habits` bullet to the Life Dashboard habit tracker via
+  /// the same loopback ingress. The editor clears the bullet only after the
+  /// handoff is accepted (David re-adds habits daily).
+  var onSendHabit: ((HabitHandoffRequest) async throws -> Void)?
   /// Appends current/counted lines to today's vault daily note. The editor
   /// clears the original lines only after this durable write succeeds.
   var onAppendDailyNote: ((String) async throws -> URL)?
@@ -82,6 +86,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
+    textView.onSendHabit = onSendHabit
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
     return scroll
@@ -138,6 +143,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
     textView.onSendLinearTask = onSendLinearTask
+    textView.onSendHabit = onSendHabit
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
     textView.onChecklistLinesChange = onChecklistLinesChange
@@ -636,6 +642,7 @@ final class PlaceholderTextView: NSTextView {
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
   var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onSendHabit: ((HabitHandoffRequest) async throws -> Void)?
   var onAppendDailyNote: ((String) async throws -> URL)?
   var onAppendTrayNote: ((String) async throws -> URL)?
   var checklistLines: [Int: ChecklistLineState] = [:]
@@ -1367,6 +1374,28 @@ final class PlaceholderTextView: NSTextView {
         failure: "Linear send failed"
       ),
       commit: { try await onSendLinearTask($0) }
+    )
+  }
+
+  func sendCurrentHabitDone(count: Int) {
+    guard let onSendHabit else {
+      vimController?.showMessage("Habit handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    let range = selectedTaskRange(count: max(1, count), in: string as NSString)
+    commitSelectedRange(
+      range,
+      preparing: { original, _ in
+        LinearTaskTitleNormalizer.title(fromSpotNoteLine: original).map(HabitHandoffRequest.init)
+      },
+      messages: LineCommitMessages(
+        empty: "No habit on this bullet",
+        progress: "Logging habit",
+        success: "Habit logged",
+        changed: "Habit sent; bullet changed",
+        failure: "Habit log failed"
+      ),
+      commit: { try await onSendHabit($0) }
     )
   }
 

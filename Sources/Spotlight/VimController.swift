@@ -417,9 +417,11 @@ enum VimCommandReference {
             + " or `## Big Things` (,b) and start typing; the section is created if absent."
         ),
         Entry(
-          id: "tray-leader",
-          usage: "\\t",
-          summary: "`\\` leader: `\\t` appends the current line to tray.md."
+          id: "leader",
+          usage: "\\t\n\\h",
+          summary:
+            "`\\` leader: `\\t` appends the current line to tray.md; `\\h` logs the"
+            + " current `## Habits` bullet to the Life Dashboard habit tracker (clears it after)."
         ),
         Entry(
           id: "noh",

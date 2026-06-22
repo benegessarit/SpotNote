@@ -29,6 +29,7 @@ struct SpotlightRootView: View {
   /// already in normal mode).
   let onEscape: () -> Void
   let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
+  let onSendHabit: (HabitHandoffRequest) async throws -> Void
   let onAppendDailyNote: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
 
@@ -170,6 +171,7 @@ struct SpotlightRootView: View {
       vimController: vimController,
       onEscape: onEscape,
       onSendLinearTask: onSendLinearTask,
+      onSendHabit: onSendHabit,
       onAppendDailyNote: onAppendDailyNote,
       onAppendTrayNote: onAppendTrayNote,
       onHeightChange: onHeightChange

@@ -214,6 +214,8 @@ extension PlaceholderTextView {
     switch action {
     case .sendCurrentTaskToLinear(let status, let count):
       sendCurrentTaskToLinear(status: status, count: count)
+    case .sendCurrentHabitDone(let count):
+      sendCurrentHabitDone(count: count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .appendCurrentLineToTrayNote(let count): appendCurrentLinesToTrayNote(count)
     default:

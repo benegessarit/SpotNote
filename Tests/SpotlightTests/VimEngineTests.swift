@@ -217,6 +217,22 @@ struct VimEngineTests {
     #expect(engine.mode == .insert)
   }
 
+  @Test("\\h logs the current habit bullet")
+  func backslashHLogsCurrentHabit() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "h", hasModifiers: false) == .sendCurrentHabitDone(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted \\h logs counted habit bullets")
+  func countedBackslashHLogsCountedHabits() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "h", hasModifiers: false) == .sendCurrentHabitDone(count: 2))
+  }
+
   @Test(",d jumps to the Todo section")
   func commaDJumpsToToDoSection() {
     let engine = VimEngine()

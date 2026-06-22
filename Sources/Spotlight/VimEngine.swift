@@ -47,6 +47,7 @@ enum VimAction: Equatable, Sendable {
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
   case sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int)
+  case sendCurrentHabitDone(count: Int)
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
   case jumpToTraySection
@@ -68,7 +69,10 @@ enum VimAction: Equatable, Sendable {
 
 final class VimEngine {
   private(set) var mode: VimMode = .normal
-  private var pendingBuffer: String = ""
+  // `pendingBuffer` and the count/motion helpers are module-internal (not private)
+  // so the normal-mode pending-prefix handlers can live in a VimEngine extension
+  // file (VimEngineNormalPending.swift), keeping this file within its length budget.
+  var pendingBuffer: String = ""
   private var countAccumulator: Int = 0
 
   func handle(key: String, hasModifiers: Bool) -> VimAction {
@@ -92,6 +96,10 @@ final class VimEngine {
     countAccumulator = 0
   }
 
+  /// Sanctioned mode transition for the extension-hosted pending handlers, which
+  /// cannot touch `mode`'s private setter directly from another file.
+  func enterInsertMode() { mode = .insert }
+
   private func handleInsert(key: String) -> VimAction {
     guard key == "\u{1B}" || key == "escape" else { return .none }
     mode = .normal
@@ -114,89 +122,6 @@ final class VimEngine {
     }
 
     return handleSingle(key: key)
-  }
-
-  // swiftlint:disable:next cyclomatic_complexity
-  private func handlePending(key: String) -> VimAction {
-    let count = resolvedCount
-    defer { clearAccumulator() }
-
-    switch pendingBuffer {
-    case "d":
-      pendingBuffer = ""
-      if key == "d" { return .deleteLine(count: count) }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "c":
-      if key == "i" {
-        pendingBuffer = "ci"
-        return .none
-      }
-      pendingBuffer = ""
-      if key == "c" {
-        mode = .insert
-        return .deleteLineInsert(count: count)
-      }
-      if key == "B" {
-        mode = .insert
-        return .changeBulletBody
-      }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "ci":
-      pendingBuffer = ""
-      if key == "b" {
-        mode = .insert
-        return .changeBulletBody
-      }
-      return .none
-    case "g":
-      return handlePendingG(key: key, count: count)
-    case ",":
-      return handlePendingComma(key: key)
-    case "\\":
-      return handlePendingBackslash(key: key, count: count)
-    default:
-      pendingBuffer = ""
-      return .none
-    }
-  }
-
-  // `g` is the Linear handoff prefix: g + status sends the current bullet to
-  // David's personal Linear at that state. `gg` keeps the document-start motion.
-  private func handlePendingG(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
-    if key == "g" { return .moveCursor(.documentStart) }
-    if key == "d" { return .sendCurrentTaskToLinear(status: .done, count: count) }
-    if key == "p" { return .sendCurrentTaskToLinear(status: .planned, count: count) }
-    if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
-    if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
-    if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
-    return .none
-  }
-
-  // `,` is the section-jump prefix: jump to a `## …` section and drop into
-  // insert on a fresh bullet (creating the section if absent).
-  private func handlePendingComma(key: String) -> VimAction {
-    pendingBuffer = ""
-    if key == "h" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
-    if key == "d" { return jumpToSectionInsertAction(.jumpToToDoSection) }
-    if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
-    if key == "b" { return jumpToSectionInsertAction(.jumpToBigThingsSection) }
-    return .none
-  }
-
-  // `\` is a reusable leader. `\t` appends the current line to tray.md.
-  // (`\h` habit-completion handoff lands with its tracker wiring.)
-  private func handlePendingBackslash(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
-    if key == "t" { return .appendCurrentLineToTrayNote(count: count) }
-    return .none
-  }
-
-  private func jumpToSectionInsertAction(_ action: VimAction) -> VimAction {
-    mode = .insert
-    return action
   }
 
   private func handleSingle(key: String) -> VimAction {
@@ -284,7 +209,7 @@ final class VimEngine {
   }
 
   // swiftlint:disable:next cyclomatic_complexity
-  private func motionForKey(_ key: String, count: Int) -> Motion? {
+  func motionForKey(_ key: String, count: Int) -> Motion? {
     // #lizard forgives
     switch key {
     case "h": return .left(count)
@@ -302,9 +227,9 @@ final class VimEngine {
     }
   }
 
-  private var resolvedCount: Int { max(1, countAccumulator) }
+  var resolvedCount: Int { max(1, countAccumulator) }
 
-  private func clearAccumulator() { countAccumulator = 0 }
+  func clearAccumulator() { countAccumulator = 0 }
 }
 
 extension VimEngine {

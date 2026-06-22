@@ -523,6 +523,9 @@ public final class SpotlightWindowController {
         onSendLinearTask: { [handoffClient] request in
           _ = try await handoffClient.sendLinearTask(request)
         },
+        onSendHabit: { [handoffClient] request in
+          _ = try await handoffClient.sendHabit(request)
+        },
         onAppendDailyNote: { [dailyNoteWriter] text in
           try await dailyNoteWriter.append(text)
         },
