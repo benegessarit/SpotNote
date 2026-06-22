@@ -1,18 +1,24 @@
 import AppKit
 
 /// Markdown-style code styling applied as `NSLayoutManager` temporary
-/// attributes -- visual only, never touches the `NSTextStorage`. Key
+/// attributes -- visual only, never touches the Markdown string. Key
 /// properties:
 ///
 /// - Backticks stay as literal characters in the document.
 /// - Inline `` `code` `` spans get a subtle background + dimmed fences.
+/// - Markdown headings get bold + brighter visual attributes; the stored
+///   Markdown string stays plain text.
 /// - Triple-fenced blocks are NOT background-tinted; instead the inner
 ///   code is tokenized via `SyntaxHighlighter` and colored per category.
 ///   Unrecognized languages fall back to a pan-language keyword set.
 ///
 /// Because temporary attributes bypass `NSTextStorage.processEditing`,
-/// re-applying on every keystroke doesn't invalidate the edited-range
-/// layout cache -- which is what used to make the backticks flash.
+/// re-applying color/background spans on every keystroke doesn't invalidate
+/// the edited-range layout cache -- which is what used to make the
+/// backticks flash. Heading fonts are the exception: AppKit's layout
+/// manager only draws non-layout temporary attributes, so headings use
+/// storage attributes while still leaving the stored Markdown string
+/// unchanged.
 enum CodeStyler {
   struct Palette {
     let codeBackground: NSColor
@@ -33,18 +39,55 @@ enum CodeStyler {
     layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
     guard fullRange.length > 0 else { return }
     let palette = palette(for: theme)
-    styleChecklist(in: nsText, fullRange: fullRange, layoutManager: layoutManager)
     let processed = styleTriples(
       in: nsText,
       fullRange: fullRange,
       layoutManager: layoutManager,
       palette: palette
     )
+    styleStorageBackedMarkdown(
+      in: nsText,
+      fullRange: fullRange,
+      textView: textView,
+      theme: theme,
+      processed: processed
+    )
     styleInline(
       in: nsText,
       fullRange: fullRange,
       layoutManager: layoutManager,
       palette: palette,
+      processed: processed
+    )
+  }
+
+  @MainActor
+  private static func styleStorageBackedMarkdown(
+    in nsText: NSString,
+    fullRange: NSRange,
+    textView: NSTextView,
+    theme: Theme,
+    processed: [NSRange]
+  ) {
+    CodeStylerHeading.apply(
+      in: nsText,
+      fullRange: fullRange,
+      textStorage: textView.textStorage,
+      style: headingStyle(for: textView, theme: theme),
+      processed: processed
+    )
+    CodeStylerListMarkers.apply(
+      in: nsText,
+      fullRange: fullRange,
+      textStorage: textView.textStorage,
+      style: listMarkerStyle(for: textView, theme: theme),
+      processed: processed
+    )
+    CodeStylerSections.apply(
+      in: nsText,
+      fullRange: fullRange,
+      textStorage: textView.textStorage,
+      style: sectionStyle(for: theme),
       processed: processed
     )
   }
@@ -159,22 +202,34 @@ enum CodeStyler {
     }
   }
 
-  private static func styleChecklist(
-    in nsText: NSString,
-    fullRange: NSRange,
-    layoutManager: NSLayoutManager
-  ) {
-    guard let regex = try? NSRegularExpression(pattern: #"(☐|☑)"#) else { return }
-    regex.enumerateMatches(in: nsText as String, range: fullRange) { match, _, _ in
-      guard let marker = match?.range(at: 1) else { return }
-      // Suppress the raw Unicode glyph; PlaceholderTextView draws the
-      // polished SF Symbol at the same position via its draw(_:) override.
-      layoutManager.addTemporaryAttribute(
-        .foregroundColor,
-        value: NSColor.clear,
-        forCharacterRange: marker
-      )
-    }
+  @MainActor
+  private static func headingStyle(for textView: NSTextView, theme: Theme) -> CodeStylerHeading.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerHeading.Style(
+      baseFont: textView.font,
+      bodyForeground: bodyForeground,
+      headingForeground: NSColor(theme.headingText)
+    )
+  }
+
+  @MainActor
+  private static func listMarkerStyle(
+    for textView: NSTextView,
+    theme: Theme
+  ) -> CodeStylerListMarkers.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerListMarkers.Style(
+      baseFont: textView.font,
+      markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78),
+      doneMarkerForeground: NSColor(theme.headingText)
+    )
+  }
+
+  private static func sectionStyle(for theme: Theme) -> CodeStylerSections.Style {
+    let bodyForeground = NSColor(theme.text)
+    return CodeStylerSections.Style(
+      trayBodyForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.82 : 0.76)
+    )
   }
 
   private static func palette(for theme: Theme) -> Palette {

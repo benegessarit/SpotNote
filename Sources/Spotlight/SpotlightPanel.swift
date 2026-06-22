@@ -4,8 +4,8 @@ import AppKit
 ///
 /// Overrides `canBecomeKey` so the panel can receive keyboard focus even
 /// though its window style is borderless. The panel intentionally avoids
-/// `.nonactivatingPanel`: SpotNote is an LSUIElement app, and its HUD must
-/// become a real key window when summoned from another app.
+/// `.nonactivatingPanel`: SpotNote's HUD must become a real key window when
+/// summoned from another app.
 final class SpotlightPanel: NSPanel {
   var keyEquivalentHandler: ((NSEvent) -> Bool)?
 

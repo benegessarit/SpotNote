@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 
 @testable import Spotlight
@@ -28,25 +29,11 @@ struct EditorMetricsTests {
 
   @Test("panelHeight stays roomy for short notes before growing")
   func panelHeightRoomyFloorThenGrows() {
-    let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 10)
-    let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 10)
-    let defaultRows = EditorMetrics.panelHeight(
-      forLines: ThemePreferences.defaultVisibleLines,
-      maxLines: 10
-    )
-    let six = EditorMetrics.panelHeight(forLines: ThemePreferences.defaultVisibleLines + 1, maxLines: 10)
-    #expect(one == defaultRows)
-    #expect(two == defaultRows)
-    #expect(six > defaultRows)
-  }
-
-  @Test("panelHeight honors a smaller user cap")
-  func panelHeightHonorsSmallMax() {
     let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
+    let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
-    let seven = EditorMetrics.panelHeight(forLines: 7, maxLines: 3)
     #expect(one == three)
-    #expect(three == seven)
+    #expect(two == three)
   }
 
   @Test("panelHeight clamps at the supplied maxLines")
@@ -56,6 +43,15 @@ struct EditorMetricsTests {
     let hundred = EditorMetrics.panelHeight(forLines: 100, maxLines: 3)
     #expect(three == seven)
     #expect(three == hundred)
+  }
+
+  @Test("panelHeight honors a smaller user cap")
+  func panelHeightHonorsSmallMax() {
+    let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
+    let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
+    let seven = EditorMetrics.panelHeight(forLines: 7, maxLines: 3)
+    #expect(one == three)
+    #expect(three == seven)
   }
 
   @Test("panelHeight grows with a larger maxLines")
@@ -81,11 +77,48 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
 
-  @Test("editor metrics use the larger nvim-style HUD scale")
-  func largerNvimStyleScale() {
-    #expect(EditorMetrics.fontSize >= 20)
-    #expect(EditorMetrics.lineHeight >= 30)
+  @Test("editor metrics use the slightly smaller nvim-style HUD scale")
+  func slightlySmallerNvimStyleScale() {
+    #expect(EditorMetrics.fontSize == 22)
+    #expect(EditorMetrics.lineHeight >= 34)
     #expect(EditorMetrics.panelWidth >= 720)
-    #expect(EditorMetrics.textTrailingGap <= 18)
+  }
+
+  @Test("short notes open at roughly twice the old four-line HUD height")
+  func shortNotesOpenAtDoubleHeight() {
+    let oldFourLineHeight =
+      CGFloat(4) * EditorMetrics.lineHeight
+      + EditorMetrics.verticalInset * 2
+      + EditorMetrics.outerPadding * 2
+    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 10)
+
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 9)
+    #expect(openHeight == EditorMetrics.panelHeight(forLines: 9, maxLines: 10))
+    #expect(openHeight >= oldFourLineHeight * 1.95)
+  }
+
+  @Test("task editor keeps restored breathing room before text")
+  @MainActor
+  func taskEditorKeepsRestoredLeadingTextGap() {
+    #expect(EditorMetrics.leadingInset == 0)
+    #expect(LineNumberRuler.markerOnlyThickness(forLabelSize: LineNumberRuler.labelFontSize) == 0)
+    #expect(EditorMetrics.textLeadingGap >= 32)
+  }
+
+  @Test("editor leaves only a narrow right inset so the scrollbar hugs the card edge")
+  func narrowRightInsetForEdgeScroller() {
+    #expect(EditorMetrics.trailingInset <= 8)
+  }
+
+  @Test("normal-mode cursor matches the Mirage block metrics")
+  @MainActor
+  func normalModeCursorMatchesMirageBlock() throws {
+    #expect(EditorMetrics.normalModeCursorWidth >= 12)
+    let color = try #require(
+      PlaceholderTextView.normalModeCursorColor.usingColorSpace(NSColorSpace.sRGB)
+    )
+    #expect(abs(color.redComponent - (221 / 255)) < 0.01)
+    #expect(abs(color.greenComponent - (179 / 255)) < 0.01)
+    #expect(abs(color.blueComponent - 1.0) < 0.01)
   }
 }

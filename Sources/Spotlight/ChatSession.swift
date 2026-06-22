@@ -32,7 +32,9 @@ struct NavigationPreview: Equatable, Sendable {
 @MainActor
 final class ChatSession: ObservableObject {
   @Published var currentText: String = ""
+  @Published var currentChecklistLines: [Int: ChecklistLineState] = [:]
   @Published private(set) var currentID: UUID?
+  @Published private(set) var currentVaultState: VaultNoteState?
   @Published private(set) var chats: [Chat] = []
   @Published private(set) var navigationPreview: NavigationPreview?
   /// Stack of deleted-chat snapshots pushed by `deleteCurrent` and
@@ -48,6 +50,8 @@ final class ChatSession: ObservableObject {
   var lastDeleted: Chat? { deletedStack.last }
 
   private let store: ChatStore
+  private let vaultDocuments: [VaultNoteState: VaultNoteDocument]
+  private let vaultDocumentOrder: [VaultNoteState]
   private var previewDismissTask: Task<Void, Never>?
   /// While true, `announce` skips scheduling auto-dismiss so the
   /// navigation overlay stays put. Driven by the window controller's
@@ -56,31 +60,48 @@ final class ChatSession: ObservableObject {
   private static let previewDismissDelay: Duration = .milliseconds(1400)
   private static let deletePreviewDelay: Duration = .milliseconds(4000)
 
-  init(store: ChatStore) {
+  init(
+    store: ChatStore,
+    vaultInbox: VaultInboxDocument? = nil,
+    vaultDocuments: [VaultNoteDocument]? = nil
+  ) {
     self.store = store
+    let documents = vaultDocuments ?? vaultInbox.map { [$0] } ?? []
+    self.vaultDocuments = Dictionary(uniqueKeysWithValues: documents.map { ($0.state, $0) })
+    self.vaultDocumentOrder = documents.map(\.state)
   }
 
-  /// Loads the chat list and restores the most-recently-edited chat. If
-  /// the store is empty, creates a fresh chat so the user can start
-  /// typing immediately.
+  /// Loads the chat list and restores the vault-backed inbox when it
+  /// exists. If there is no vault inbox, restores the most-recently-edited
+  /// app-local chat. If the store is empty, creates a fresh chat so the
+  /// user can start typing immediately.
   func bootstrap() async {
-    chats = await store.list()
+    await store.loadFromDisk()
+    chats = await availableChats()
+    if currentID != nil { return }
+    if !currentText.isEmpty {
+      _ = await createBlankChat(initialText: currentText)
+      return
+    }
+    if let preferredVaultState = vaultDocuments[.tasks] != nil ? VaultNoteState.tasks : vaultDocumentOrder.first {
+      await switchVaultState(preferredVaultState, announcing: false)
+      return
+    }
     if let mostRecent = chats.first {
-      currentID = mostRecent.id
-      currentText = mostRecent.text
+      loadCurrentChat(mostRecent)
     } else {
       _ = await createBlankChat()
     }
   }
 
   func reload() async {
-    await store.flush()
-    chats = await store.list()
+    await flush()
+    await store.loadFromDisk()
+    chats = await availableChats()
     if let id = currentID, let current = chats.first(where: { $0.id == id }) {
-      currentText = current.text
+      loadCurrentChat(current)
     } else if let mostRecent = chats.first {
-      currentID = mostRecent.id
-      currentText = mostRecent.text
+      loadCurrentChat(mostRecent)
     } else {
       _ = await createBlankChat()
     }
@@ -91,7 +112,7 @@ final class ChatSession: ObservableObject {
     var snapshot =
       chats.first(where: { $0.id == id })
       ?? Chat(id: id, createdAt: Date(), updatedAt: Date(), text: currentText)
-    snapshot.text = currentText
+    snapshot.text = serializedCurrentText()
     return snapshot
   }
 
@@ -113,7 +134,7 @@ final class ChatSession: ObservableObject {
   func cycleNewer() async { await cycle(by: -1) }
 
   private func cycle(by delta: Int) async {
-    chats = await store.list()
+    chats = await availableChats()
     guard !chats.isEmpty else { return }
     guard chats.count > 1 else {
       announce("only one note")
@@ -123,8 +144,7 @@ final class ChatSession: ObservableObject {
     let count = chats.count
     let next = ((index + delta) % count + count) % count
     let chat = chats[next]
-    currentID = chat.id
-    currentText = chat.text
+    loadCurrentChat(chat)
     announce("note \(next + 1) of \(count)")
   }
 
@@ -138,27 +158,27 @@ final class ChatSession: ObservableObject {
       previewDismissTask?.cancel()
       previewDismissTask = nil
     }
-    currentID = chat.id
-    currentText = chat.text
+    loadCurrentChat(chat)
   }
 
-  /// Binds to ⌘D -- removes the current chat and lands on the next
-  /// most-recently-edited one. When the store becomes empty a fresh
-  /// blank chat is created so the user can keep typing immediately.
-  /// The deleted chat (with the in-memory text, in case of unsaved
-  /// edits) is captured into `lastDeleted` so ⌘Z can restore it.
+  /// Binds to ⌘D -- removes the current app-local chat and lands on the
+  /// next available note. The vault inbox is protected from chat-library
+  /// deletion because it is a real Markdown file in the knowledge vault.
   func deleteCurrent() async {
     guard let id = currentID else { return }
+    guard vaultDocument(for: id) == nil else {
+      announce("vault file stays")
+      return
+    }
     var snapshot =
       chats.first(where: { $0.id == id })
       ?? Chat(id: id, createdAt: Date(), updatedAt: Date(), text: currentText)
-    snapshot.text = currentText
+    snapshot.text = serializedCurrentText()
     try? await store.delete(id: id)
     deletedStack.append(snapshot)
-    chats = await store.list()
+    chats = await availableChats()
     if let replacement = chats.first {
-      currentID = replacement.id
-      currentText = replacement.text
+      loadCurrentChat(replacement)
       announce("deleted", sticky: true)
     } else {
       _ = await createBlankChat()
@@ -174,16 +194,19 @@ final class ChatSession: ObservableObject {
   func undoDelete() async {
     guard let chat = deletedStack.popLast() else { return }
     try? await store.restore(chat)
-    chats = await store.list()
-    currentID = chat.id
-    currentText = chat.text
+    chats = await availableChats()
+    loadCurrentChat(chat)
     announce("restored", sticky: true, highlightedID: chat.id)
   }
 
   func togglePin() async {
     guard let id = currentID else { return }
+    guard vaultDocument(for: id) == nil else {
+      announce("vault file is pinned")
+      return
+    }
     try? await store.togglePin(id: id)
-    chats = await store.list()
+    chats = await availableChats()
     let wasPinned = chats.first(where: { $0.id == id })?.isPinned ?? false
     announce(wasPinned ? "pinned ★" : "unpinned", sticky: false)
   }
@@ -201,20 +224,73 @@ final class ChatSession: ObservableObject {
       previewDismissTask?.cancel()
       previewDismissTask = nil
     }
-    guard let id = currentID else { return }
-    let snapshot = currentText
+    currentChecklistLines = ChecklistDocument.prunedChecklistLines(currentChecklistLines, for: currentText)
+    let visibleSnapshot = currentText
+    let snapshot = serializedCurrentText()
+    guard let id = currentID else {
+      Task { [weak self] in
+        guard let self else { return }
+        await self.createCurrentChatForPendingEdit(visibleSnapshot)
+      }
+      return
+    }
+    if let vault = vaultDocument(for: id) {
+      Task { await vault.update(text: snapshot) }
+      return
+    }
     let store = store
     Task { await store.update(id: id, text: snapshot) }
   }
 
+  func updateChecklistLines(_ lines: [Int: ChecklistLineState]) {
+    let pruned = ChecklistDocument.prunedChecklistLines(lines, for: currentText)
+    guard currentChecklistLines != pruned else { return }
+    currentChecklistLines = pruned
+    persistIfNeeded()
+  }
+
+  func flush() async {
+    await store.flush()
+    for vault in vaultDocuments.values {
+      await vault.flush()
+    }
+  }
+
   // MARK: - Private
 
-  private func createBlankChat() async -> Bool {
+  private func loadCurrentChat(_ chat: Chat) {
+    let document = ChecklistDocument.parseMarkdown(chat.text)
+    currentID = chat.id
+    currentVaultState = vaultState(for: chat.id)
+    currentText = document.text
+    currentChecklistLines = document.checklistLines
+  }
+
+  private func serializedCurrentText() -> String {
+    ChecklistDocument.serializeMarkdown(text: currentText, checklistLines: currentChecklistLines)
+  }
+
+  private func createBlankChat(initialText: String = "") async -> Bool {
     guard let chat = try? await store.create() else { return false }
     currentID = chat.id
-    currentText = ""
-    chats = await store.list()
+    currentVaultState = nil
+    let document = ChecklistDocument.parseMarkdown(initialText)
+    currentText = document.text
+    currentChecklistLines = document.checklistLines
+    if !initialText.isEmpty {
+      await store.update(id: chat.id, text: serializedCurrentText())
+    }
+    chats = await availableChats()
     return true
+  }
+
+  private func createCurrentChatForPendingEdit(_ snapshot: String) async {
+    guard currentID == nil else {
+      persistIfNeeded()
+      return
+    }
+    guard currentText == snapshot else { return }
+    _ = await createBlankChat(initialText: snapshot)
   }
 
   private func announce(
@@ -256,5 +332,37 @@ final class ChatSession: ObservableObject {
       do { try await Task.sleep(for: delay) } catch { return }
       self?.navigationPreview = nil
     }
+  }
+}
+
+extension ChatSession {
+  func switchVaultState(_ state: VaultNoteState, announcing: Bool = true) async {
+    guard let vault = vaultDocuments[state] else { return }
+    await flush()
+    let chat = await vault.load() ?? vault.emptyChat()
+    loadCurrentChat(chat)
+    chats = await availableChats()
+    if announcing { announce(state.switchLabel, includingList: false) }
+  }
+
+  private func availableChats() async -> [Chat] {
+    let vaultIDs = Set(vaultDocuments.values.map(\.id))
+    let saved = await store.list().filter { !vaultIDs.contains($0.id) }
+    var vaultChats: [Chat] = []
+    for state in vaultDocumentOrder {
+      guard let vault = vaultDocuments[state], let chat = await vault.load() else { continue }
+      vaultChats.append(chat)
+    }
+    return vaultChats + saved
+  }
+
+  private func vaultDocument(for id: UUID?) -> VaultNoteDocument? {
+    guard let id else { return nil }
+    return vaultDocuments.values.first { $0.id == id }
+  }
+
+  private func vaultState(for id: UUID?) -> VaultNoteState? {
+    guard let id else { return nil }
+    return vaultDocuments.first { $0.value.id == id }?.key
   }
 }

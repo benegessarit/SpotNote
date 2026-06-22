@@ -36,6 +36,10 @@ extension PlaceholderTextView {
       acceptSuggestion(suggestion)
       return true
     }
+    if handleMarkdownOutlineTab(event: event, modifiers: mods) {
+      return true
+    }
+    if mods.isEmpty, handleVimReturnKey(event, engine: engine) { return true }
     if mods == .control, chars == "c", engine.mode != .normal {
       _ = engine.handle(key: "\u{1B}", hasModifiers: false)
       executeVimAction(.switchToNormal)
@@ -51,12 +55,6 @@ extension PlaceholderTextView {
     if isInsert, action == .none { return false }
     executeVimAction(action)
     return true
-  }
-
-  private func vimKey(for event: NSEvent, mods: NSEvent.ModifierFlags, chars: String) -> String {
-    if event.keyCode == 53 { return "\u{1B}" }
-    if !mods.subtracting(.shift).isEmpty { return chars }
-    return event.characters ?? chars
   }
 
   /// Routes one keystroke into the active `:` / `/` prompt. Returns
@@ -153,7 +151,13 @@ extension PlaceholderTextView {
   /// the resulting AppKit caret/scroll side effects to the live text view.
   @discardableResult
   func performFlashJump(_ request: VimFlashRequest) -> Bool {
-    guard let target = VimFlash.targetLocation(in: string, from: selectedRange.location, request: request) else {
+    guard
+      let target = VimFlash.targetLocation(
+        in: string,
+        from: selectedRange.location,
+        request: request
+      )
+    else {
       return false
     }
     let range = NSRange(location: target, length: 0)
@@ -168,67 +172,81 @@ extension PlaceholderTextView {
   /// `MultilineEditor.swift`.
   func executeVimAction(_ action: VimAction) {
     if VimActionDispatcher.handleSimple(action, on: self) { return }
-    if executeCursorEditAction(action) { return }
-    if executeGroupedOrJumpAction(action) { return }
-    if executeVisualLineAction(action) { return }
-    executeTextObjectAction(action)
+    executeMutatingVimAction(action)
   }
 
-  private func executeCursorEditAction(_ action: VimAction) -> Bool {
-    switch action {
-    case .moveCursor(let motion): executeMotion(motion)
-    case .delete(let motion): executeDeleteMotion(motion)
-    case .deleteLine(let count): executeDeleteLines(count)
-    case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
-    case .deleteChar(let count): executeDeleteChar(count)
-    default: return false
-    }
-    return true
+  private func executeMutatingVimAction(_ action: VimAction) {
+    if executeTextMutatingVimAction(action) { return }
+    if executeHandoffVimAction(action) { return }
+    if executeNavigationVimAction(action) { return }
+    if executeVisualVimAction(action) { return }
+    _ = executeVisualLineVimAction(action)
   }
 
-  private func executeGroupedOrJumpAction(_ action: VimAction) -> Bool {
+  private func executeTextMutatingVimAction(_ action: VimAction) -> Bool {
+    if executeDeletionVimAction(action) { return true }
     switch action {
+    case .pasteAfter(let count): executeVimPasteAfter(count: count)
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
       for sub in actions { executeVimAction(sub) }
+    default:
+      return false
+    }
+    return true
+  }
+
+  private func executeDeletionVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .delete(let motion): executeDeleteMotion(motion)
+    case .deleteLine(let count): executeDeleteLines(count)
+    case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
+    case .changeBulletBody: changeCurrentBulletBodyForVim()
+    case .deleteChar(let count): executeDeleteChar(count)
+    default:
+      return false
+    }
+    return true
+  }
+
+  private func executeHandoffVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .sendCurrentTaskToLinear(let status, let count):
+      sendCurrentTaskToLinear(status: status, count: count)
+    case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
+    case .appendCurrentLineToTrayNote(let count): appendCurrentLinesToTrayNote(count)
+    default:
+      return false
+    }
+    return true
+  }
+
+  private func executeNavigationVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .moveCursor(let motion): executeMotion(motion)
     case .gotoLine(let line):
       _ = jumpToLine(line)
-    default: return false
-    }
-    return true
-  }
-
-  private func executeVisualLineAction(_ action: VimAction) -> Bool {
-    switch action {
-    case .enterVisualLine:
-      enterVisualLineMode()
-    case .extendVisualLine(let motion):
-      extendVisualLine(by: motion)
-    case .yankVisualLine:
-      yankVisualLineSelection()
-    case .deleteVisualLineSelection:
-      deleteVisualLineSelection(switchingToInsert: false)
-    case .changeVisualLineSelection:
-      deleteVisualLineSelection(switchingToInsert: true)
-    default: return false
-    }
-    return true
-  }
-
-  private func executeTextObjectAction(_ action: VimAction) {
-    switch action {
-    case .changeTextObject(let object):
-      replaceTextObject(object, with: "", switchingToInsert: true)
-    case .deleteTextObject(let object):
-      replaceTextObject(object, with: "", switchingToInsert: false)
-    case .wrapCurrentWord(let style):
-      wrapCurrentWord(style)
-    case .wrapVisualLine(let style):
-      wrapSelection(style)
+    case .jumpToTraySection: _ = jumpToTraySectionForVim()
+    case .jumpToHabitsSection: _ = jumpToHabitsSectionForVim()
+    case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
     default:
-      break
+      return false
     }
+    return true
+  }
+
+  private func executeVisualLineVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .enterVisualLine: enterVisualLineMode()
+    case .extendVisualLine(let motion): extendVisualLine(by: motion)
+    case .yankVisualLine: yankVisualLineSelection()
+    case .deleteVisualLineSelection: deleteVisualLineSelection(switchingToInsert: false)
+    case .changeVisualLineSelection: deleteVisualLineSelection(switchingToInsert: true)
+    default:
+      return false
+    }
+    return true
   }
 
   // MARK: - Visual line
@@ -281,9 +299,8 @@ extension PlaceholderTextView {
     let range = selectedRange
     if range.length > 0, range.length <= nsString.length {
       let text = nsString.substring(with: range)
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.setString(text, forType: .string)
+      vimPasteboard.clearContents()
+      vimPasteboard.setString(text, forType: .string)
     }
     exitVisualLineSelection(restoreCaretTo: range.location)
   }
@@ -321,7 +338,6 @@ extension PlaceholderTextView {
     guard end > cursor else { return }
     insertText("", replacementRange: NSRange(location: cursor, length: end - cursor))
   }
-
 }
 
 /// Pure-Swift core of the substitute command -- split out so it can be
@@ -360,9 +376,19 @@ enum VimSubstitution {
     if replaceAll {
       var working = line
       var count = 0
-      while let range = working.range(of: pattern) {
+      var searchStartOffset = 0
+      while true {
+        let start = working.index(working.startIndex, offsetBy: searchStartOffset)
+        guard let range = working.range(of: pattern, range: start..<working.endIndex) else { break }
+        let matchStartOffset = working.distance(from: working.startIndex, to: range.lowerBound)
         working.replaceSubrange(range, with: replacement)
         count += 1
+        // Resume scanning just past the inserted replacement so a
+        // replacement that itself contains the pattern (e.g. :s/a/aa/g)
+        // cannot re-match at the same spot forever. The offset strictly
+        // advances past replaced text, or the line shrinks on deletion,
+        // so the loop always terminates.
+        searchStartOffset = matchStartOffset + replacement.count
       }
       return (working, count)
     }
@@ -370,96 +396,5 @@ enum VimSubstitution {
     var working = line
     working.replaceSubrange(range, with: replacement)
     return (working, 1)
-  }
-}
-
-/// Side-effect dispatcher for the simple `VimAction` cases (no associated
-/// values that change the editor's text). Returning `true` tells
-/// `executeVimAction` it has nothing more to do.
-enum VimActionDispatcher {
-  @MainActor
-  static func handleSimple(_ action: VimAction, on view: PlaceholderTextView) -> Bool {
-    if handleModeAction(action, on: view) { return true }
-    if handlePromptAction(action, on: view) { return true }
-    return handleEditingAction(action, on: view)
-  }
-
-  @MainActor
-  private static func handleModeAction(
-    _ action: VimAction,
-    on view: PlaceholderTextView
-  ) -> Bool {
-    switch action {
-    case .none:
-      return true
-    case .switchToInsert, .switchToNormal:
-      // Collapse any lingering visual-line selection back to the
-      // motion's last caret so Esc/V from VISUAL LINE leaves the user
-      // exactly where they were, not on a wide highlight.
-      if let caret = view.visualLineCaret {
-        let clamped = min(caret, (view.string as NSString).length)
-        view.setSelectedRange(NSRange(location: clamped, length: 0))
-      }
-      view.visualLineAnchor = nil
-      view.visualLineCaret = nil
-      view.notifyVimModeChanged()
-      view.needsDisplay = true
-    case .insertAtEndOfLine:
-      view.moveToEndOfLine(view)
-      view.notifyVimModeChanged()
-      view.needsDisplay = true
-    case .insertAtFirstNonBlank:
-      view.executeMotion(.firstNonBlank)
-      view.notifyVimModeChanged()
-      view.needsDisplay = true
-    default:
-      return false
-    }
-    return true
-  }
-
-  @MainActor
-  private static func handlePromptAction(
-    _ action: VimAction,
-    on view: PlaceholderTextView
-  ) -> Bool {
-    switch action {
-    case .enterCommand: view.vimController?.enterPrompt(.command)
-    case .enterSearch: view.vimController?.enterPrompt(.search)
-    case .enterFlash(let direction, let count, let scope):
-      view.enterFlashPrompt(direction: direction, count: count, scope: scope)
-    case .enterLineFlash(let count):
-      view.vimController?.enterPrompt(.lineFlash(count: count))
-      view.refreshLineFlashHints()
-    case .findNext: view.vimController?.findStep(1)
-    case .findPrevious: view.vimController?.findStep(-1)
-    default: return false
-    }
-    return true
-  }
-
-  @MainActor
-  private static func handleEditingAction(
-    _ action: VimAction,
-    on view: PlaceholderTextView
-  ) -> Bool {
-    switch action {
-    case .deleteToEndOfLine:
-      view.deleteToEndOfParagraph(view)
-    case .openLineBelow:
-      view.moveToEndOfLine(view)
-      view.insertNewline(view)
-      view.notifyVimModeChanged()
-      view.needsDisplay = true
-    case .openLineAbove:
-      view.moveToBeginningOfLine(view)
-      view.insertNewline(view)
-      view.moveUp(view)
-      view.notifyVimModeChanged()
-      view.needsDisplay = true
-    default:
-      return false
-    }
-    return true
   }
 }

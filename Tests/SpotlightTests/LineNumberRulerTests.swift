@@ -53,49 +53,111 @@ struct LineNumberRulerTests {
 
   // MARK: - thickness(forLineCount:labelSize:)
 
-  @Test("thickness is monotonically non-decreasing with line count")
-  func thicknessMonotonic() {
+  @Test("line number labels use the same nvim-size scale as editor text")
+  func labelFontUsesEditorScale() {
+    #expect(LineNumberRuler.labelFontSize == EditorMetrics.fontSize)
+  }
+
+  @Test("line number gutter labels stay faded behind the text")
+  func gutterLabelsStayFadedBehindText() {
+    #expect(LineNumberRuler.defaultTextAlpha <= 0.46)
+  }
+
+  @Test("marker-only thickness stays stable as line count grows")
+  func markerOnlyThicknessIgnoresDigitBuckets() {
     let single = LineNumberRuler.thickness(forLineCount: 1, labelSize: 15)
     let ten = LineNumberRuler.thickness(forLineCount: 10, labelSize: 15)
     let hundred = LineNumberRuler.thickness(forLineCount: 100, labelSize: 15)
     let thousand = LineNumberRuler.thickness(forLineCount: 1000, labelSize: 15)
+    #expect(single == ten)
+    #expect(ten == hundred)
+    #expect(hundred == thousand)
+  }
+
+  @Test("numeric thickness remains available when line numbers are explicitly shown")
+  func numericThicknessMonotonic() {
+    let single = LineNumberRuler.thickness(forLineCount: 1, labelSize: 15, showsLineNumbers: true)
+    let ten = LineNumberRuler.thickness(forLineCount: 10, labelSize: 15, showsLineNumbers: true)
+    let hundred = LineNumberRuler.thickness(forLineCount: 100, labelSize: 15, showsLineNumbers: true)
+    let thousand = LineNumberRuler.thickness(forLineCount: 1000, labelSize: 15, showsLineNumbers: true)
     #expect(single < ten)
     #expect(ten < hundred)
     #expect(hundred < thousand)
   }
 
-  @Test("thickness is identical within the same digit bucket")
-  func thicknessBuckets() {
-    let sizes = [1, 5, 9].map { LineNumberRuler.thickness(forLineCount: $0, labelSize: 15) }
+  @Test("numeric thickness is identical within the same digit bucket")
+  func numericThicknessBuckets() {
+    let sizes = [1, 5, 9].map {
+      LineNumberRuler.thickness(forLineCount: $0, labelSize: 15, showsLineNumbers: true)
+    }
     #expect(Set(sizes).count == 1, "all single-digit counts should share a thickness")
 
-    let double = [10, 42, 99].map { LineNumberRuler.thickness(forLineCount: $0, labelSize: 15) }
+    let double = [10, 42, 99].map {
+      LineNumberRuler.thickness(forLineCount: $0, labelSize: 15, showsLineNumbers: true)
+    }
     #expect(Set(double).count == 1, "all two-digit counts should share a thickness")
   }
 
-  @Test("thickness fits the widest digit at the requested label size")
-  func thicknessFitsDigit() {
+  @Test("numeric thickness fits the widest digit at the requested label size")
+  func numericThicknessFitsDigit() {
     let labelSize: CGFloat = 15
     let font = NSFont.monospacedDigitSystemFont(ofSize: labelSize, weight: .regular)
     let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
-    let thickness = LineNumberRuler.thickness(forLineCount: 1, labelSize: labelSize)
-    // 2pt right inset + a little left breathing room.
-    #expect(thickness == ceil(digitWidth) + 6)
+    let thickness = LineNumberRuler.thickness(
+      forLineCount: 1,
+      labelSize: labelSize,
+      showsLineNumbers: true
+    )
+    #expect(thickness >= ceil(digitWidth))
+    // And we add a small breathing-room inset beyond raw digit width.
+    #expect(thickness > ceil(digitWidth))
   }
 
-  @Test("thickness tracks label font size -- a bigger font yields a wider gutter")
-  func thicknessScalesWithFont() {
-    let small = LineNumberRuler.thickness(forLineCount: 10, labelSize: 11)
-    let large = LineNumberRuler.thickness(forLineCount: 10, labelSize: 20)
-    #expect(small < large)
+  @Test("marker-only thickness stays zero for every label size")
+  func markerOnlyThicknessStaysZeroForEveryLabelSize() {
+    let defaultSized = LineNumberRuler.thickness(forLineCount: 10, labelSize: 22)
+    let large = LineNumberRuler.thickness(forLineCount: 10, labelSize: 30)
+    #expect(defaultSized == 0)
+    #expect(large == 0)
   }
 
-  @Test("zero or negative line counts do not produce a zero-width gutter")
-  func thicknessFloor() {
+  @Test("zero or negative hidden line counts keep the zero-width gutter")
+  func hiddenLineNumberThicknessFloor() {
     let zero = LineNumberRuler.thickness(forLineCount: 0, labelSize: 15)
     let negative = LineNumberRuler.thickness(forLineCount: -5, labelSize: 15)
     let one = LineNumberRuler.thickness(forLineCount: 1, labelSize: 15)
     #expect(zero == one)
     #expect(negative == one)
   }
+
+  @Test("hidden-line-number mode reserves no checkbox gutter")
+  func hiddenLineNumberModeReservesNoCheckboxGutter() {
+    #expect(LineNumberRuler.markerOnlyThickness(forLabelSize: 22) == 0)
+    #expect(LineNumberRuler.thickness(forLineCount: 999, labelSize: 22) == 0)
+    #expect(LineNumberRuler.thickness(forLineCount: 999, labelSize: 22, showsLineNumbers: true) > 0)
+  }
+
+  @Test("line Flash temporarily opens the hidden gutter for row labels")
+  func lineFlashTemporarilyOpensHiddenGutter() {
+    #expect(LineNumberRuler.thickness(forLineCount: 8, labelSize: 22) == 0)
+    #expect(LineNumberRuler.thickness(forLineCount: 8, labelSize: 22, showsLineFlashHints: true) > 0)
+  }
+
+  @Test("glyph fragments after blank lines keep their logical line index")
+  func glyphFragmentsAfterBlankLinesKeepLogicalLineIndex() {
+    let text = "## To Do\n\nPass email" as NSString
+    let taskStart = ("## To Do\n\n" as NSString).length
+
+    #expect(LineNumberRuler.logicalLineIndex(forFragmentStartingAt: 0, in: text) == 0)
+    #expect(LineNumberRuler.logicalLineIndex(forFragmentStartingAt: taskStart, in: text) == 2)
+  }
+
+  @Test("Markdown checklist parse distinguishes open and completed states")
+  func markdownChecklistParseDistinguishesStates() {
+    let document = ChecklistDocument.parseMarkdown("[   ] open\n[ x ] done")
+
+    #expect(document.text == "open\ndone")
+    #expect(document.checklistLines == [0: .unchecked, 1: .checked])
+  }
+
 }

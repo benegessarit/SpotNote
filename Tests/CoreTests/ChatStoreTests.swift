@@ -42,8 +42,8 @@ struct ChatStoreTests {
     #expect(loaded.text == "draft 20", "last value wins after debounce")
   }
 
-  @Test("rehydrates chats from the directory on init")
-  func rehydrates() async throws {
+  @Test("construction does not synchronously rehydrate chats")
+  func constructionDoesNotSynchronouslyRehydrate() async throws {
     let dir = try makeTempDirectory()
     let firstStore = try ChatStore(directory: dir, debounce: .milliseconds(20))
     let chat = try await firstStore.create()
@@ -51,6 +51,20 @@ struct ChatStoreTests {
     await firstStore.flush()
 
     let secondStore = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let loaded = await secondStore.get(chat.id)
+    #expect(loaded == nil)
+  }
+
+  @Test("loadFromDisk explicitly rehydrates chats")
+  func loadFromDiskRehydrates() async throws {
+    let dir = try makeTempDirectory()
+    let firstStore = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let chat = try await firstStore.create()
+    await firstStore.update(id: chat.id, text: "hello world")
+    await firstStore.flush()
+
+    let secondStore = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    await secondStore.loadFromDisk()
     let loaded = await secondStore.get(chat.id)
     #expect(loaded?.text == "hello world")
   }

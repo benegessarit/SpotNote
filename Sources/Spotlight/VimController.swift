@@ -12,10 +12,18 @@ final class VimController: ObservableObject {
   }
 
   enum MessageKind: Equatable { case info, success, error }
+  enum MessageIcon: Equatable { case hermes }
 
   struct Message: Equatable {
     let text: String
     let kind: MessageKind
+    var icon: MessageIcon?
+
+    init(text: String, kind: MessageKind, icon: MessageIcon? = nil) {
+      self.text = text
+      self.kind = kind
+      self.icon = icon
+    }
   }
 
   struct Prompt: Equatable {
@@ -155,8 +163,8 @@ final class VimController: ObservableObject {
     }
   }
 
-  func showMessage(_ text: String, kind: MessageKind) {
-    let msg = Message(text: text, kind: kind)
+  func showMessage(_ text: String, kind: MessageKind, icon: MessageIcon? = nil) {
+    let msg = Message(text: text, kind: kind, icon: icon)
     message = msg
     messageClearTask?.cancel()
     let duration = Self.messageDuration
@@ -190,7 +198,6 @@ enum VimCommand: Equatable {
   case deleteNote
   case setLineNumbers(Bool)
   case setVimMode(Bool)
-  case setHints(Bool)
   case setTheme(String)
   case setMaxLines(Int)
   case substitute(SubstituteRequest)
@@ -257,8 +264,7 @@ enum VimCommandParser {
   private static let setToggleTable: [String: VimCommand] = [
     "number": .setLineNumbers(true), "nu": .setLineNumbers(true),
     "nonumber": .setLineNumbers(false), "nonu": .setLineNumbers(false),
-    "vim": .setVimMode(true), "novim": .setVimMode(false),
-    "hints": .setHints(true), "nohints": .setHints(false)
+    "vim": .setVimMode(true), "novim": .setVimMode(false)
   ]
 
   private static func parseSetParameterized(
@@ -378,11 +384,6 @@ enum VimCommandReference {
           summary: "Toggle vim mode itself. `:set novim` exits vim entirely."
         ),
         Entry(
-          id: "hints",
-          usage: ":set hints\n:set nohints",
-          summary: "Show or hide the hints bar above the editor."
-        ),
-        Entry(
           id: "theme",
           usage: ":set theme <name>",
           summary: "Switch theme by name (e.g. `obsidian`, `parchment`)."
@@ -409,6 +410,13 @@ enum VimCommandReference {
           summary: "Jump caret to line n."
         ),
         Entry(
+          id: "section-jumps",
+          usage: "gH\ngD\ngT",
+          summary:
+            "Jump to a fresh bullet in `## Habits` (gH), `## Todo` (gD), or `## Tray` (gT)"
+            + " and start typing; the section is created if it doesn't exist yet."
+        ),
+        Entry(
           id: "noh",
           usage: ":noh\n:nohlsearch",
           summary: "Clear the active search highlight and counter."
@@ -417,11 +425,6 @@ enum VimCommandReference {
           id: "slash",
           usage: "/<pattern>",
           summary: "Vim-native search. Matches highlight in the editor; the bottom bar shows `i/total`."
-        ),
-        Entry(
-          id: "flash",
-          usage: "s<query><label>  ·  S<query><label>",
-          summary: "Flash jump: type a query, then one of the inline hint labels to jump. Return jumps by count."
         ),
         Entry(
           id: "n",
@@ -437,7 +440,7 @@ enum VimCommandReference {
         Entry(
           id: "help",
           usage: ":h\n:help",
-          summary: "Show the hints bar."
+          summary: "Show a short help reminder."
         )
       ]
     )

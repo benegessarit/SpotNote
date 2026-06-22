@@ -1,6 +1,8 @@
-// swiftlint:disable file_length type_body_length function_body_length
+// swiftlint:disable file_length type_body_length function_body_length function_parameter_count
 import AppKit
 import SwiftUI
+
+private enum VimWordClass: Equatable { case whitespace, keyword, punctuation }
 
 /// The HUD's text surface -- `NSTextView` in an `NSScrollView` with a
 /// custom `NSRulerView` line-number gutter.
@@ -13,6 +15,8 @@ import SwiftUI
 /// gutter and where the caret sits.
 struct MultilineEditor: NSViewRepresentable {
   @Binding var text: String
+  var checklistLines: [Int: ChecklistLineState] = [:]
+  var onChecklistLinesChange: ([Int: ChecklistLineState]) -> Void = { _ in }
   let theme: Theme
   let placeholder: String
   let showLineNumbers: Bool
@@ -46,6 +50,16 @@ struct MultilineEditor: NSViewRepresentable {
   /// mode (insert-mode Esc still falls through to the engine to switch
   /// modes first, matching real vim).
   var onEscape: (() -> Void)?
+  /// Sends a normalized current-line title to the local Hermes/Marginal
+  /// ingress, which creates the Linear issue without embedding Linear
+  /// credentials in SpotNote.
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  /// Appends current/counted lines to today's vault daily note. The editor
+  /// clears the original lines only after this durable write succeeds.
+  var onAppendDailyNote: ((String) async throws -> URL)?
+  /// Appends current/counted lines to the misc thoughts dump (`tray.md`), then
+  /// clears the original lines only after this durable write succeeds.
+  var onAppendTrayNote: ((String) async throws -> URL)?
   /// Called from the AppKit delegate synchronously, so the panel resizes in
   /// the same runloop tick as the text change. A SwiftUI `@State` round-trip
   /// would defer the resize by one runloop, causing a visible flash.
@@ -58,6 +72,8 @@ struct MultilineEditor: NSViewRepresentable {
     scroll.documentView = textView
     applyStyle(textView: textView)
     textView.string = text
+    textView.checklistLines = checklistLines
+    textView.onChecklistLinesChange = onChecklistLinesChange
     textView.placeholderString = placeholder
     refreshAttributes(on: textView)
     configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
@@ -65,20 +81,15 @@ struct MultilineEditor: NSViewRepresentable {
     textView.vimModeEnabled = vimModeEnabled
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
+    textView.onSendLinearTask = onSendLinearTask
+    textView.onAppendDailyNote = onAppendDailyNote
+    textView.onAppendTrayNote = onAppendTrayNote
     return scroll
   }
 
   private func makeScrollView() -> NSScrollView {
-    let scroll = NSScrollView()
-    scroll.drawsBackground = false
-    scroll.borderType = .noBorder
-    scroll.hasVerticalScroller = true
-    scroll.scrollerStyle = .overlay
-    scroll.verticalScroller?.controlSize = .small
-    scroll.autohidesScrollers = true
-    scroll.hasHorizontalScroller = false
-    scroll.wantsLayer = true
-    scroll.layer?.masksToBounds = true
+    let scroll = SpotNoteScrollView()
+    SpotNoteScrollViewStyle.apply(to: scroll)
     return scroll
   }
 
@@ -96,7 +107,6 @@ struct MultilineEditor: NSViewRepresentable {
     textView.textContainerInset = NSSize(width: EditorMetrics.textLeadingGap, height: 0)
     textView.textContainer?.lineFragmentPadding = 0
     textView.textContainer?.widthTracksTextView = true
-    textView.copyButtonClearance = 0
     textView.autoresizingMask = [.width]
     textView.isAutomaticQuoteSubstitutionEnabled = false
     textView.isAutomaticDashSubstitutionEnabled = false
@@ -127,8 +137,19 @@ struct MultilineEditor: NSViewRepresentable {
     }
     textView.attachVimController(vimController)
     textView.onEscape = onEscape
-    applyStyle(textView: textView)
-    textView.placeholderString = placeholder
+    textView.onSendLinearTask = onSendLinearTask
+    textView.onAppendDailyNote = onAppendDailyNote
+    textView.onAppendTrayNote = onAppendTrayNote
+    textView.onChecklistLinesChange = onChecklistLinesChange
+    applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    if textView.checklistLines != checklistLines {
+      textView.checklistLines = checklistLines
+      textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+    }
+    if textView.placeholderString != placeholder {
+      textView.placeholderString = placeholder
+      textView.needsDisplay = true
+    }
     configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
 
     if context.coordinator.lastFocusRequest != focusRequest {
@@ -153,13 +174,9 @@ struct MultilineEditor: NSViewRepresentable {
     // Re-evaluate the panel height: text (via bindings), `maxVisibleLines`,
     // and `extraChromeHeight` can all change here, and the editor delegate
     // only fires on user-driven text edits.
-    let rows = LineNumberRuler.displayRowCount(in: textView)
-    let editorHeight = EditorMetrics.panelHeight(forLines: rows, maxLines: maxVisibleLines)
-    onHeightChange(editorHeight + extraChromeHeight)
+    context.coordinator.reportHeightIfNeeded(for: textView)
 
     refreshSuggestion(on: textView)
-    scroll.verticalRulerView?.needsDisplay = true
-    textView.needsDisplay = true
   }
 
   /// Recomputes the inline math suggestion and repositions the ghost
@@ -286,6 +303,7 @@ struct MultilineEditor: NSViewRepresentable {
     var lastCaretEndRequest: Int = 0
     var lastFindHighlight: NSRange?
     var normalizedTextAwaitingNotification: String?
+    private var lastReportedHeight: CGFloat?
 
     init(_ parent: MultilineEditor) { self.parent = parent }
 
@@ -305,7 +323,6 @@ struct MultilineEditor: NSViewRepresentable {
       if textView.normalizeSpecialTokens() {
         normalizedTextAwaitingNotification = textView.string
       }
-      textView.clearFlashHints()
       // Resize first -- synchronous and ahead of the SwiftUI @Binding
       // update that happens on the next runloop. Without this ordering,
       // NSTextView had the new line laid out before the panel had grown,
@@ -319,9 +336,11 @@ struct MultilineEditor: NSViewRepresentable {
         forLines: rows,
         maxLines: parent.maxVisibleLines
       )
-      parent.onHeightChange(editorHeight + parent.extraChromeHeight)
+      reportHeightIfNeeded(editorHeight + parent.extraChromeHeight)
       parent.ensureParagraphStyle(on: textView)
       parent.text = textView.string
+      textView.synchronizeChecklistLinesWithCurrentText()
+      parent.onChecklistLinesChange(textView.checklistLines)
       // Stop showing "2/5" once the user starts editing -- match indices
       // are about to be wrong anyway.
       textView.vimController?.clearSearchStatus()
@@ -332,6 +351,23 @@ struct MultilineEditor: NSViewRepresentable {
       parent.applyCodeStyling(on: textView)
       parent.refreshSuggestion(on: textView)
       textView.needsDisplay = true
+    }
+
+    @MainActor
+    func reportHeightIfNeeded(for textView: NSTextView) {
+      let rows = LineNumberRuler.displayRowCount(in: textView)
+      let editorHeight = EditorMetrics.panelHeight(
+        forLines: rows,
+        maxLines: parent.maxVisibleLines
+      )
+      reportHeightIfNeeded(editorHeight + parent.extraChromeHeight)
+    }
+
+    @MainActor
+    private func reportHeightIfNeeded(_ height: CGFloat) {
+      guard lastReportedHeight != height else { return }
+      lastReportedHeight = height
+      parent.onHeightChange(height)
     }
   }
 
@@ -355,12 +391,18 @@ struct MultilineEditor: NSViewRepresentable {
     MultilineEditor.sharedFixedParagraphStyle
   }
 
-  private static let sharedFixedParagraphStyle: NSParagraphStyle = {
+  private static let sharedFixedParagraphStyle: NSParagraphStyle = fixedParagraphStyle(
+    headIndent: 0
+  )
+
+  private static func fixedParagraphStyle(headIndent: CGFloat) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
     style.minimumLineHeight = EditorMetrics.lineHeight
     style.maximumLineHeight = EditorMetrics.lineHeight
-    return style
-  }()
+    style.firstLineHeadIndent = 0
+    style.headIndent = headIndent
+    return style.copy() as? NSParagraphStyle ?? style
+  }
 
   private var textAttributes: [NSAttributedString.Key: Any] {
     [
@@ -370,27 +412,40 @@ struct MultilineEditor: NSViewRepresentable {
     ]
   }
 
-  private func applyStyle(textView: PlaceholderTextView) {
+  func applyStyleAndRefreshAttributesIfNeeded(on textView: PlaceholderTextView) {
+    let needsAttributeRefresh = textViewNeedsAttributeRefresh(textView)
+    applyStyle(textView: textView)
+    if needsAttributeRefresh {
+      refreshAttributes(on: textView)
+    }
+  }
+
+  func applyStyle(textView: PlaceholderTextView) {
     let newTextColor = NSColor(theme.text)
     let newPlaceholderColor = NSColor(theme.placeholder)
-    if textView.font != font { textView.font = font }
-    if textView.textColor != newTextColor { textView.textColor = newTextColor }
-    textView.insertionPointColor = ghosttyCursorColor
+    // `textView.font` / `textView.textColor` are not just passive defaults:
+    // on a non-empty NSTextView they rewrite storage attributes. When the
+    // caret is in a styled Markdown heading, using them as style-refresh
+    // guards erases every heading back to body font/color. Existing text is
+    // styled via `refreshAttributes`/`CodeStyler`; these setters are only
+    // safe as empty-editor defaults.
+    if textView.string.isEmpty, textView.font != font {
+      textView.font = font
+    }
+    if textView.string.isEmpty, textView.textColor != newTextColor {
+      textView.textColor = newTextColor
+    }
+    let cursorColor = NSColor(theme.resolvedCursor)
+    textView.insertionPointColor = cursorColor
+    textView.editorCursorColor = cursorColor
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
     textView.editorTextAttributes = textAttributes
-    textView.checkboxCheckedColor = .systemGreen.withAlphaComponent(0.95)
-    // Derive the unchecked border from the text colour rather than the placeholder.
-    // Dark themes (e.g. Obsidian): text is near-white → 0.50 opacity = visible light border.
-    // Light themes: text is near-black → 0.65 opacity = a dark, legible stroke.
-    textView.checkboxUncheckedColor =
-      newTextColor
-      .withAlphaComponent(theme.mode == .dark ? 0.50 : 0.65)
+    textView.editorHeadingTextColor = NSColor(theme.headingText)
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
       ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
-      ruler.updateRequiredThickness()
     }
   }
 
@@ -398,11 +453,44 @@ struct MultilineEditor: NSViewRepresentable {
     guard let storage = textView.textStorage else { return }
     let range = NSRange(location: 0, length: storage.length)
     storage.setAttributes(textAttributes, range: range)
+    ensureParagraphStyle(on: textView)
     applyCodeStyling(on: textView)
   }
 
-  private var ghosttyCursorColor: NSColor {
-    NSColor(red: 0.973, green: 0.973, blue: 0.941, alpha: 1.0)
+  private func textViewNeedsAttributeRefresh(_ textView: PlaceholderTextView) -> Bool {
+    guard
+      let currentFont = textView.editorTextAttributes[.font] as? NSFont,
+      let nextFont = textAttributes[.font] as? NSFont,
+      currentFont == nextFont,
+      colorsMatch(
+        textView.editorTextAttributes[.foregroundColor] as? NSColor,
+        NSColor(theme.text)
+      ),
+      colorsMatch(textView.editorHeadingTextColor, NSColor(theme.headingText)),
+      paragraphStylesMatch(
+        textView.editorTextAttributes[.paragraphStyle] as? NSParagraphStyle,
+        fixedParagraphStyle
+      )
+    else { return true }
+    return false
+  }
+
+  private func colorsMatch(_ lhs: NSColor?, _ rhs: NSColor) -> Bool {
+    guard let left = lhs?.usingColorSpace(.sRGB), let right = rhs.usingColorSpace(.sRGB) else {
+      return lhs?.isEqual(rhs) == true
+    }
+    return abs(left.redComponent - right.redComponent) < 0.001
+      && abs(left.greenComponent - right.greenComponent) < 0.001
+      && abs(left.blueComponent - right.blueComponent) < 0.001
+      && abs(left.alphaComponent - right.alphaComponent) < 0.001
+  }
+
+  private func paragraphStylesMatch(_ lhs: NSParagraphStyle?, _ rhs: NSParagraphStyle) -> Bool {
+    guard let lhs else { return false }
+    return lhs.minimumLineHeight == rhs.minimumLineHeight
+      && lhs.maximumLineHeight == rhs.maximumLineHeight
+      && lhs.firstLineHeadIndent == rhs.firstLineHeadIndent
+      && lhs.headIndent == rhs.headIndent
   }
 
   private func replaceLayoutManager(on textView: NSTextView) {
@@ -412,7 +500,6 @@ struct MultilineEditor: NSViewRepresentable {
     let fixed = FixedLineHeightLayoutManager()
     fixed.fixedLineHeight = EditorMetrics.lineHeight
     fixed.editorFont = font
-    fixed.delegate = fixed  // self-delegate for glyph-advance normalisation
     if let existing = storage.layoutManagers.first {
       storage.removeLayoutManager(existing)
     }
@@ -424,20 +511,50 @@ struct MultilineEditor: NSViewRepresentable {
     guard let storage = textView.textStorage else { return }
     let length = storage.length
     guard length > 0 else { return }
-    let fullRange = NSRange(location: 0, length: length)
-    var rangesNeedingStyle: [NSRange] = []
-    storage.enumerateAttribute(.paragraphStyle, in: fullRange) { value, range, _ in
-      guard let style = value as? NSParagraphStyle,
-        style.minimumLineHeight == EditorMetrics.lineHeight,
-        style.maximumLineHeight == EditorMetrics.lineHeight
-      else {
-        rangesNeedingStyle.append(range)
-        return
+    let text = storage.string as NSString
+    storage.beginEditing()
+    var location = 0
+    while location < length {
+      let lineRange = text.lineRange(for: NSRange(location: location, length: 0))
+      let contentEnd = text.lineContentEnd(of: lineRange)
+      let contentRange = NSRange(
+        location: lineRange.location,
+        length: max(0, contentEnd - lineRange.location)
+      )
+      let lineText = contentRange.length > 0 ? text.substring(with: contentRange) : ""
+      let desiredStyle = paragraphStyle(forLineText: lineText)
+      if shouldApplyParagraphStyle(desiredStyle, to: lineRange, in: storage) {
+        storage.addAttribute(.paragraphStyle, value: desiredStyle, range: lineRange)
       }
+      let nextLocation = lineRange.location + lineRange.length
+      guard nextLocation > location else { break }
+      location = nextLocation
     }
-    for range in rangesNeedingStyle {
-      storage.addAttribute(.paragraphStyle, value: fixedParagraphStyle, range: range)
+    storage.endEditing()
+  }
+
+  private func paragraphStyle(forLineText lineText: String) -> NSParagraphStyle {
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else {
+      return fixedParagraphStyle
     }
+    let indent = ceil((prefix as NSString).size(withAttributes: [.font: font]).width)
+    return Self.fixedParagraphStyle(headIndent: indent)
+  }
+
+  private func shouldApplyParagraphStyle(
+    _ desiredStyle: NSParagraphStyle,
+    to range: NSRange,
+    in storage: NSTextStorage
+  ) -> Bool {
+    guard range.length > 0 else { return false }
+    let current =
+      storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil)
+      as? NSParagraphStyle
+    guard let current else { return true }
+    return current.minimumLineHeight != desiredStyle.minimumLineHeight
+      || current.maximumLineHeight != desiredStyle.maximumLineHeight
+      || current.firstLineHeadIndent != desiredStyle.firstLineHeadIndent
+      || current.headIndent != desiredStyle.headIndent
   }
 
   func applyCodeStyling(on textView: NSTextView) {
@@ -445,16 +562,18 @@ struct MultilineEditor: NSViewRepresentable {
   }
 
   private func configureRuler(scroll: NSScrollView, textView: NSTextView, visible: Bool) {
-    if visible {
-      if !(scroll.verticalRulerView is LineNumberRuler) {
-        scroll.verticalRulerView = LineNumberRuler(textView: textView, editorFont: font)
-      }
-      scroll.hasVerticalRuler = true
-      scroll.rulersVisible = true
+    let ruler: LineNumberRuler
+    if let existing = scroll.verticalRulerView as? LineNumberRuler {
+      ruler = existing
     } else {
-      scroll.rulersVisible = false
-      scroll.hasVerticalRuler = false
+      ruler = LineNumberRuler(textView: textView, editorFont: font, showsLineNumbers: visible)
+      scroll.verticalRulerView = ruler
     }
+    if ruler.showsLineNumbers != visible {
+      ruler.showsLineNumbers = visible
+    }
+    scroll.hasVerticalRuler = true
+    scroll.rulersVisible = true
   }
 
 }
@@ -464,7 +583,6 @@ struct MultilineEditor: NSViewRepresentable {
 final class PlaceholderTextView: NSTextView {
   private enum RenderedTokenKind {
     case today
-    case checklist
   }
 
   private struct RenderedToken {
@@ -489,23 +607,40 @@ final class PlaceholderTextView: NSTextView {
   weak var suggestionField: SuggestionView?
   var pendingSuggestion: String?
   var editorTextAttributes: [NSAttributedString.Key: Any] = [:]
-  var checkboxCheckedColor: NSColor = .systemGreen.withAlphaComponent(0.95)
-  var checkboxUncheckedColor: NSColor = .secondaryLabelColor.withAlphaComponent(0.6)
+  var editorHeadingTextColor: NSColor?
+  /// Active theme's cursor color; falls back to `normalModeCursorColor` when the
+  /// style pass hasn't run yet.
+  var editorCursorColor: NSColor?
+  /// Fallback cursor color used before a theme is applied.
+  static let normalModeCursorColor = NSColor(
+    srgbRed: 221 / 255,
+    green: 179 / 255,
+    blue: 255 / 255,
+    alpha: 1
+  )
 
-  var copyButtonClearance: CGFloat = 0
   /// Caret position captured when entering visual line mode. The
   /// rendered selection always spans full lines from this anchor to
   /// wherever the caret currently sits, so motions just move the
   /// "tail" of the selection.
+  var visualAnchor: Int?
+  var visualCaret: Int?
   var visualLineAnchor: Int?
   /// Live caret tracked separately from the selection -- `extendVisualLine`
   /// uses it as the moving end (above OR below the anchor) so motions
   /// extend symmetrically instead of always re-collapsing to a fixed
   /// edge of the snapped line range.
   var visualLineCaret: Int?
+  var vimPasteboard: NSPasteboard = .general
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onAppendDailyNote: ((String) async throws -> URL)?
+  var onAppendTrayNote: ((String) async throws -> URL)?
+  var checklistLines: [Int: ChecklistLineState] = [:]
+  var onChecklistLinesChange: (([Int: ChecklistLineState]) -> Void)?
+  var linearTaskToday: Date?
   var flashHints: [VimFlashTarget] = []
   var flashLabelBuffer: String = ""
   var isShowingLineFlashHints = false
@@ -513,7 +648,7 @@ final class PlaceholderTextView: NSTextView {
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
-  private var isPasting = false
+  var isPasting = false
   private var suppressedOccurrences: [SuppressedTokenOccurrence] = []
 
   var vimModeEnabled: Bool = false {
@@ -527,19 +662,6 @@ final class PlaceholderTextView: NSTextView {
       notifyVimModeChanged()
       needsDisplay = true
     }
-  }
-
-  override func layout() {
-    super.layout()
-    guard copyButtonClearance > 0, let container = textContainer else { return }
-    let containerWidth = container.size.width
-    let rect = NSRect(
-      x: containerWidth - copyButtonClearance,
-      y: 0,
-      width: copyButtonClearance,
-      height: EditorMetrics.lineHeight
-    )
-    container.exclusionPaths = [NSBezierPath(rect: rect)]
   }
 
   override func keyDown(with event: NSEvent) {
@@ -573,16 +695,46 @@ final class PlaceholderTextView: NSTextView {
       onEscape?()
       return
     }
-    if mods.isEmpty, let suggestion = pendingSuggestion, shouldAcceptSuggestion(event: event) {
-      acceptSuggestion(suggestion)
+    if handleCompletionOrMarkdownOutlineTab(event: event, modifiers: mods) {
       return
     }
     super.keyDown(with: event)
   }
 
+  private func handleCompletionOrMarkdownOutlineTab(
+    event: NSEvent,
+    modifiers mods: NSEvent.ModifierFlags
+  ) -> Bool {
+    if mods.isEmpty, let suggestion = pendingSuggestion, shouldAcceptSuggestion(event: event) {
+      acceptSuggestion(suggestion)
+      return true
+    }
+    return handleMarkdownOutlineTab(event: event, modifiers: mods)
+  }
+
+  func handleMarkdownOutlineTab(event: NSEvent, modifiers mods: NSEvent.ModifierFlags) -> Bool {
+    guard event.keyCode == 48, mods.subtracting(.shift).isEmpty else { return false }
+    return adjustCurrentMarkdownOutlineLine(outdent: mods.contains(.shift))
+  }
+
   override func deleteBackward(_ sender: Any?) {
     if revertLastRenderedTokenIfPossible() { return }
     super.deleteBackward(sender)
+  }
+
+  override func insertNewline(_ sender: Any?) {
+    if insertMarkdownOutlineNewline() { return }
+    super.insertNewline(sender)
+  }
+
+  override func insertTab(_ sender: Any?) {
+    if adjustCurrentMarkdownOutlineLine(outdent: false) { return }
+    super.insertTab(sender)
+  }
+
+  override func insertBacktab(_ sender: Any?) {
+    if adjustCurrentMarkdownOutlineLine(outdent: true) { return }
+    super.insertBacktab(sender)
   }
 
   override func paste(_ sender: Any?) {
@@ -598,17 +750,99 @@ final class PlaceholderTextView: NSTextView {
       replacement: replacementString,
       isPaste: isPasting
     )
-    return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+    let allowed = super.shouldChangeText(
+      in: affectedCharRange,
+      replacementString: replacementString
+    )
+    if allowed {
+      applyChecklistLineEdit(
+        affectedRange: affectedCharRange,
+        replacementString: replacementString ?? ""
+      )
+    }
+    return allowed
   }
 
-  override func mouseDown(with event: NSEvent) {
-    let point = convert(event.locationInWindow, from: nil)
-    let containerPoint = NSPoint(
-      x: point.x - textContainerOrigin.x,
-      y: point.y - textContainerOrigin.y
-    )
-    if toggleChecklistAtPoint(containerPoint) { return }
-    super.mouseDown(with: event)
+  func synchronizeChecklistLinesWithCurrentText() {
+    setChecklistLines(ChecklistDocument.prunedChecklistLines(checklistLines, for: string))
+  }
+
+  private func applyChecklistLineEdit(affectedRange: NSRange, replacementString: String) {
+    let before = string as NSString
+    guard affectedRange.location <= before.length,
+      affectedRange.location + affectedRange.length <= before.length
+    else { return }
+    let insertedNewlines = newlineCount(in: replacementString)
+    guard affectedRange.length > 0 || insertedNewlines > 0 else { return }
+    let removed = before.substring(with: affectedRange)
+    let removedNewlines = newlineCount(in: removed)
+    let delta = insertedNewlines - removedNewlines
+    let affectedEnd = affectedRange.location + affectedRange.length
+    let after = before.replacingCharacters(in: affectedRange, with: replacementString) as NSString
+    let lineRanges = logicalLineRanges(in: before)
+    var updated: [Int: ChecklistLineState] = [:]
+    for (index, state) in checklistLines.sorted(by: { $0.key < $1.key }) {
+      guard index >= 0, index < lineRanges.count else { continue }
+      let lineRange = lineRanges[index]
+      let lineEnd = lineRange.location + lineRange.length
+      let target: Int?
+      if affectedRange.length == 0 {
+        let lineIsVisiblyEmpty = before.lineContentEnd(of: lineRange) == lineRange.location
+        let insertsBeforeLine =
+          affectedRange.location < lineRange.location
+          || (affectedRange.location == lineRange.location && !lineIsVisiblyEmpty)
+        target = insertsBeforeLine ? index + insertedNewlines : index
+      } else if lineEnd <= affectedRange.location {
+        target = index
+      } else if lineRange.location >= affectedEnd {
+        target = index + delta
+      } else if lineRange.location >= affectedRange.location, lineEnd <= affectedEnd {
+        target = nil
+      } else {
+        target = lineIndex(containing: min(lineRange.location, affectedRange.location), in: after)
+      }
+      if let target, updated[target] == nil {
+        updated[target] = state
+      }
+    }
+    setChecklistLines(updated, pruningAgainst: after as String)
+  }
+
+  private func setChecklistLines(
+    _ updated: [Int: ChecklistLineState],
+    pruningAgainst text: String? = nil
+  ) {
+    let pruned = ChecklistDocument.prunedChecklistLines(updated, for: text ?? string)
+    guard pruned != checklistLines else { return }
+    checklistLines = pruned
+    onChecklistLinesChange?(pruned)
+    enclosingScrollView?.verticalRulerView?.needsDisplay = true
+  }
+
+  private func logicalLineRanges(in text: NSString) -> [NSRange] {
+    if text.length == 0 { return [NSRange(location: 0, length: 0)] }
+    var ranges: [NSRange] = []
+    var location = 0
+    while location < text.length {
+      let range = text.lineRange(for: NSRange(location: location, length: 0))
+      ranges.append(range)
+      location = max(location + 1, range.location + range.length)
+    }
+    if text.character(at: text.length - 1) == 0x0A {
+      ranges.append(NSRange(location: text.length, length: 0))
+    }
+    return ranges
+  }
+
+  private func lineIndex(containing location: Int, in text: NSString) -> Int {
+    let clamped = min(max(0, location), text.length)
+    guard clamped > 0 else { return 0 }
+    let prefix = text.substring(with: NSRange(location: 0, length: clamped))
+    return newlineCount(in: prefix)
+  }
+
+  private func newlineCount(in text: String) -> Int {
+    text.reduce(0) { $0 + ($1 == "\n" ? 1 : 0) }
   }
 
   override func tryToPerform(_ action: Selector, with object: Any?) -> Bool {
@@ -643,32 +877,146 @@ final class PlaceholderTextView: NSTextView {
       moveByLogicalLines(delta)
       return
     }
+    if executeVisibleBoundaryMotion(motion) { return }
+    if executeVimWordForwardMotion(motion) { return }
     if let (selector, count) = repeatedMotion(motion) {
       for _ in 0..<count { selector(self) }
       return
     }
     switch motion {
-    case .lineStart: moveToBeginningOfLine(self)
+    case .documentStart:
+      moveToDocumentStartForVim()
+    case .documentEnd:
+      moveToDocumentEndForVim()
+    default:
+      return
+    }
+  }
+
+  private func moveToDocumentStartForVim() {
+    setSelectedRange(NSRange(location: 0, length: 0))
+    if let clipView = enclosingScrollView?.contentView {
+      let constrained = clipView.constrainBoundsRect(
+        NSRect(origin: .zero, size: clipView.bounds.size)
+      )
+      clipView.scroll(to: constrained.origin)
+      enclosingScrollView?.reflectScrolledClipView(clipView)
+    } else {
+      scroll(.zero)
+    }
+    needsDisplay = true
+  }
+
+  private func moveToDocumentEndForVim() {
+    let length = (string as NSString).length
+    setSelectedRange(NSRange(location: length, length: 0))
+    if let clipView = enclosingScrollView?.contentView {
+      let bottomOriginY = max(
+        clipView.documentRect.minY,
+        clipView.documentRect.maxY - clipView.bounds.height
+      )
+      let constrained = clipView.constrainBoundsRect(
+        NSRect(
+          x: clipView.bounds.origin.x,
+          y: bottomOriginY,
+          width: clipView.bounds.width,
+          height: clipView.bounds.height
+        )
+      )
+      clipView.scroll(to: constrained.origin)
+      enclosingScrollView?.reflectScrolledClipView(clipView)
+    } else {
+      scrollRangeToVisible(NSRange(location: length, length: 0))
+    }
+    needsDisplay = true
+  }
+
+  private func executeVisibleBoundaryMotion(_ motion: Motion) -> Bool {
+    switch motion {
+    case .left(let count): moveHorizontallyByVisibleColumns(-count)
+    case .right(let count): moveHorizontallyByVisibleColumns(count)
+    case .lineStart: moveToVisibleLineStart()
     case .lineEnd: moveToEndOfLine(self)
     case .firstNonBlank: moveToFirstNonBlank()
-    case .documentStart:
-      setSelectedRange(NSRange(location: 0, length: 0))
-    case .documentEnd:
-      setSelectedRange(NSRange(location: (string as NSString).length, length: 0))
-    default:
-      break
+    default: return false
     }
+    return true
   }
 
   private func repeatedMotion(_ motion: Motion) -> ((Any?) -> Void, Int)? {
     switch motion {
-    case .left(let count): return (moveBackward(_:), count)
-    case .right(let count): return (moveForward(_:), count)
-    case .wordForward(let count), .wordEnd(let count):
+    case .wordEnd(let count):
       return (moveWordForward(_:), count)
     case .wordBackward(let count): return (moveWordBackward(_:), count)
     default: return nil
     }
+  }
+
+  private func executeVimWordForwardMotion(_ motion: Motion) -> Bool {
+    guard case .wordForward(let count) = motion else { return false }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return true }
+    var location = min(max(0, selectedRange.location), nsString.length)
+    for _ in 0..<max(1, count) {
+      location = vimWordForwardLocation(from: location, in: nsString)
+    }
+    setInsertionPoint(location)
+    scrollRangeToVisible(NSRange(location: location, length: 0))
+    return true
+  }
+
+  private func vimWordForwardLocation(from location: Int, in nsString: NSString) -> Int {
+    var index = min(max(0, location), nsString.length)
+    guard index < nsString.length else { return nsString.length }
+    if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+      return bodyStart
+    }
+
+    let currentClass = vimWordClass(at: index, in: nsString)
+    if currentClass != .whitespace {
+      while index < nsString.length, vimWordClass(at: index, in: nsString) == currentClass {
+        if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+          return bodyStart
+        }
+        index += 1
+      }
+    }
+    return vimNextWordStart(from: index, in: nsString)
+  }
+
+  private func vimNextWordStart(from location: Int, in nsString: NSString) -> Int {
+    var index = min(max(0, location), nsString.length)
+    while index < nsString.length {
+      if let bodyStart = markdownListBodyStart(containing: index, in: nsString), index < bodyStart {
+        return bodyStart
+      }
+      if vimWordClass(at: index, in: nsString) != .whitespace {
+        return index
+      }
+      index += 1
+    }
+    return nsString.length
+  }
+
+  private func vimWordClass(at location: Int, in nsString: NSString) -> VimWordClass {
+    guard location >= 0, location < nsString.length else { return .whitespace }
+    let codeUnit = nsString.character(at: location)
+    guard let scalar = UnicodeScalar(UInt32(codeUnit)) else { return .punctuation }
+    if CharacterSet.whitespacesAndNewlines.contains(scalar) { return .whitespace }
+    if CharacterSet.alphanumerics.contains(scalar) || scalar.value == 95 { return .keyword }
+    return .punctuation
+  }
+
+  private func markdownListBodyStart(containing location: Int, in nsString: NSString) -> Int? {
+    guard nsString.length > 0 else { return nil }
+    let line = logicalLineRange(containing: min(location, nsString.length), in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    guard contentEnd >= line.location else { return nil }
+    let lineText = nsString.substring(
+      with: NSRange(location: line.location, length: contentEnd - line.location)
+    )
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return nil }
+    return min(line.location + (prefix as NSString).length, contentEnd)
   }
 
   private func logicalLineDelta(for motion: Motion) -> Int? {
@@ -681,51 +1029,265 @@ final class PlaceholderTextView: NSTextView {
     guard delta != 0 else { return }
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
-    let lines = logicalLineRanges(in: nsString)
-    guard !lines.isEmpty else { return }
     let cursor = min(selectedRange.location, nsString.length)
-    let currentIndex = logicalLineIndex(containing: cursor, in: lines)
-    let currentLine = lines[currentIndex]
-    let column = max(0, cursor - currentLine.location)
-    let targetIndex = min(max(0, currentIndex + delta), lines.count - 1)
-    let targetLine = lines[targetIndex]
-    let targetEnd = lineContentEnd(targetLine, in: nsString)
-    setInsertionPoint(min(targetLine.location + column, targetEnd))
+    let currentLine = logicalLineRange(containing: cursor, in: nsString)
+    let column = visibleColumn(for: cursor, in: currentLine, text: nsString)
+    let targetLine = logicalLineRange(moving: delta, from: currentLine, in: nsString)
+    setInsertionPoint(rawLocation(forVisibleColumn: column, in: targetLine, text: nsString))
+    scrollVimLogicalMotionTargetIntoView()
   }
 
-  private func logicalLineRanges(in nsString: NSString) -> [NSRange] {
-    var ranges: [NSRange] = []
-    var location = 0
-    while location < nsString.length {
-      let range = nsString.lineRange(for: NSRange(location: location, length: 0))
-      ranges.append(range)
-      let next = range.location + range.length
-      guard next > location else { break }
-      location = next
+  private func scrollVimLogicalMotionTargetIntoView() {
+    guard let clipView = enclosingScrollView?.contentView else {
+      scrollRangeToVisible(selectedRange)
+      return
     }
-    if nsString.length > 0, nsString.character(at: nsString.length - 1) == 0x0A {
-      ranges.append(NSRange(location: nsString.length, length: 0))
+    let caretRect = normalizedInsertionPointRect(
+      NSRect(x: 0, y: 0, width: 1, height: EditorMetrics.lineHeight)
+    )
+    let visible = clipView.documentVisibleRect
+    var targetBounds = clipView.bounds
+    if caretRect.minY < visible.minY {
+      targetBounds.origin.y = caretRect.minY
+    } else if caretRect.maxY > visible.maxY {
+      targetBounds.origin.y = caretRect.maxY - visible.height
+    } else {
+      return
     }
-    return ranges
+    let constrained = clipView.constrainBoundsRect(targetBounds)
+    clipView.scroll(to: constrained.origin)
+    enclosingScrollView?.reflectScrolledClipView(clipView)
+    enclosingScrollView?.flashScrollers()
   }
 
-  private func logicalLineIndex(containing cursor: Int, in lines: [NSRange]) -> Int {
-    for (index, line) in lines.enumerated() {
-      if cursor >= line.location, cursor < line.location + line.length {
-        return index
+  private func visibleColumn(for location: Int, in line: NSRange, text nsString: NSString) -> Int {
+    let contentEnd = nsString.lineContentEnd(of: line)
+    let clampedLocation = min(max(line.location, location), contentEnd)
+    return max(0, clampedLocation - line.location)
+  }
+
+  private func rawLocation(
+    forVisibleColumn column: Int,
+    in line: NSRange,
+    text nsString: NSString
+  ) -> Int {
+    let contentEnd = nsString.lineContentEnd(of: line)
+    return min(line.location + max(0, column), contentEnd)
+  }
+
+  private func moveHorizontallyByVisibleColumns(_ delta: Int) {
+    guard delta != 0 else { return }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    let currentColumn = visibleColumn(for: cursor, in: line, text: nsString)
+    let finalColumn = visibleColumn(for: contentEnd, in: line, text: nsString)
+    let targetColumn = min(max(0, currentColumn + delta), finalColumn)
+    setInsertionPoint(rawLocation(forVisibleColumn: targetColumn, in: line, text: nsString))
+  }
+
+  private func moveToVisibleLineStart() {
+    let nsString = string as NSString
+    guard nsString.length > 0 else {
+      setInsertionPoint(0)
+      return
+    }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    setInsertionPoint(rawLocation(forVisibleColumn: 0, in: line, text: nsString))
+  }
+
+  func openLineBelowForVim() {
+    openLineForVim(above: false)
+  }
+
+  func openLineAboveForVim() {
+    openLineForVim(above: true)
+  }
+
+  func changeCurrentBulletBodyForVim() {
+    guard selectedRange.length == 0 else { return }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    let lineText = nsString.substring(
+      with: NSRange(location: line.location, length: contentEnd - line.location)
+    )
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return }
+
+    let bodyStart = line.location + (prefix as NSString).length
+    let bodyRange = NSRange(location: bodyStart, length: max(0, contentEnd - bodyStart))
+    if bodyRange.length > 0 {
+      guard shouldChangeText(in: bodyRange, replacementString: "") else { return }
+      replaceCharacters(in: bodyRange, with: "")
+      didChangeText()
+    }
+    setInsertionPoint(min(bodyStart, (string as NSString).length))
+    scrollRangeToVisible(NSRange(location: selectedRange.location, length: 0))
+  }
+
+  private func openLineForVim(above: Bool) {
+    let nsString = string as NSString
+    let cursor = min(selectedRange.location, nsString.length)
+    let currentLine = logicalLineRange(containing: cursor, in: nsString)
+    let currentLineIndex = lineIndex(containing: cursor, in: nsString)
+    let originalChecklistLines = checklistLines
+    let currentIsChecklist = originalChecklistLines[currentLineIndex] != nil
+    let currentLineText = nsString.substring(
+      with: NSRange(
+        location: currentLine.location,
+        length: nsString.lineContentEnd(of: currentLine) - currentLine.location
+      )
+    )
+    let outlinePrefix = MarkdownOutline.continuationPrefix(in: currentLineText)
+    let insertionPoint: Int
+    let insertionText: String
+    let caretAfterInsert: Int
+    let newLineIndex: Int
+    if above {
+      insertionPoint = currentLine.location
+      insertionText = outlinePrefix.map { $0 + "\n" } ?? "\n"
+      caretAfterInsert = insertionPoint + (outlinePrefix.map { ($0 as NSString).length } ?? 0)
+      newLineIndex = currentLineIndex
+    } else {
+      insertionPoint = currentLine.location + currentLine.length
+      let lineHasTerminator =
+        currentLine.length > 0
+        && insertionPoint <= nsString.length
+        && nsString.character(at: insertionPoint - 1) == 0x0A
+      if let outlinePrefix {
+        insertionText = lineHasTerminator ? outlinePrefix + "\n" : "\n" + outlinePrefix
+        caretAfterInsert =
+          insertionPoint + (outlinePrefix as NSString).length + (lineHasTerminator ? 0 : 1)
+      } else {
+        insertionText = "\n"
+        caretAfterInsert = lineHasTerminator ? insertionPoint : insertionPoint + 1
       }
+      newLineIndex = currentLineIndex + 1
     }
-    return max(0, lines.count - 1)
+
+    let range = NSRange(location: insertionPoint, length: 0)
+    guard shouldChangeText(in: range, replacementString: insertionText) else { return }
+    replaceCharacters(in: range, with: insertionText)
+    didChangeText()
+    setChecklistLines(
+      checklistLinesAfterOpeningVimLine(
+        originalChecklistLines,
+        newLineIndex: newLineIndex,
+        inheritsChecklistState: currentIsChecklist
+      )
+    )
+    let caret = min(caretAfterInsert, (string as NSString).length)
+    setInsertionPoint(caret)
+    scrollRangeToVisible(NSRange(location: caret, length: 0))
   }
 
-  private func lineContentEnd(_ line: NSRange, in nsString: NSString) -> Int {
-    var end = line.location + line.length
-    while end > line.location {
-      let ch = nsString.character(at: end - 1)
-      guard ch == 0x0A || ch == 0x0D else { break }
-      end -= 1
+  private func checklistLinesAfterOpeningVimLine(
+    _ original: [Int: ChecklistLineState],
+    newLineIndex: Int,
+    inheritsChecklistState: Bool
+  ) -> [Int: ChecklistLineState] {
+    var shifted: [Int: ChecklistLineState] = [:]
+    for (index, state) in original {
+      shifted[index >= newLineIndex ? index + 1 : index] = state
     }
-    return end
+    if inheritsChecklistState {
+      shifted[newLineIndex] = .unchecked
+    }
+    return shifted
+  }
+
+  @discardableResult
+  private func insertMarkdownOutlineNewline() -> Bool {
+    guard selectedRange.length == 0 else { return false }
+    let nsString = string as NSString
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    let lineRange = NSRange(location: line.location, length: contentEnd - line.location)
+    let lineText = nsString.substring(with: lineRange)
+    guard let prefix = MarkdownOutline.continuationPrefix(in: lineText) else { return false }
+
+    if MarkdownOutline.isBareListItem(lineText) {
+      guard shouldChangeText(in: lineRange, replacementString: "") else { return true }
+      replaceCharacters(in: lineRange, with: "")
+      didChangeText()
+      setInsertionPoint(line.location)
+      return true
+    }
+
+    let insertion = "\n" + prefix
+    let range = NSRange(location: cursor, length: 0)
+    guard shouldChangeText(in: range, replacementString: insertion) else { return true }
+    replaceCharacters(in: range, with: insertion)
+    didChangeText()
+    setInsertionPoint(cursor + (insertion as NSString).length)
+    return true
+  }
+
+  @discardableResult
+  func adjustCurrentMarkdownOutlineLine(outdent: Bool) -> Bool {
+    guard selectedRange.length == 0 else { return false }
+    let nsString = string as NSString
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    let lineRange = NSRange(location: line.location, length: contentEnd - line.location)
+    let lineText = nsString.substring(with: lineRange)
+    let replacement =
+      outdent
+      ? MarkdownOutline.outdentedLine(lineText)
+      : MarkdownOutline.indentedLine(lineText)
+    guard let replacement, replacement != lineText else { return false }
+    guard shouldChangeText(in: lineRange, replacementString: replacement) else { return true }
+    replaceCharacters(in: lineRange, with: replacement)
+    didChangeText()
+    let delta = (replacement as NSString).length - lineRange.length
+    setInsertionPoint(max(line.location, min(cursor + delta, (string as NSString).length)))
+    return true
+  }
+
+  private func logicalLineRange(containing cursor: Int, in nsString: NSString) -> NSRange {
+    let isTrailingNewline =
+      cursor == nsString.length && cursor > 0 && nsString.character(at: cursor - 1) == 0x0A
+    if isTrailingNewline {
+      return NSRange(location: cursor, length: 0)
+    }
+    let probe = min(cursor, max(0, nsString.length - 1))
+    return nsString.lineRange(for: NSRange(location: probe, length: 0))
+  }
+
+  private func logicalLineRange(
+    moving delta: Int,
+    from line: NSRange,
+    in nsString: NSString
+  ) -> NSRange {
+    var current = line
+    if delta > 0 {
+      for _ in 0..<delta {
+        let nextStart = current.location + current.length
+        guard nextStart < nsString.length else {
+          let isTrailingNewline =
+            nextStart == nsString.length && nsString.length > 0
+            && nsString.character(at: nsString.length - 1) == 0x0A
+          if isTrailingNewline {
+            current = NSRange(location: nextStart, length: 0)
+          }
+          return current
+        }
+        current = nsString.lineRange(for: NSRange(location: nextStart, length: 0))
+      }
+      return current
+    }
+    for _ in 0..<abs(delta) {
+      guard current.location > 0 else { return current }
+      current = nsString.lineRange(for: NSRange(location: current.location - 1, length: 0))
+    }
+    return current
   }
 
   func executeDeleteMotion(_ motion: Motion) {
@@ -754,6 +1316,13 @@ final class PlaceholderTextView: NSTextView {
       range.length += 1
     }
     let cursorAfter = min(range.location, max(0, nsString.length - range.length))
+    // dd yanks the deleted line(s) to the system clipboard (so they can be
+    // pasted with `p` or into any other app), mirroring vim's delete-to-register.
+    let deleted = nsString.substring(with: range)
+    if !deleted.isEmpty {
+      vimPasteboard.clearContents()
+      vimPasteboard.setString(deleted, forType: .string)
+    }
     insertText("", replacementRange: range)
     setSelectedRange(NSRange(location: cursorAfter, length: 0))
   }
@@ -763,17 +1332,317 @@ final class PlaceholderTextView: NSTextView {
     executeVimAction(.switchToInsert)
   }
 
-  private func moveToFirstNonBlank() {
-    moveToBeginningOfLine(self)
-    let nsString = string as NSString
-    var cursor = selectedRange.location
-    while cursor < nsString.length {
-      guard let scalar = UnicodeScalar(nsString.character(at: cursor)) else { break }
-      let ch = Character(scalar)
-      guard ch == " " || ch == "\t" else { break }
-      cursor += 1
+  @objc func sendCurrentLineToLinearShortcut(_ sender: Any?) {
+    sendCurrentLinesToLinear(1)
+  }
+
+  @objc func appendCurrentLineToDailyNoteShortcut(_ sender: Any?) {
+    appendCurrentLinesToDailyNote(1)
+  }
+
+  func sendCurrentLinesToLinear(_ count: Int) {
+    sendCurrentTaskToLinear(status: .triage, count: count)
+  }
+
+  func sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int) {
+    guard let onSendLinearTask else {
+      vimController?.showMessage("Linear handoff unavailable", kind: .error, icon: .hermes)
+      return
     }
-    setSelectedRange(NSRange(location: cursor, length: 0))
+    let range = selectedTaskRange(count: max(1, count), in: string as NSString)
+    commitSelectedRange(
+      range,
+      preparing: { [weak self] original, _ in
+        LinearTaskMetadataParser.request(
+          from: original,
+          targetStatus: status,
+          today: self?.linearTaskToday ?? Date()
+        )
+      },
+      messages: LineCommitMessages(
+        empty: "No Linear task on this bullet",
+        progress: "Sending to Linear",
+        success: "Sent to Hermes for Linear",
+        changed: "Linear sent; bullet changed",
+        failure: "Linear send failed"
+      ),
+      commit: { try await onSendLinearTask($0) }
+    )
+  }
+
+  func appendCurrentLinesToDailyNote(_ count: Int) {
+    guard let onAppendDailyNote else {
+      vimController?.showMessage("Daily note handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    commitSelectedLines(
+      count: count,
+      preparing: { [weak self] original, range in
+        self?.dailyNotePayload(for: original, selectedRange: range)
+      },
+      messages: LineCommitMessages(
+        empty: "No daily-note text on this line",
+        progress: "Appending to Daily Note",
+        success: "Daily note updated",
+        changed: "Daily note updated; line changed",
+        failure: "Daily note append failed"
+      ),
+      commit: { _ = try await onAppendDailyNote($0) }
+    )
+  }
+
+  func appendCurrentLinesToTrayNote(_ count: Int) {
+    guard let onAppendTrayNote else {
+      vimController?.showMessage("tray.md handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedTrayNoteRange(count: max(1, count), in: nsString)
+    commitSelectedRange(
+      range,
+      preparing: { original, _ in TrayNotePayload.normalized(original) },
+      messages: LineCommitMessages(
+        empty: "No tray.md text on this line",
+        progress: "Appending to tray.md",
+        success: "Sent to tray.md",
+        changed: "Sent to tray.md; line changed",
+        failure: "tray.md append failed"
+      ),
+      commit: { _ = try await onAppendTrayNote($0) }
+    )
+  }
+
+  private func selectedTrayNoteRange(count: Int, in nsString: NSString) -> NSRange {
+    let selection = selectedRange
+    if isValidTrayNoteSelection(selection, in: nsString) {
+      return selection
+    }
+    return selectedTaskRange(count: count, in: nsString)
+  }
+
+  private func isValidTrayNoteSelection(_ selection: NSRange, in nsString: NSString) -> Bool {
+    selection.length > 0
+      && selection.location >= 0
+      && selection.location + selection.length <= nsString.length
+  }
+
+  private struct LineCommitMessages: Sendable {
+    let empty: String
+    let progress: String
+    let success: String
+    let changed: String
+    let failure: String
+  }
+
+  private func commitSelectedLines<Payload: Sendable>(
+    count: Int,
+    preparing payloadFor: @escaping (String, NSRange) -> Payload?,
+    messages: LineCommitMessages,
+    commit: @escaping (Payload) async throws -> Void
+  ) {
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedLineRange(count: max(1, count), in: nsString)
+    commitSelectedRange(
+      range,
+      preparing: payloadFor,
+      messages: messages,
+      commit: commit
+    )
+  }
+
+  private func commitSelectedRange<Payload: Sendable>(
+    _ range: NSRange,
+    preparing payloadFor: @escaping (String, NSRange) -> Payload?,
+    messages: LineCommitMessages,
+    commit: @escaping (Payload) async throws -> Void
+  ) {
+    let nsString = string as NSString
+    guard nsString.length > 0,
+      range.location >= 0,
+      range.length > 0,
+      range.location + range.length <= nsString.length
+    else { return }
+    let original = nsString.substring(with: range)
+    guard let payload = payloadFor(original, range) else {
+      vimController?.showMessage(messages.empty, kind: .error, icon: .hermes)
+      return
+    }
+    vimController?.showMessage(messages.progress, kind: .info, icon: .hermes)
+    Task { @MainActor [weak self, range, original, payload, messages, commit] in
+      guard let self else { return }
+      do {
+        try await commit(payload)
+        let current = self.string as NSString
+        guard range.location + range.length <= current.length,
+          current.substring(with: range) == original
+        else {
+          self.vimController?.showMessage(messages.changed, kind: .error, icon: .hermes)
+          return
+        }
+        guard self.shouldChangeText(in: range, replacementString: "") else {
+          self.vimController?.showMessage(messages.changed, kind: .error, icon: .hermes)
+          return
+        }
+        self.replaceCharacters(in: range, with: "")
+        self.didChangeText()
+        let cursor = min(range.location, (self.string as NSString).length)
+        self.setSelectedRange(NSRange(location: cursor, length: 0))
+        self.vimController?.showMessage(messages.success, kind: .success, icon: .hermes)
+      } catch {
+        self.vimController?.showMessage(messages.failure, kind: .error, icon: .hermes)
+      }
+    }
+  }
+
+  private func dailyNotePayload(for selectedText: String, selectedRange: NSRange) -> String? {
+    let document = string as NSString
+    let firstSelectedLine = lineIndex(containing: selectedRange.location, in: document)
+    let selectedLineCount = selectedText.components(separatedBy: "\n").count
+    var selectedChecklistLines: [Int: ChecklistLineState] = [:]
+    for (index, state) in checklistLines {
+      let relative = index - firstSelectedLine
+      if relative >= 0, relative < selectedLineCount {
+        selectedChecklistLines[relative] = state
+      }
+    }
+    let markdown = ChecklistDocument.serializeMarkdown(
+      text: selectedText,
+      checklistLines: selectedChecklistLines
+    )
+    return DailyNotePayload.normalized(markdown)
+  }
+
+  private struct BulletLineInfo {
+    let indent: Int
+  }
+
+  private func selectedTaskRange(count: Int, in nsString: NSString) -> NSRange {
+    guard nsString.length > 0 else { return NSRange(location: 0, length: 0) }
+    let lineRanges = logicalLineRanges(in: nsString)
+    let currentLine = min(
+      lineIndex(containing: selectedRange.location, in: nsString),
+      max(0, lineRanges.count - 1)
+    )
+    guard
+      let firstBullet = bulletStartLine(containing: currentLine, ranges: lineRanges, in: nsString)
+    else {
+      return selectedLineRange(count: count, in: nsString)
+    }
+
+    var finalEnd = bulletBlockEnd(startingAt: firstBullet, ranges: lineRanges, in: nsString)
+    var remaining = max(1, count) - 1
+    while remaining > 0 {
+      guard let nextStart = nextBulletStart(after: finalEnd, ranges: lineRanges, in: nsString)
+      else {
+        break
+      }
+      finalEnd = bulletBlockEnd(startingAt: nextStart, ranges: lineRanges, in: nsString)
+      remaining -= 1
+    }
+
+    let startLocation = lineRanges[firstBullet].location
+    let endLine = max(firstBullet, min(finalEnd - 1, lineRanges.count - 1))
+    var range = NSRange(
+      location: startLocation,
+      length: lineRanges[endLine].location + lineRanges[endLine].length - startLocation
+    )
+    if range.location > 0, range.location + range.length >= nsString.length {
+      range.location -= 1
+      range.length += 1
+    }
+    return range
+  }
+
+  private func bulletStartLine(
+    containing lineIndex: Int,
+    ranges: [NSRange],
+    in text: NSString
+  ) -> Int? {
+    var index = min(max(0, lineIndex), max(0, ranges.count - 1))
+    while index >= 0 {
+      let line = lineText(at: index, ranges: ranges, in: text)
+      if bulletInfo(for: line) != nil { return index }
+      let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty || trimmed.hasPrefix("#") { return nil }
+      index -= 1
+    }
+    return nil
+  }
+
+  private func bulletBlockEnd(startingAt start: Int, ranges: [NSRange], in text: NSString) -> Int {
+    let startIndent = bulletInfo(for: lineText(at: start, ranges: ranges, in: text))?.indent ?? 0
+    var index = start + 1
+    while index < ranges.count {
+      let line = lineText(at: index, ranges: ranges, in: text)
+      let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty || trimmed.hasPrefix("#") { break }
+      if let info = bulletInfo(for: line), info.indent <= startIndent { break }
+      index += 1
+    }
+    return index
+  }
+
+  private func nextBulletStart(after lineIndex: Int, ranges: [NSRange], in text: NSString) -> Int? {
+    var index = min(max(0, lineIndex), ranges.count)
+    while index < ranges.count {
+      if bulletInfo(for: lineText(at: index, ranges: ranges, in: text)) != nil { return index }
+      index += 1
+    }
+    return nil
+  }
+
+  private func bulletInfo(for rawLine: String) -> BulletLineInfo? {
+    let pattern = #"^([ \t]*)(?:[-*•]|\d+[.)])[ \t]+"#
+    guard let regex = try? NSRegularExpression(pattern: pattern),
+      let match = regex.firstMatch(
+        in: rawLine,
+        range: NSRange(location: 0, length: (rawLine as NSString).length)
+      ),
+      let indentRange = Range(match.range(at: 1), in: rawLine)
+    else { return nil }
+    return BulletLineInfo(indent: rawLine[indentRange].count)
+  }
+
+  private func lineText(at index: Int, ranges: [NSRange], in text: NSString) -> String {
+    guard index >= 0, index < ranges.count else { return "" }
+    let range = ranges[index]
+    let length = text.lineContentEnd(of: range) - range.location
+    return text.substring(with: NSRange(location: range.location, length: length))
+  }
+
+  private func selectedLineRange(count: Int, in nsString: NSString) -> NSRange {
+    var range = nsString.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+    for _ in 1..<count {
+      let nextStart = range.location + range.length
+      guard nextStart < nsString.length else { break }
+      let nextLine = nsString.lineRange(for: NSRange(location: nextStart, length: 0))
+      range.length += nextLine.length
+    }
+    if range.location > 0, range.location + range.length >= nsString.length {
+      range.location -= 1
+      range.length += 1
+    }
+    return range
+  }
+
+  private func moveToFirstNonBlank() {
+    let nsString = string as NSString
+    guard nsString.length > 0 else {
+      setInsertionPoint(0)
+      return
+    }
+    let cursor = min(selectedRange.location, nsString.length)
+    let line = logicalLineRange(containing: cursor, in: nsString)
+    let contentEnd = nsString.lineContentEnd(of: line)
+    var location = line.location
+    while location < contentEnd {
+      let ch = nsString.character(at: location)
+      guard ch == 0x20 || ch == 0x09 else { break }
+      location += 1
+    }
+    setInsertionPoint(location)
   }
 
   func notifyVimModeChanged() {
@@ -784,7 +1653,6 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
-    drawCheckboxSymbols(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
@@ -804,72 +1672,22 @@ final class PlaceholderTextView: NSTextView {
     (placeholderString as NSString).draw(at: origin, withAttributes: attrs)
   }
 
-  // round(22 × 0.64) = 14 pt — (22 − 14) / 2 = 4 pt headroom each side, no clipping.
-  private var checkboxSymbolSize: CGFloat { round(EditorMetrics.lineHeight * 0.64) }
-
-  /// Draws an SF Symbol in place of each ☐/☑ glyph (which CodeStyler
-  /// hides with `.foregroundColor = .clear`). Called from `draw(_:)` so
-  /// it happens in the same graphics context as the rest of the text view.
-  private func drawCheckboxSymbols(in dirtyRect: NSRect) {
-    guard let lm = layoutManager, let tc = textContainer else { return }
-    let nsString = string as NSString
-    guard nsString.length > 0 else { return }
-    lm.ensureLayout(for: tc)
-    let size = checkboxSymbolSize
-    for charIdx in 0..<nsString.length {
-      let ch = nsString.character(at: charIdx)
-      guard ch == 0x2610 || ch == 0x2611 else { continue }
-      let glyphIdx = lm.glyphIndexForCharacter(at: charIdx)
-      let frag = lm.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: nil)
-      guard !frag.isEmpty else { continue }
-      let fragTopInView = textContainerOrigin.y + frag.origin.y
-      guard fragTopInView + frag.height > dirtyRect.minY,
-        fragTopInView < dirtyRect.maxY
-      else { continue }
-      let isChecked = ch == 0x2611
-      // checkmark.square = outline square + checkmark, no fill.
-      // Single palette colour renders both the square border and the checkmark.
-      let symbolName = isChecked ? "checkmark.square" : "square"
-      let color = isChecked ? checkboxCheckedColor : checkboxUncheckedColor
-      let cfg = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
-        .applying(.init(paletteColors: [color]))
-      guard
-        let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-          .withSymbolConfiguration(cfg)
-      else { continue }
-      let glyphLoc = lm.location(forGlyphAt: glyphIdx)
-      let drawX = textContainerOrigin.x + frag.origin.x + glyphLoc.x
-      let drawY = fragTopInView + (frag.height - size) / 2
-      img.draw(in: NSRect(x: drawX, y: drawY, width: size, height: size))
-    }
-  }
-
   /// Shrink the blinking caret to the font's ascender-to-descender height
   /// rather than the full 22pt forced-line-height fragment. The fixed
   /// layout manager centers glyphs inside that fragment, so the caret uses
   /// the same vertical inset.
   override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-    let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
     if vimEngine?.mode == .normal {
-      let caretFont = font ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
-      let blockWidth = max(
-        displayRect.width,
-        ceil(("M" as NSString).size(withAttributes: [.font: caretFont]).width)
-      )
-      let blockRect = NSRect(
-        x: displayRect.origin.x,
-        y: displayRect.origin.y,
-        width: blockWidth,
-        height: displayRect.height
-      )
-      guard flag else {
+      let blockRect = normalModeCursorDisplayRect(for: rect, turnedOn: flag)
+      if flag {
+        lastInsertionPointDisplayRect = blockRect
+        (editorCursorColor ?? Self.normalModeCursorColor).withAlphaComponent(0.82).setFill()
+        blockRect.fill()
+      } else {
         invalidateInsertionPointRect(blockRect)
-        return
       }
-      lastInsertionPointDisplayRect = blockRect
-      color.withAlphaComponent(0.82).setFill()
-      blockRect.fill()
     } else {
+      let displayRect = insertionPointDisplayRect(for: rect, turnedOn: flag)
       super.drawInsertionPoint(in: displayRect, color: color, turnedOn: flag)
       if flag {
         lastInsertionPointDisplayRect = displayRect
@@ -927,7 +1745,10 @@ final class PlaceholderTextView: NSTextView {
         originY = textContainerOrigin.y + extra.origin.y
       } else {
         let lastGlyphIndex = max(0, layoutManager.numberOfGlyphs - 1)
-        let fragment = layoutManager.lineFragmentRect(forGlyphAt: lastGlyphIndex, effectiveRange: nil)
+        let fragment = layoutManager.lineFragmentRect(
+          forGlyphAt: lastGlyphIndex,
+          effectiveRange: nil
+        )
         originY = textContainerOrigin.y + fragment.maxY
       }
       return NSRect(
@@ -959,7 +1780,8 @@ final class PlaceholderTextView: NSTextView {
 
   private func insertionPointX(cursor: Int, glyphIndex: Int, in nsString: NSString) -> CGFloat {
     guard cursor > 0, nsString.character(at: cursor - 1) != 0x0A, let textContainer else {
-      let fragment = layoutManager?.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil) ?? .zero
+      let fragment =
+        layoutManager?.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil) ?? .zero
       return textContainerOrigin.x + fragment.minX
     }
     let priorGlyph = layoutManager?.glyphIndexForCharacter(at: cursor - 1) ?? glyphIndex
@@ -972,7 +1794,7 @@ final class PlaceholderTextView: NSTextView {
   }
 
   override func setNeedsDisplay(_ invalidRect: NSRect) {
-    let dx: CGFloat = vimEngine?.mode == .normal ? -10 : 0
+    let dx: CGFloat = vimEngine?.mode == .normal ? -(EditorMetrics.normalModeCursorWidth + 2) : 0
     super.setNeedsDisplay(invalidRect.insetBy(dx: dx, dy: -2))
     if let lastInsertionPointDisplayRect {
       super.setNeedsDisplay(lastInsertionPointDisplayRect.insetBy(dx: dx, dy: -2))
@@ -981,14 +1803,6 @@ final class PlaceholderTextView: NSTextView {
 
   @objc func insertTodayBadgeToken(_ sender: Any?) {
     insertText("@today", replacementRange: NSRange(location: NSNotFound, length: 0))
-  }
-
-  @objc func insertChecklistToken(_ sender: Any?) {
-    insertText("@cl", replacementRange: NSRange(location: NSNotFound, length: 0))
-  }
-
-  @objc func toggleChecklistShortcut(_ sender: Any?) {
-    toggleChecklistAtCurrentLine()
   }
 
   // swiftlint:disable opening_brace
@@ -1004,9 +1818,7 @@ final class PlaceholderTextView: NSTextView {
     if edit.isPaste { return false }
     pruneSuppressedOccurrences(after: edit, in: originalNS)
 
-    if let replacement = edit.replacement,
-      replacement.count == 1 || replacement == "@today" || replacement == "@cl"
-    {
+    if let replacement = edit.replacement, replacement.count == 1 || replacement == "@today" {
       let caret = selectedRange.location
       if let tokenRange = originalNS.trailingTokenRange("@today", endingAt: caret),
         !isSuppressed(literal: "@today", range: tokenRange, in: originalNS)
@@ -1020,25 +1832,8 @@ final class PlaceholderTextView: NSTextView {
           renderedText: date,
           renderedRange: NSRange(location: tokenRange.location, length: (date as NSString).length)
         )
-        targetSelection = NSRange(location: tokenRange.location + (date as NSString).length, length: 0)
-      } else if let tokenRange = originalNS.trailingTokenRange("@cl", endingAt: caret),
-        !isSuppressed(literal: "@cl", range: tokenRange, in: originalNS),
-        !originalNS.lineContainsCheckbox(at: tokenRange.location)
-      {
-        let replacementText = "☐"
-        updated = originalNS.replacingCharacters(in: tokenRange, with: replacementText)
-        renderedToken = RenderedToken(
-          kind: .checklist,
-          tokenLiteral: "@cl",
-          reversionText: "[ ]",
-          renderedText: replacementText,
-          renderedRange: NSRange(
-            location: tokenRange.location,
-            length: (replacementText as NSString).length
-          )
-        )
         targetSelection = NSRange(
-          location: tokenRange.location + (replacementText as NSString).length,
+          location: tokenRange.location + (date as NSString).length,
           length: 0
         )
       }
@@ -1058,13 +1853,6 @@ final class PlaceholderTextView: NSTextView {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "d MMMM yyyy"
     return formatter.string(from: Date())
-  }
-
-  private func toggleChecklistAtCurrentLine() {
-    let nsString = string as NSString
-    let line = nsString.lineRange(for: NSRange(location: selectedRange.location, length: 0))
-    let caretInLine = selectedRange.location - line.location
-    guard toggleChecklist(in: line, targetOffset: caretInLine) else { return }
   }
 
   private func revertLastRenderedTokenIfPossible() -> Bool {
@@ -1121,74 +1909,6 @@ final class PlaceholderTextView: NSTextView {
     }
   }
 
-  /// Toggles the checkbox only when `containerPoint` lands within the
-  /// SF Symbol's drawn rect ± `hitPadding` horizontally (full line height
-  /// vertically — the user doesn't need sub-pixel vertical precision).
-  /// Clicking anywhere else on the line falls through to normal cursor
-  /// placement via `super.mouseDown`.
-  private func toggleChecklistAtPoint(_ containerPoint: NSPoint) -> Bool {
-    guard let lm = layoutManager, let tc = textContainer else { return false }
-    let nsString = string as NSString
-    guard nsString.length > 0 else { return false }
-    lm.ensureLayout(for: tc)
-    let size = checkboxSymbolSize
-    let hitPadding: CGFloat = 6
-    for charIdx in 0..<nsString.length {
-      let ch = nsString.character(at: charIdx)
-      guard ch == 0x2610 || ch == 0x2611 else { continue }
-      let glyphIdx = lm.glyphIndexForCharacter(at: charIdx)
-      let frag = lm.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: nil)
-      guard !frag.isEmpty else { continue }
-      let glyphLoc = lm.location(forGlyphAt: glyphIdx)
-      let symX = frag.origin.x + glyphLoc.x
-      let hitRect = NSRect(
-        x: symX - hitPadding,
-        y: frag.origin.y,
-        width: size + hitPadding * 2,
-        height: frag.height
-      )
-      guard hitRect.contains(containerPoint) else { continue }
-      let line = nsString.lineRange(for: NSRange(location: charIdx, length: 0))
-      return toggleChecklist(in: line, targetOffset: charIdx - line.location)
-    }
-    return false
-  }
-
-  @discardableResult
-  private func toggleChecklist(in lineRange: NSRange, targetOffset: Int) -> Bool {
-    let nsString = string as NSString
-    let lineText = nsString.substring(with: lineRange)
-    guard let markerRange = checklistMarkerRange(in: lineText, near: targetOffset) else { return false }
-    let nsLine = lineText as NSString
-    let marker = nsLine.substring(with: markerRange)
-    let replacement = marker == "☐" ? "☑" : "☐"
-    let absoluteRange = NSRange(location: lineRange.location + markerRange.location, length: markerRange.length)
-    if shouldChangeText(in: absoluteRange, replacementString: replacement) {
-      replaceCharacters(in: absoluteRange, with: replacement)
-      didChangeText()
-      return true
-    }
-    return false
-  }
-
-  private func checklistMarkerRange(in lineText: String, near targetOffset: Int) -> NSRange? {
-    let nsLine = lineText as NSString
-    var matches: [NSRange] = []
-    for index in 0..<nsLine.length {
-      let character = nsLine.character(at: index)
-      if character == 0x2610 || character == 0x2611 {
-        matches.append(NSRange(location: index, length: 1))
-      }
-    }
-    if matches.isEmpty { return nil }
-    if let containing = matches.first(where: { NSLocationInRange(targetOffset, $0) }) {
-      return containing
-    }
-    return matches.min { lhs, rhs in
-      abs(lhs.location - targetOffset) < abs(rhs.location - targetOffset)
-    }
-  }
-
   private func stabilizeTypingAttributes() {
     guard !editorTextAttributes.isEmpty else { return }
     typingAttributes = editorTextAttributes
@@ -1200,17 +1920,9 @@ final class PlaceholderTextView: NSTextView {
       return
     }
     let nsString = string as NSString
-    let raw = nsString.substring(with: selectedRange)
-    let lines = raw.components(separatedBy: "\n").map { line -> String in
-      if line.hasPrefix("☑ ") { return "[x] " + String(line.dropFirst(2)) }
-      if line == "☑" { return "[x]" }
-      if line.hasPrefix("☐") { return "[ ]" + String(line.dropFirst(2)) }
-      if line == "☐" { return "[ ]" }
-      return line
-    }
-    let mapped = lines.joined(separator: "\n")
+    let selected = nsString.substring(with: selectedRange)
     NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(mapped, forType: .string)
+    NSPasteboard.general.setString(selected, forType: .string)
   }
 
   private func isSuppressed(literal: String, range: NSRange, in nsString: NSString) -> Bool {
@@ -1241,10 +1953,41 @@ final class PlaceholderTextView: NSTextView {
   }
 
   private func setInsertionPoint(_ location: Int) {
+    invalidateNormalModeCursorDisplay()
     setSelectedRange(
       NSRange(location: location, length: 0),
       affinity: .downstream,
       stillSelecting: false
+    )
+    invalidateNormalModeCursorDisplay()
+    if vimEngine?.mode == .normal {
+      displayIfNeeded()
+    }
+  }
+
+  private func invalidateNormalModeCursorDisplay() {
+    guard vimEngine?.mode == .normal else { return }
+    let baseRect = NSRect(x: 0, y: 0, width: 1, height: EditorMetrics.lineHeight)
+    let current = normalModeCursorDisplayRect(for: baseRect, turnedOn: true)
+    super.setNeedsDisplay(current.insetBy(dx: -2, dy: -2))
+    if let lastInsertionPointDisplayRect {
+      super.setNeedsDisplay(lastInsertionPointDisplayRect.insetBy(dx: -2, dy: -2))
+    }
+  }
+
+  private func normalModeCursorDisplayRect(for rect: NSRect, turnedOn flag: Bool) -> NSRect {
+    let displayRect =
+      if flag {
+        shrinkInsertionPointRectToFont(normalizedInsertionPointRect(rect))
+      } else {
+        insertionPointDisplayRect(for: rect, turnedOn: false)
+      }
+
+    return NSRect(
+      x: displayRect.origin.x,
+      y: displayRect.origin.y,
+      width: max(displayRect.width, EditorMetrics.normalModeCursorWidth),
+      height: displayRect.height
     )
   }
 
@@ -1266,14 +2009,6 @@ extension NSString {
     return candidate == token ? NSRange(location: start, length: tokenLen) : nil
   }
 
-  func lineContainsCheckbox(at position: Int) -> Bool {
-    let line = lineRange(for: NSRange(location: position, length: 0))
-    for i in 0..<line.length {
-      let ch = character(at: line.location + i)
-      if ch == 0x2610 || ch == 0x2611 { return true }
-    }
-    return false
-  }
 }
 
 // MARK: - SuggestionView
@@ -1317,8 +2052,8 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
   var fixedLineHeight: CGFloat = EditorMetrics.lineHeight
   /// Cached editor font used for baseline centering. Avoids looking up
   /// `at: 0` from storage on every glyph placement, which is fragile
-  /// when position 0 holds a Unicode character (e.g. ☐) that triggers
-  /// system font substitution and produces wrong ascender metrics.
+  /// when position 0 falls back to a different font metric than the
+  /// editor font.
   var editorFont: NSFont = .systemFont(ofSize: EditorMetrics.fontSize)
 
   override func setLineFragmentRect(
@@ -1330,7 +2065,7 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
     // Derive origin.y from the previously stored rect so the typesetter's
     // internal Y-tracker (which advances by the glyph's *natural* height,
     // not our overridden height) cannot push subsequent lines off-grid.
-    // Without this, a substituted-font glyph on line N (e.g. ☐) causes
+    // Without this, a substituted-font glyph on line N can cause
     // line N+1 to land at natural_height instead of fixedLineHeight, and
     // the next partial re-layout corrects it — producing the visible shift.
     if glyphRange.location == 0 {
@@ -1379,72 +2114,4 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
     )
   }
 
-}
-
-// MARK: - FixedLineHeightLayoutManager + NSLayoutManagerDelegate
-
-/// Uses self-delegation to normalise the glyph advance of ☑ (U+2611) to
-/// match ☐ (U+2610). Both characters are rendered invisible by CodeStyler
-/// (`.foregroundColor = .clear`) and replaced visually with SF Symbols, so
-/// the actual glyph drawn is irrelevant. What matters is that both share
-/// the same advance width so toggling a checkbox never shifts text to its right.
-extension FixedLineHeightLayoutManager: NSLayoutManagerDelegate {
-  // swiftlint:disable:next function_parameter_count
-  func layoutManager(
-    _ layoutManager: NSLayoutManager,
-    shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
-    properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
-    characterIndexes charIndexes: UnsafePointer<Int>,
-    font aFont: NSFont,
-    forGlyphRange glyphRange: NSRange
-  ) -> Int {
-    guard let storage = textStorage else { return 0 }
-    let nsString = storage.string as NSString
-
-    // Fast-path: no ☑ in range → nothing to substitute
-    var hasChecked = false
-    for i in 0..<glyphRange.length where charIndexes[i] < nsString.length {
-      if nsString.character(at: charIndexes[i]) == 0x2611 {
-        hasChecked = true
-        break
-      }
-    }
-    guard hasChecked else { return 0 }
-
-    // Resolve ☐'s glyph in the current font so we can reuse it for ☑
-    var uncheckedChar: UniChar = 0x2610
-    var uncheckedGlyph: CGGlyph = 0
-    guard CTFontGetGlyphsForCharacters(aFont as CTFont, &uncheckedChar, &uncheckedGlyph, 1),
-      uncheckedGlyph != 0
-    else { return 0 }
-
-    var newGlyphs = Array(UnsafeBufferPointer(start: glyphs, count: glyphRange.length))
-    for i in 0..<glyphRange.length {
-      guard charIndexes[i] < nsString.length,
-        nsString.character(at: charIndexes[i]) == 0x2611
-      else { continue }
-      newGlyphs[i] = uncheckedGlyph
-    }
-
-    let propsArr = Array(UnsafeBufferPointer(start: props, count: glyphRange.length))
-    let charArr = Array(UnsafeBufferPointer(start: charIndexes, count: glyphRange.length))
-    newGlyphs.withUnsafeBufferPointer { gp in
-      propsArr.withUnsafeBufferPointer { pp in
-        charArr.withUnsafeBufferPointer { cp in
-          guard let glyphBase = gp.baseAddress,
-            let propertyBase = pp.baseAddress,
-            let characterBase = cp.baseAddress
-          else { return }
-          setGlyphs(
-            glyphBase,
-            properties: propertyBase,
-            characterIndexes: characterBase,
-            font: aFont,
-            forGlyphRange: glyphRange
-          )
-        }
-      }
-    }
-    return glyphRange.length
-  }
 }

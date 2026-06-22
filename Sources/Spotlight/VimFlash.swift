@@ -94,12 +94,16 @@ enum VimFlash {
       let offset = utf16Offset(of: index, in: text)
       guard candidateRange.contains(offset),
         isCandidate(offset, relativeTo: clampedLocation, request: request),
-        text[index...].hasPrefix(request.query)
+        hasCaseInsensitivePrefix(request.query, at: index, in: text)
       else { continue }
       matches.append(offset)
       if matches.count == limit { break }
     }
     return matches
+  }
+
+  private static func hasCaseInsensitivePrefix(_ query: String, at index: String.Index, in text: String) -> Bool {
+    text[index...].range(of: query, options: [.anchored, .caseInsensitive]) != nil
   }
 
   private static func candidateRange(in text: String, from location: Int, scope: VimFlashScope) -> Range<Int> {
@@ -115,13 +119,7 @@ enum VimFlash {
   }
 
   private static func trimmedLineLength(_ line: NSRange, in text: NSString) -> Int {
-    var length = line.length
-    while length > 0 {
-      let char = text.character(at: line.location + length - 1)
-      guard char == 10 || char == 13 else { break }
-      length -= 1
-    }
-    return length
+    text.lineContentEnd(of: line) - line.location
   }
 
   private static func isCandidate(
@@ -139,16 +137,23 @@ enum VimFlash {
   static func labels(for count: Int) -> [String] {
     guard count > 0 else { return [] }
     let alphabet = labelAlphabet.map(String.init)
-    var labels = Array(alphabet.prefix(min(count, alphabet.count)))
-    guard labels.count < count else { return labels }
-
+    // When every target fits in a single character, use single-char labels.
+    if count <= alphabet.count {
+      return Array(alphabet.prefix(count))
+    }
+    // Otherwise emit uniform two-character labels only. Mixing single- and
+    // two-character labels makes a single label (e.g. "a") a prefix of a
+    // two-character one (e.g. "aa"), which an exact-match-first consumer can
+    // never reach -- so the label set must be prefix-free.
+    var labels: [String] = []
+    labels.reserveCapacity(count)
     for first in alphabet {
       for second in alphabet {
         labels.append(first + second)
         if labels.count == count { return labels }
       }
     }
-    return Array(labels.prefix(count))
+    return labels
   }
 
   private static func utf16Offset(of index: String.Index, in text: String) -> Int {

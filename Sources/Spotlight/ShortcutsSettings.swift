@@ -15,23 +15,27 @@ struct ShortcutsPane: View {
           .foregroundStyle(.secondary)
       }
 
-      ShortcutGroup(title: "Global", actions: [.toggleHotkey, .appendToLastNote], store: shortcuts)
+      ShortcutGroup(
+        title: "Global",
+        actions: [.toggleHotkey, .appendToLastNote],
+        store: shortcuts
+      )
       ShortcutGroup(
         title: "Editor",
-        actions: [.insertTodayBadge, .insertChecklist, .toggleChecklist],
+        actions: [.insertTodayBadge],
         store: shortcuts
       )
       ShortcutGroup(
         title: "Notes",
         actions: [
           .newChat, .olderChat, .newerChat, .deleteChat, .undoDelete, .pinNote,
-          .copyContent, .shareCurrentChat
+          .appendToDailyNote, .copyContent, .shareCurrentChat
         ],
         store: shortcuts
       )
       ShortcutGroup(
         title: "Navigation",
-        actions: [.findInNote, .fuzzyFindAll, .commandPalette, .openSettings, .toggleTutorial],
+        actions: [.findInNote, .fuzzyFindAll, .commandPalette, .openSettings],
         store: shortcuts
       )
 

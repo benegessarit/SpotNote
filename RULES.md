@@ -1,6 +1,6 @@
 # SpotNote Engineering Rules
 
-**Target:** macOS-native app (SwiftUI + Metal) written in Swift 6.
+**Target:** macOS-native app (SwiftUI + AppKit) written in Swift 6.
 **Scope:** This document is the single source of truth for conventions, tooling, and workflows. Read it in full before authoring code or tests.
 
 ---
@@ -15,7 +15,7 @@ Measure, don't guess. Every performance claim is backed by an Instruments trace.
 
 Every public symbol is a commitment. Default access is `internal`. `public` only when the symbol crosses a module boundary as a considered API.
 
-Metal is an engineering discipline, not a library call. Resource lifetime, command buffer submission, and memory barriers are first-class design concerns.
+Keep pure logic out of the UI. State machines, parsers, and geometry are value types with no AppKit/SwiftUI imports, so they can be unit-tested without a view.
 
 ---
 
@@ -72,7 +72,7 @@ Metal is an engineering discipline, not a library call. Resource lifetime, comma
 6. Always check `Task.checkCancellation()` inside long-running loops.
 7. `async` functions throw `CancellationError`; handle it up to a UI boundary and ignore silently there.
 8. Prefer `AsyncStream` / `AsyncSequence` for event pipelines over Combine.
-9. GCD (`DispatchQueue`) is permitted only for bridging C APIs or Metal's `MTLCommandQueue` interaction.
+9. GCD (`DispatchQueue`) is permitted only for bridging C APIs (e.g. the Carbon global-hotkey callback) and AppKit appearance-timed work. Prefer structured concurrency everywhere else.
 
 ---
 
@@ -92,43 +92,20 @@ SpotNote uses SwiftUI-first MVVM with composable feature modules. TCA is not ado
 
 ---
 
-## 4. Metal & Rendering
+## 4. Compositing & Visual Effects
 
-Metal code lives in `Sources/Rendering` (Swift, CPU side) and `Sources/Shaders` (`.metal` MSL files). Rules distil Apple's Metal Best Practices Guide and WWDC20/21/23 sessions.
+SpotNote has no Metal layer. The HUD's translucency is AppKit compositing, not a custom render pipeline.
 
-### 4.1 Command Submission
-- One `MTLCommandQueue` per thread of submission. Most apps need exactly one.
-- Batch draw calls in a single command buffer; aim for <= 3 command buffers per frame.
-- Set resource storage mode deliberately:
-  - `.shared` for small CPU-updated-per-frame buffers (uniforms).
-  - `.private` for GPU-only textures and large static buffers; upload via blit from a `.shared` staging buffer.
-  - `.memoryless` for intermediate render targets that never touch system memory. Use this for G-buffer-style attachments on Apple Silicon.
-- Use argument buffers for large bind sets. Reduces CPU overhead and unlocks GPU-driven rendering.
-- Never read a resource on the CPU before its command buffer has completed. Synchronise via `addCompletedHandler` or `waitUntilCompleted` (test-only).
+### 4.1 Materials
+- The glass panel is an `NSVisualEffectView` (see `SpotNoteVisualEffectView`). Pick the blur material deliberately; do not stack multiple effect views to fake depth.
+- Tint over the material is a single translucent fill (`SpotlightRootView.glassTintOpacity`). Tune transparency there, in one place, not per call site.
 
-### 4.2 Memory & Bandwidth
-- Apple GPUs are Tile-Based Deferred Renderers (TBDR). Treat tile memory as a scarce, fast scratchpad.
-- Prefer `half` / `half4` over `float` / `float4` in MSL.
-- Choose the smallest texture format that meets quality. Avoid `.rgba32Float` unless mathematically required.
-- Avoid fragment-stage memory barriers; they flush tile memory to DRAM. Use programmable blending or single-pass deferred shading instead.
-- Prefer `loadAction = .clear` over `.load` when a previous value is not needed; prefer `storeAction = .dontCare` for intermediate attachments.
+### 4.2 Text rendering
+- Editor styling uses TextKit: `NSLayoutManager` temporary attributes (`addTemporaryAttribute`) for syntax/heading color so styling never mutates `NSTextStorage` or invalidates the layout cache on every keystroke.
+- Compile any `NSRegularExpression` built from a compile-time-constant pattern once (a `static let`), never per keystroke.
 
-### 4.3 Pipeline State
-- Build all `MTLRenderPipelineState` / `MTLComputePipelineState` objects at app launch or first-use, never per frame.
-- Compile shaders offline (`.metal` -> `.metallib`) for release builds. Use Metal function constants to specialise variants.
-- Enable `MTLCompileOptions.mathMode = .fast` only after confirming no NaN/Inf dependence.
-
-### 4.4 Shaders (MSL)
-- Prefer constant-address-space buffers for uniforms (`constant T& uniforms [[buffer(0)]]`); cached, broadcasted, fast.
-- Unroll short loops with `[[unroll]]` only when the trip count is compile-time known.
-- Use `simd_group` / quad-group intrinsics for reductions when possible.
-- Avoid dynamic indexing into large arrays in thread-private memory.
-
-### 4.5 Debugging & Profiling
-- Name every resource (`label = "..."`). Names appear in Xcode's GPU frame capture and Metal System Trace.
-- Wrap logical work in `commandBuffer.pushDebugGroup(_:) / popDebugGroup()`.
-- Validate every rendering feature with: GPU Frame Capture, Metal System Trace (Instruments), and GPU Counters.
-- Ship with `MTL_DEBUG_LAYER=1` and `MTL_SHADER_VALIDATION=1` in Debug builds only.
+### 4.3 If real GPU rendering is ever added
+Add it under a new `Sources/Rendering` target and write the Metal discipline (command submission, storage modes, pipeline-state caching, MSL conventions) into this section then — not before. Aspirational rules for code that does not exist are drift.
 
 ---
 
@@ -148,22 +125,20 @@ All tools are vendored via SPM plugins or Homebrew and invoked from `make` targe
   - `function_body_length`: warning 40, error 80.
   - `type_body_length`: warning 250, error 400.
   - `file_length`: warning 400, error 700.
-- `swiftlint analyze` runs weekly in CI; opt-in rules catch unused declarations the in-file pass cannot.
+- `swiftlint analyze` (cross-file rules) is available via `make analyze`; the CI lint gate itself runs `swiftlint --strict`.
 
 ### 5.3 Dead Code (`Periphery`)
-- Scan with `periphery scan --strict` on every PR. New unused declarations block merge.
+- `make periphery` runs `periphery scan` configured by `Tools/.periphery.yml` (retains `@objc`-accessible and assign-only members). New unused declarations fail the run.
 - Annotate intentional exceptions: `// periphery:ignore - exposed for SwiftUI previews`.
 
 ### 5.4 Complexity Analysis
-- Cyclomatic complexity enforced by SwiftLint. Target mean CC <= 5 per function; any function > 10 must be justified in code review.
-- `lizard` runs nightly with the project's tuned thresholds (CCN, length, args). CI fails on violations.
-- Every public algorithmic function carries a `- Complexity:` line in its doc comment (e.g. `- Complexity: O(n log n)`).
-- Performance-critical paths get an XCTest `measure { }` block plus an Instruments Time Profiler trace archived on first introduction.
+- SwiftLint enforces cyclomatic complexity (warning 10, error 15). Target mean CC <= 5 per function; any function > 10 must be justified in code review.
+- `make complexity` runs `lizard` in CI with the project's tuned thresholds (CCN 17, length 100, arguments 7). CI fails on violations.
+- Write a `- Complexity:` doc line on a public algorithmic function when the big-O is non-obvious (e.g. `- Complexity: O(n log n)`).
 
 ### 5.5 Other
-- Clang/Swift static analyzer runs as part of `xcodebuild analyze`; zero warnings required.
-- Thread Sanitizer enabled on the `Debug-TSan` scheme; run the full test suite under TSan before every release.
-- Address Sanitizer for Metal bridging code.
+- Build is warning-clean: `swift build` produces zero warnings.
+- The full test suite must pass (`make test`) before every release.
 
 ---
 
@@ -177,7 +152,6 @@ All tools are vendored via SPM plugins or Homebrew and invoked from `make` targe
 ### 6.2 What to Test
 - All pure logic in `Core` is unit-tested. Aim for >= 85% line coverage in `Core`, >= 70% overall.
 - View models: test state transitions, not view output.
-- Metal rendering: deterministic golden-image tests with a per-pixel tolerance.
 
 ### 6.3 Test Quality
 - One behaviour per test, full-sentence names: `@Test("loads notes sorted by most-recently-edited")`.
@@ -191,15 +165,15 @@ All tools are vendored via SPM plugins or Homebrew and invoked from `make` targe
 
 ## 7. Build, CI, and Release
 
-- Single `Makefile` entry points: `make fmt`, `make lint`, `make test`, `make analyze`, `make periphery`, `make ci` (runs everything).
-- CI runs, in order: `swift-format lint --strict` -> `swiftlint --strict` -> `swift build` -> `swift test --parallel` -> `periphery scan --strict` -> `lizard` -> `xcodebuild analyze` -> archive.
-- Zero-warning policy. `SWIFT_TREAT_WARNINGS_AS_ERRORS = YES` in Release.
+- Single `Makefile` entry points: `make fmt`, `make lint`, `make test`, `make analyze`, `make periphery`, `make complexity`, `make ci` (runs the full gate).
+- `make ci` runs, in order: `tools-check` -> `fmt-check` (`swift-format lint --strict`) -> `lint` (`swiftlint --strict`) -> `build` (`swift build`) -> `test` (`swift test`) -> `periphery` -> `complexity` (`lizard`).
+- Zero-warning policy: `swift build` is warning-clean.
 - `main` is always releasable. Feature branches rebase onto `main` before merge; no merge commits.
 
 ### 7.1 Commit Style
 - Format: `<short-tag>: all lowercase and concise msg`.
   - `bug-fix: unexpected app termination on Intel chips`
-  - `feat: add Metal-based blur behind the Spotlight panel`
+  - `feat: add a translucent blur behind the Spotlight panel`
 - Lowercase EXCEPT legitimate acronyms: API, URL, CPU, GPU, UI, UX, MSL, SPM, CI, CD, macOS, iOS, JSON, HTML, HTTP, I/O, etc.
 - Tags: `feat`, `bug-fix`, `fix`, `perf`, `refactor`, `test`, `docs`, `style`, `build`, `chore`, `ci`, `revert`.
 - Subject line <= 72 chars. No trailing period. Imperative mood.

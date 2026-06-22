@@ -9,10 +9,22 @@ extension Bundle {
   /// itself -- `Bundle(for:)` resolves it.
   public static var spotlightResources: Bundle {
     #if SWIFT_PACKAGE
+    if let bundled = Bundle.spotlightAppResourceBundle {
+      return bundled
+    }
     return .module
     #else
     return Bundle(for: _SpotlightBundleAnchor.self)
     #endif
+  }
+
+  private static var spotlightAppResourceBundle: Bundle? {
+    guard let resourceURL = Bundle.main.resourceURL else { return nil }
+    let bundleURL = resourceURL.appendingPathComponent(
+      "SpotNote_Spotlight.bundle",
+      isDirectory: true
+    )
+    return Bundle(url: bundleURL)
   }
 }
 

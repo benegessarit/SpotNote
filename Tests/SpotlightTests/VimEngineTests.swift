@@ -1,4 +1,4 @@
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 import Testing
 
 @testable import Spotlight
@@ -145,31 +145,139 @@ struct VimEngineTests {
     #expect(second == .moveCursor(.documentStart))
   }
 
+  @Test("g-status motions send the current bullet to Linear")
+  func gStatusMotionsSendCurrentBulletToLinear() {
+    let cases: [(String, LinearTaskTargetStatus)] = [
+      ("d", .done),
+      ("p", .planned),
+      ("t", .triage),
+      ("s", .started),
+      ("l", .later)
+    ]
+
+    for (key, status) in cases {
+      let engine = VimEngine()
+      #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+      #expect(engine.handle(key: key, hasModifiers: false) == .sendCurrentTaskToLinear(status: status, count: 1))
+      #expect(engine.mode == .normal)
+    }
+  }
+
+  @Test("counted g-status motions send counted bullets to Linear")
+  func countedGStatusMotionsSendCountedBulletsToLinear() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
+  }
+
+  @Test("gy sends the current bullet to tray.md")
+  func gYSendsCurrentBulletToTrayNote() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted gy sends counted bullets to tray.md")
+  func countedGYSendsCountedBulletsToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
+  }
+
+  @Test("visual gy sends the active selection to tray.md and exits visual mode")
+  func visualGYSendsSelectionToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("visual-line gy sends the active line selection to tray.md and exits visual mode")
+  func visualLineGYSendsSelectionToTrayNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("gH jumps to the HABITS section")
+  func gShiftHJumpsToHabitsSection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "H", hasModifiers: false) == .jumpToHabitsSection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("gD jumps to the TODO section")
+  func gShiftDJumpsToToDoSection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToToDoSection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("gT jumps to the Tray section")
+  func gShiftTJumpsToTraySection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("tt jumps to the Tray section")
+  func ttJumpsToTraySection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "t", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
   @Test("s opens a whole-document forward Flash jump prompt")
   func flashForwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .document))
+    #expect(
+      engine.handle(key: "s", hasModifiers: false)
+        == .enterFlash(.forward, count: 1, scope: .document)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("S opens a whole-document backward Flash jump prompt")
   func flashBackwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "S", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .document))
+    #expect(
+      engine.handle(key: "S", hasModifiers: false)
+        == .enterFlash(.backward, count: 1, scope: .document)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("f opens a same-line forward Flash jump prompt")
   func flashSameLineForwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "f", hasModifiers: false) == .enterFlash(.forward, count: 1, scope: .currentLine))
+    #expect(
+      engine.handle(key: "f", hasModifiers: false)
+        == .enterFlash(.forward, count: 1, scope: .currentLine)
+    )
     #expect(engine.mode == .normal)
   }
 
   @Test("F opens a same-line backward Flash jump prompt")
   func flashSameLineBackwardPrompt() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "F", hasModifiers: false) == .enterFlash(.backward, count: 1, scope: .currentLine))
+    #expect(
+      engine.handle(key: "F", hasModifiers: false)
+        == .enterFlash(.backward, count: 1, scope: .currentLine)
+    )
     #expect(engine.mode == .normal)
   }
 
@@ -184,7 +292,10 @@ struct VimEngineTests {
   func countedFlashPrompt() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
-    #expect(engine.handle(key: "s", hasModifiers: false) == .enterFlash(.forward, count: 3, scope: .document))
+    #expect(
+      engine.handle(key: "s", hasModifiers: false)
+        == .enterFlash(.forward, count: 3, scope: .document)
+    )
     #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }
 
@@ -261,6 +372,25 @@ struct VimEngineTests {
     let engine = VimEngine()
     _ = engine.handle(key: "c", hasModifiers: false)
     #expect(engine.handle(key: "c", hasModifiers: false) == .deleteLineInsert(count: 1))
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("cib changes the current bullet body and enters insert")
+  func cIBChangesCurrentBulletBody() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "c", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "i", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "b", hasModifiers: false) == .changeBulletBody)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("cB is a short alias for changing the current bullet body")
+  func cShiftBChangesCurrentBulletBody() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "c", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "B", hasModifiers: false) == .changeBulletBody)
     #expect(engine.mode == .insert)
   }
 

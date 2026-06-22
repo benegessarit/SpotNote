@@ -62,8 +62,7 @@ extension SpotlightWindowController {
       runClearHighlight()
       return nil
     case .help:
-      preferences.showHints = true
-      return VimController.Message(text: "hints on", kind: .info)
+      return VimController.Message(text: "Vim help lives in Settings → Vim.", kind: .info)
     default:
       return runVimSetting(command)
     }
@@ -77,9 +76,6 @@ extension SpotlightWindowController {
     case .setVimMode(let on):
       preferences.vimMode = on
       return on ? nil : VimController.Message(text: "vim mode off", kind: .info)
-    case .setHints(let on):
-      preferences.showHints = on
-      return VimController.Message(text: on ? "hints on" : "hints off", kind: .info)
     case .setTheme(let name):
       return runSetTheme(name)
     case .setMaxLines(let count):

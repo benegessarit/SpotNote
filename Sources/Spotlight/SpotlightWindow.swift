@@ -16,9 +16,9 @@ public final class SpotlightWindowController {
   /// releases even when the panel joins that Space.
   nonisolated static let panelLevel: NSWindow.Level = .screenSaver
   /// `.canJoinAllApplications` is the cross-app fullscreen guard:
-  /// without it, an LSUIElement HUD can activate while the fullscreen
-  /// app visibly blurs/refocuses, but the panel is not admitted into
-  /// that app's fullscreen Space.
+  /// without it, the HUD can activate while the fullscreen app visibly
+  /// blurs/refocuses, but the panel is not admitted into that app's
+  /// fullscreen Space.
   /// `.canJoinAllSpaces` keeps the panel reachable from every Space,
   /// `.fullScreenAuxiliary` lets it sit alongside fullscreen windows,
   /// `.transient` keeps it in the floating Spaces group. `.stationary`
@@ -30,9 +30,28 @@ public final class SpotlightWindowController {
     .canJoinAllApplications, .canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle
   ]
   nonisolated static let defaultUnfocusedAlpha: CGFloat = 0.55
+  /// Gap kept between the panel and the screen's right and bottom edges at rest.
+  nonisolated static let defaultEdgeInset: CGFloat = 8
+
+  /// X origin: the panel hugs the right edge of the visible frame, inset by
+  /// `defaultEdgeInset` (clamped on-screen for narrow displays).
+  nonisolated static func restingOriginX(in screenFrame: NSRect, panelWidth: CGFloat) -> CGFloat {
+    let rightmostX = max(screenFrame.minX, screenFrame.maxX - panelWidth)
+    return min(max(rightmostX - defaultEdgeInset, screenFrame.minX), rightmostX).rounded()
+  }
+
+  /// Y origin (the panel's *bottom* edge): the panel hugs the bottom of the
+  /// visible frame, inset by `defaultEdgeInset`. The panel is bottom-anchored and
+  /// grows upward, so the bottom-right corner stays put as content reflows.
+  /// Clamped so a very tall panel never runs off the top of the screen.
+  nonisolated static func restingOriginY(in screenFrame: NSRect, panelHeight: CGFloat) -> CGFloat {
+    let highestY = max(screenFrame.minY, screenFrame.maxY - panelHeight)
+    return min(screenFrame.minY + defaultEdgeInset, highestY).rounded()
+  }
 
   private var panel: SpotlightPanel?
   private var fuzzyPreviewPanel: FuzzyPreviewPanel?
+  private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
   let preferences: ThemePreferences
   let session: ChatSession
@@ -40,29 +59,25 @@ public final class SpotlightWindowController {
   let findController = FindController()
   private let fuzzyController = FuzzyController()
   private let commandController = CommandController()
+  private let copyController = CopyController()
+  private let handoffClient = ScratchpadHandoffClient()
+  private let dailyNoteWriter = DailyNoteWriter()
+  private let trayNoteWriter = TrayNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
+  private let onWillShowHUD: () -> Void
+  private let onDidHideHUD: () -> Void
   private var observers: [NSObjectProtocol] = []
   private weak var previouslyActiveApp: NSRunningApplication?
-  /// Screen-space Y of the panel's intended top edge, cached on first
-  /// placement and reused thereafter. Without this, AppKit's first
-  /// `makeKeyAndOrderFront` landed the panel ~1pt lower than subsequent
-  /// reshows (subpixel arithmetic on `visibleFrame.midY + h * 0.18`
-  /// rounded one way for the first orderFront and another after the
-  /// window was cached in the Dock server), which made the panel appear
-  /// to "jump up" the first time it was re-toggled.
-  private var pinnedTopY: CGFloat?
-  /// Three-state machine that drives `setPanelHeight`:
-  /// - `.none` -- top-anchored at `pinnedTopY` (the rest position).
-  /// - `.pendingFirstResize` -- the navigation overlay just appeared;
-  ///   the next resize keeps the panel top-anchored so the editor
-  ///   doesn't visibly jump, and afterwards captures the new bottom
-  ///   edge as the anchor for subsequent cycles.
-  /// - `.bottomPinned(y)` -- every later resize while the overlay is
-  ///   still visible keeps the panel's bottom at `y`, so chats with
-  ///   different line counts grow/shrink the editor upward instead of
-  ///   shifting the navigation list around.
-  /// Driven by a Combine sink on `session.$navigationPreview`.
+  /// Screen-space Y of the panel's pinned *bottom* edge (the rest origin),
+  /// cached on first placement and reused thereafter so the bottom-right corner
+  /// stays put and the panel doesn't "jump" between reshows.
+  private var pinnedBottomY: CGFloat?
+  /// Drives `setPanelHeight`. The HUD is bottom-anchored at the bottom-right
+  /// corner, so the rest state is `.bottomPinned(pinnedBottomY)`: the panel's
+  /// bottom edge stays fixed and content (editor + navigation overlay) grows
+  /// upward as line counts change. The `.none`/`.pendingFirstResize` cases are
+  /// retained for the solver's API but are no longer entered by the controller.
   private enum NavAnchorState {
     case none
     case pendingFirstResize
@@ -101,12 +116,11 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel (find bar + tutorial
-  /// when visible). Used to map between `panel.top` and `editorTopY`.
+  /// Layout above the editor card inside the panel (find bar when visible).
+  /// Used to map between `panel.top` and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
     var height: CGFloat = 0
     if findController.isVisible { height += EditorMetrics.findBarHeight }
-    if preferences.showHints { height += EditorMetrics.tutorialBarHeight }
     return height
   }
 
@@ -115,7 +129,6 @@ public final class SpotlightWindowController {
   /// SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
     var height: CGFloat = 0
-    if preferences.vimMode { height += SpotlightRootView.vimBarHeight }
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
     } else if commandController.isVisible {
@@ -153,17 +166,23 @@ public final class SpotlightWindowController {
     preferences: ThemePreferences,
     store: ChatStore,
     shortcuts: ShortcutStore,
-    onOpenSettings: @escaping () -> Void
+    vaultDocuments: [VaultNoteDocument]? = nil,
+    onOpenSettings: @escaping () -> Void,
+    onWillShowHUD: @escaping () -> Void = {},
+    onDidHideHUD: @escaping () -> Void = {}
   ) {
     self.preferences = preferences
-    self.session = ChatSession(store: store)
+    self.session = ChatSession(store: store, vaultDocuments: vaultDocuments)
     self.shortcuts = shortcuts
     self.onOpenSettings = onOpenSettings
+    self.onWillShowHUD = onWillShowHUD
+    self.onDidHideHUD = onDidHideHUD
     FontLoader.registerBundledFonts()
     observeActiveApp()
     installModifierMonitor()
     observeNavigationPreview()
     observeFuzzyPreview()
+    observeToastMessages()
     installVimCommandRunner()
     Task { [session] in await session.bootstrap() }
   }
@@ -193,14 +212,14 @@ public final class SpotlightWindowController {
     session.$navigationPreview
       .map { $0 != nil }
       .removeDuplicates()
-      .sink { [weak self] visible in
+      .sink { [weak self] _ in
         MainActor.assumeIsolated {
           guard let self else { return }
-          if visible {
-            self.navAnchor = .pendingFirstResize
-          } else {
-            self.editorTopY = nil
-            self.navAnchor = .none
+          // The panel is bottom-anchored, so the overlay simply grows the panel
+          // upward from the fixed bottom edge; keep the bottom pin on both
+          // appear and dismiss.
+          if let bottom = self.pinnedBottomY {
+            self.navAnchor = .bottomPinned(bottom)
           }
         }
       }
@@ -240,6 +259,70 @@ public final class SpotlightWindowController {
     }
   }
 
+  private func observeToastMessages() {
+    vimController.$message
+      .sink { [weak self] message in
+        MainActor.assumeIsolated { self?.syncToastPanel(message: message) }
+      }
+      .store(in: &cancellables)
+  }
+
+  private func syncToastPanel(message: VimController.Message? = nil) {
+    guard let message = message ?? vimController.message,
+      let panel,
+      panel.isVisible
+    else {
+      toastPanel?.orderOut(nil)
+      return
+    }
+    let toast = toastPanel ?? makeToastPanel(parent: panel)
+    toastPanel = toast
+    if toast.parent !== panel {
+      panel.addChildWindow(toast, ordered: .above)
+    }
+    let content = NSHostingView(
+      rootView: HermesToastView(message: message, theme: preferences.activeTheme)
+    )
+    let size = content.fittingSize
+    content.frame = NSRect(origin: .zero, size: size)
+    toast.contentView = content
+    let frame = toastFrame(for: panel, size: size)
+    if !Self.rect(toast.frame, isApproximatelyEqualTo: frame) {
+      toast.setFrame(frame, display: true)
+    }
+    if !toast.isVisible {
+      toast.orderFrontRegardless()
+    }
+  }
+
+  private func makeToastPanel(parent: NSPanel) -> HermesToastPanel {
+    let toast = HermesToastPanel(
+      contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+      styleMask: Self.panelStyleMask,
+      backing: .buffered,
+      defer: false
+    )
+    Self.configurePanel(toast)
+    toast.hasShadow = false
+    toast.ignoresMouseEvents = true
+    parent.addChildWindow(toast, ordered: .above)
+    return toast
+  }
+
+  private func toastFrame(for panel: NSPanel, size: NSSize) -> NSRect {
+    let panelFrame = panel.frame
+    let width = ceil(size.width)
+    let height = ceil(size.height)
+    let topInset = EditorMetrics.outerPadding + 7
+    let trailingInset = EditorMetrics.outerPadding + 8
+    return NSRect(
+      x: (panelFrame.maxX - trailingInset - width).rounded(),
+      y: (panelFrame.maxY - topInset - height).rounded(),
+      width: width,
+      height: height
+    )
+  }
+
   private func fuzzyPreviewFrame(for panel: NSPanel) -> NSRect? {
     let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
     guard let screenFrame else { return nil }
@@ -277,15 +360,27 @@ public final class SpotlightWindowController {
   }
 
   public func handleHotkey() {
-    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive {
+    handleVaultHotkey(.tasks)
+  }
+
+  private func handleVaultHotkey(_ state: VaultNoteState) {
+    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive, session.currentVaultState == state {
       close()
     } else {
-      focusOrShow()
+      openVaultState(state, announcing: false)
     }
   }
 
   public func openHUD() {
-    focusOrShow()
+    openVaultState(.tasks, announcing: false)
+  }
+
+  private func openVaultState(_ state: VaultNoteState, announcing: Bool) {
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      await self.session.switchVaultState(state, announcing: announcing)
+      self.focusOrShow()
+    }
   }
 
   /// Summons the HUD on the most recently edited note with the caret
@@ -318,8 +413,16 @@ public final class SpotlightWindowController {
     }
   }
 
+  /// Awaits every pending debounced write across the chat store *and* the
+  /// vault-backed documents (the `## To Do` inbox). Call on app termination
+  /// so a last edit isn't lost -- flushing the chat store alone is not enough.
+  public func flush() async {
+    await session.flush()
+  }
+
   public func close() {
     fuzzyPreviewPanel?.orderOut(nil)
+    toastPanel?.orderOut(nil)
     panel?.orderOut(nil)
     // If a bona-fide SpotNote window (Settings) is visible, leave the
     // app active so the user can keep working there. Filter to
@@ -335,12 +438,14 @@ public final class SpotlightWindowController {
     let target = previouslyActiveApp
     previouslyActiveApp = nil
     NSApp.hide(nil)
+    onDidHideHUD()
     if let target, target.bundleIdentifier != Bundle.main.bundleIdentifier {
       target.activate()
     }
   }
 
   private func focusOrShow() {
+    onWillShowHUD()
     let panel = panel ?? makePanel()
     self.panel = panel
     if !NSApp.isActive {
@@ -362,22 +467,26 @@ public final class SpotlightWindowController {
     panel.makeKeyAndOrderFront(nil)
     panel.orderFrontRegardless()
     syncFuzzyPreviewPanel()
+    syncToastPanel()
   }
 
   private func repositionForShow(_ panel: NSPanel) {
     guard let screen = NSScreen.main else { return }
     let screenFrame = screen.visibleFrame
     let height = expectedPanelHeight
-    let top: CGFloat
-    if let cached = pinnedTopY {
-      top = cached
+    let bottom: CGFloat
+    if let cached = pinnedBottomY {
+      bottom = cached
     } else {
-      top = (screenFrame.midY + screenFrame.height * 0.18 + height / 2).rounded()
-      pinnedTopY = top
+      bottom = Self.restingOriginY(in: screenFrame, panelHeight: height)
+      pinnedBottomY = bottom
     }
-    let x = (screenFrame.midX - panel.frame.width / 2).rounded()
+    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    // Bottom-anchored at the bottom-right corner: the origin (bottom edge) is
+    // fixed and the panel grows upward as content reflows.
+    navAnchor = .bottomPinned(bottom)
     setPanelFrame(
-      NSRect(x: x, y: top - height, width: panel.frame.width, height: height),
+      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
       display: false
     )
   }
@@ -410,6 +519,15 @@ public final class SpotlightWindowController {
         },
         onEscape: { [weak self] in
           self?.close()
+        },
+        onSendLinearTask: { [handoffClient] request in
+          _ = try await handoffClient.sendLinearTask(request)
+        },
+        onAppendDailyNote: { [dailyNoteWriter] text in
+          try await dailyNoteWriter.append(text)
+        },
+        onAppendTrayNote: { [trayNoteWriter] text in
+          try await trayNoteWriter.append(text)
         }
       )
     )
@@ -462,20 +580,19 @@ public final class SpotlightWindowController {
   private func pinnedOrigin(for panel: NSPanel) -> NSPoint? {
     guard let screen = NSScreen.main else { return nil }
     let screenFrame = screen.visibleFrame
-    let top: CGFloat
-    if let cached = pinnedTopY {
-      top = cached
+    let bottom: CGFloat
+    if let cached = pinnedBottomY {
+      bottom = cached
     } else {
       let initialHeight = EditorMetrics.panelHeight(
         forLines: 1,
         maxLines: preferences.maxVisibleLines
       )
-      top = (screenFrame.midY + screenFrame.height * 0.18 + initialHeight / 2).rounded()
-      pinnedTopY = top
+      bottom = Self.restingOriginY(in: screenFrame, panelHeight: initialHeight)
+      pinnedBottomY = bottom
     }
-    let x = (screenFrame.midX - panel.frame.width / 2).rounded()
-    let y = top - panel.frame.height
-    return NSPoint(x: x, y: y)
+    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    return NSPoint(x: x, y: bottom)
   }
 
   private func correctDriftIfNeeded(_ panel: NSPanel) {
@@ -504,7 +621,7 @@ public final class SpotlightWindowController {
       newHeight: height,
       chromeAbove: chromeAbove,
       cachedEditorTopY: editorTopY,
-      pinnedTopY: pinnedTopY
+      pinnedTopY: pinnedBottomY
     )
     let newY = resolved.newOriginY
     if let updated = resolved.editorTopY { editorTopY = updated }
@@ -534,6 +651,7 @@ public final class SpotlightWindowController {
     programmaticFrameToIgnore = frame
     panel.setFrame(frame, display: display, animate: animate)
     syncFuzzyPreviewPanel()
+    syncToastPanel()
   }
 
   private func shouldIgnoreProgrammaticMove(_ frame: NSRect) -> Bool {
@@ -593,10 +711,11 @@ extension SpotlightWindowController {
         MainActor.assumeIsolated {
           guard let self, let panel else { return }
           if self.shouldIgnoreProgrammaticMove(panel.frame) { return }
-          let newTop = panel.frame.origin.y + panel.frame.size.height
-          self.pinnedTopY = newTop
-          self.editorTopY = newTop - self.chromeAboveEditor
+          let newBottom = panel.frame.origin.y
+          self.pinnedBottomY = newBottom
+          self.navAnchor = .bottomPinned(newBottom)
           self.syncFuzzyPreviewPanel()
+          self.syncToastPanel()
         }
       }
     )
@@ -693,14 +812,14 @@ extension SpotlightWindowController {
         #selector(PlaceholderTextView.insertTodayBadgeToken(_:)),
         with: nil
       )
-    case .insertChecklist:
+    case .sendToLinear:
       _ = panel?.firstResponder?.tryToPerform(
-        #selector(PlaceholderTextView.insertChecklistToken(_:)),
+        #selector(PlaceholderTextView.sendCurrentLineToLinearShortcut(_:)),
         with: nil
       )
-    case .toggleChecklist:
+    case .appendToDailyNote:
       _ = panel?.firstResponder?.tryToPerform(
-        #selector(PlaceholderTextView.toggleChecklistShortcut(_:)),
+        #selector(PlaceholderTextView.appendCurrentLineToDailyNoteShortcut(_:)),
         with: nil
       )
     case .pinNote:
@@ -708,9 +827,8 @@ extension SpotlightWindowController {
     case .shareCurrentChat:
       shareCurrentChat()
     case .copyContent:
-      copyCurrentContent()
+      copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
-    case .toggleTutorial: preferences.showHints.toggle()
     case .toggleHotkey, .appendToLastNote: break
     }
   }
@@ -725,12 +843,6 @@ extension SpotlightWindowController {
     } catch {
       NSSound.beep()
     }
-  }
-
-  private func copyCurrentContent() {
-    let pasteboard = NSPasteboard.general
-    pasteboard.clearContents()
-    pasteboard.setString(session.currentText, forType: .string)
   }
 
   private func dispatchSessionAction(_ action: ShortcutAction) {

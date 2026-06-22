@@ -55,11 +55,11 @@ struct ShortcutStoreTests {
     let defaults = makeDefaults()
     let first = ShortcutStore(defaults: defaults)
     _ = first.setBinding(
-      Shortcut(key: "k", modifiers: [.command, .option]),
+      Shortcut(key: "j", modifiers: [.command, .option]),
       for: .deleteChat
     )
     let second = ShortcutStore(defaults: defaults)
-    #expect(second.binding(for: .deleteChat).key == "k")
+    #expect(second.binding(for: .deleteChat).key == "j")
     #expect(second.binding(for: .deleteChat).modifiers == [.command, .option])
   }
 
@@ -70,6 +70,94 @@ struct ShortcutStoreTests {
     #expect(action == .newChat)
     let none = store.match(key: "j", modifiers: [.command])
     #expect(none == nil)
+  }
+
+  @Test("plain Cmd-K does not open the command palette")
+  func commandPaletteDefaultAvoidsPlainCmdK() {
+    let store = ShortcutStore(defaults: makeDefaults())
+
+    #expect(ShortcutAction.commandPalette.defaultShortcut != Shortcut(key: "k", modifiers: [.command]))
+    #expect(store.match(key: "k", modifiers: [.command]) == nil)
+    #expect(store.match(key: "k", modifiers: [.command, .option]) == .commandPalette)
+  }
+
+  @Test("send to Linear defaults to Cmd Option L")
+  func sendToLinearDefaultShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    let binding = store.binding(for: .sendToLinear)
+    #expect(binding.key == "l")
+    #expect(binding.modifiers == [.command, .option])
+    #expect(store.match(key: "l", modifiers: [.command, .option]) == .sendToLinear)
+  }
+
+  @Test("append to Daily Note defaults to Cmd Option D")
+  func appendToDailyNoteDefaultShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    let binding = store.binding(for: .appendToDailyNote)
+    #expect(binding.key == "d")
+    #expect(binding.modifiers == [.command, .option])
+    #expect(store.match(key: "d", modifiers: [.command, .option]) == .appendToDailyNote)
+  }
+
+  @Test("tray has no separate global open shortcut")
+  func trayHasNoSeparateGlobalOpenShortcut() {
+    let store = ShortcutStore(defaults: makeDefaults())
+    #expect(store.match(key: "space", modifiers: [.command, .option]) == nil)
+  }
+
+  @Test("loading an older shortcut map avoids conflicts for new default chords")
+  func missingActionBackfillAvoidsExistingChordConflicts() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where action != .appendToDailyNote {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    let existingOwner = Shortcut(key: "d", modifiers: [.command, .option])
+    oldMap[ShortcutAction.openSettings.rawValue] = existingOwner
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    let store = ShortcutStore(defaults: defaults, storageKey: key)
+
+    #expect(store.binding(for: .openSettings) == existingOwner)
+    #expect(store.binding(for: .appendToDailyNote) == Shortcut(key: "d", modifiers: [.command, .option, .shift]))
+    #expect(store.match(key: "d", modifiers: [.command, .option]) == .openSettings)
+    #expect(store.match(key: "d", modifiers: [.command, .option, .shift]) == .appendToDailyNote)
+  }
+
+  @Test("loading an older shortcut map writes missing actions back to defaults")
+  func missingActionsArePersistedBackToDefaults() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where ![.sendToLinear, .appendToDailyNote].contains(action) {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    _ = ShortcutStore(defaults: defaults, storageKey: key)
+
+    let storedData = try #require(defaults.data(forKey: key))
+    let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
+    #expect(stored[ShortcutAction.sendToLinear.rawValue] == ShortcutAction.sendToLinear.defaultShortcut)
+    #expect(stored[ShortcutAction.appendToDailyNote.rawValue] == ShortcutAction.appendToDailyNote.defaultShortcut)
+  }
+
+  @Test("legacy command palette Cmd-K binding migrates off plain Cmd-K")
+  func legacyCommandPaletteCmdKBindingMigratesOffPlainCmdK() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    oldMap[ShortcutAction.commandPalette.rawValue] = Shortcut(key: "k", modifiers: [.command])
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    let store = ShortcutStore(defaults: defaults, storageKey: key)
+
+    #expect(store.match(key: "k", modifiers: [.command]) == nil)
+    #expect(store.binding(for: .commandPalette) == ShortcutAction.commandPalette.defaultShortcut)
   }
 
   @Test("resetAll restores every action to its default")

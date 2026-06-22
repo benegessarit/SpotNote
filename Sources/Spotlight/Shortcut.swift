@@ -72,8 +72,8 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case toggleHotkey
   case appendToLastNote
   case insertTodayBadge
-  case insertChecklist
-  case toggleChecklist
+  case sendToLinear
+  case appendToDailyNote
   case newChat
   case olderChat
   case newerChat
@@ -86,17 +86,16 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case openSettings
   case pinNote
   case commandPalette
-  case toggleTutorial
 
   public var id: String { rawValue }
 
   public var displayName: String {
     switch self {
-    case .toggleHotkey: return "Show / hide HUD"
+    case .toggleHotkey: return "Open Tasks / hide HUD"
     case .appendToLastNote: return "Append to most recent"
     case .insertTodayBadge: return "Insert today badge"
-    case .insertChecklist: return "Insert checklist item"
-    case .toggleChecklist: return "Toggle checklist state"
+    case .sendToLinear: return "Send task to Linear"
+    case .appendToDailyNote: return "Append line to Daily Note"
     case .newChat: return "New note"
     case .olderChat: return "Older note"
     case .newerChat: return "Newer note"
@@ -109,18 +108,18 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .openSettings: return "Open settings"
     case .pinNote: return "Pin / unpin note"
     case .commandPalette: return "Command palette"
-    case .toggleTutorial: return "Toggle hints bar"
     }
   }
 
   public var subtitle: String {
     switch self {
-    case .toggleHotkey: return "Global hotkey to summon SpotNote from any app."
+    case .toggleHotkey: return "Global hotkey to summon the Tasks list from any app."
     case .appendToLastNote:
       return "Summon the HUD on the most recently edited note with the caret already at the end."
     case .insertTodayBadge: return "Insert @today token at the caret."
-    case .insertChecklist: return "Insert @cl token at the caret."
-    case .toggleChecklist: return "Toggle the current checklist item between empty and checked."
+    case .sendToLinear: return "Create one Linear task from the current bullet, then delete it after handoff."
+    case .appendToDailyNote:
+      return "Append current or counted lines to today's vault daily note, then delete them after handoff."
     case .newChat: return "Start a fresh blank note."
     case .olderChat: return "Step back through your saved notes (hold to repeat)."
     case .newerChat: return "Step forward through your saved notes (hold to repeat)."
@@ -133,7 +132,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .openSettings: return "Open this settings window."
     case .pinNote: return "Pin the current note so it stays at the top of the list."
     case .commandPalette: return "Search settings and keyboard shortcuts."
-    case .toggleTutorial: return "Show or hide the hint strip above the editor."
     }
   }
 
@@ -142,8 +140,8 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .toggleHotkey: return Shortcut(key: "space", modifiers: [.command, .shift])
     case .appendToLastNote: return Shortcut(key: ".", modifiers: [.command, .shift])
     case .insertTodayBadge: return Shortcut(key: "t", modifiers: [.command, .shift])
-    case .insertChecklist: return Shortcut(key: "l", modifiers: [.command, .shift])
-    case .toggleChecklist: return Shortcut(key: "k", modifiers: [.command, .shift])
+    case .sendToLinear: return Shortcut(key: "l", modifiers: [.command, .option])
+    case .appendToDailyNote: return Shortcut(key: "d", modifiers: [.command, .option])
     case .newChat: return Shortcut(key: "n", modifiers: [.command])
     case .olderChat: return Shortcut(key: "n", modifiers: [.control])
     case .newerChat: return Shortcut(key: "p", modifiers: [.control])
@@ -155,8 +153,24 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .copyContent: return Shortcut(key: "c", modifiers: [.command])
     case .openSettings: return Shortcut(key: ",", modifiers: [.command])
     case .pinNote: return Shortcut(key: "s", modifiers: [.command])
-    case .commandPalette: return Shortcut(key: "k", modifiers: [.command])
-    case .toggleTutorial: return Shortcut(key: "/", modifiers: [.command])
+    case .commandPalette: return Shortcut(key: "k", modifiers: [.command, .option])
+    }
+  }
+
+  var defaultShortcutCandidates: [Shortcut] {
+    switch self {
+    case .appendToDailyNote:
+      return [
+        defaultShortcut,
+        Shortcut(key: "d", modifiers: [.command, .option, .shift])
+      ]
+    case .commandPalette:
+      return [
+        defaultShortcut,
+        Shortcut(key: "k", modifiers: [.command, .shift])
+      ]
+    default:
+      return [defaultShortcut]
     }
   }
 }
@@ -182,6 +196,7 @@ public final class ShortcutStore: ObservableObject {
     self.defaults = defaults
     self.storageKey = storageKey
     self.bindings = Self.load(defaults: defaults, key: storageKey)
+    persist()
   }
 
   public func binding(for action: ShortcutAction) -> Shortcut {
@@ -229,11 +244,35 @@ public final class ShortcutStore: ObservableObject {
         }
       }
     }
+    loaded = migrateLegacyBindings(loaded)
     var result: [ShortcutAction: Shortcut] = [:]
+    let alreadyOwned = Set(loaded.values)
     for action in ShortcutAction.allCases {
-      result[action] = loaded[action] ?? action.defaultShortcut
+      if let shortcut = loaded[action] {
+        result[action] = shortcut
+      } else {
+        result[action] = firstAvailableCandidate(for: action, avoiding: alreadyOwned.union(result.values))
+      }
     }
     return result
+  }
+
+  private static func migrateLegacyBindings(
+    _ loaded: [ShortcutAction: Shortcut]
+  ) -> [ShortcutAction: Shortcut] {
+    var migrated = loaded
+    let legacyCommandPaletteShortcut = Shortcut(key: "k", modifiers: [.command])
+    if migrated[.commandPalette] == legacyCommandPaletteShortcut {
+      migrated[.commandPalette] = nil
+    }
+    return migrated
+  }
+
+  private static func firstAvailableCandidate(
+    for action: ShortcutAction,
+    avoiding used: Set<Shortcut>
+  ) -> Shortcut {
+    action.defaultShortcutCandidates.first { !used.contains($0) } ?? action.defaultShortcut
   }
 
   private func persist() {

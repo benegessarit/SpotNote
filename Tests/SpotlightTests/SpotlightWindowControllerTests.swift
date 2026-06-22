@@ -7,16 +7,14 @@ import Testing
 
 @Suite("SpotlightWindowController")
 struct SpotlightWindowControllerTests {
-  /// **Regression guard** -- for an LSUIElement accessory app the
-  /// panel must be a regular activating NSPanel, otherwise
-  /// `makeKeyAndOrderFront` from a background process never produces
-  /// a visible, keyed window. `.nonactivatingPanel` was tried as part
-  /// of an over-fullscreen fix and reproduced exactly that symptom
-  /// (HUD never opens). The over-fullscreen path is handled instead
-  /// by `panelLevel == .screenSaver`, `.canJoinAllApplications`, and
-  /// `.fullScreenAuxiliary` in the collection behavior -- see the
-  /// dedicated tests below.
-  @Test("panel style mask must NOT contain .nonactivatingPanel for an LSUIElement app")
+  /// **Regression guard** -- SpotNote may hide from the Dock at runtime with
+  /// the accessory activation policy, but the panel itself must still be a
+  /// regular activating NSPanel. `.nonactivatingPanel` was tried as part of an
+  /// over-fullscreen fix and reproduced the no-visible-HUD symptom. The
+  /// over-fullscreen path is handled instead by `panelLevel == .screenSaver`,
+  /// `.canJoinAllApplications`, and `.fullScreenAuxiliary` in the collection
+  /// behavior -- see the dedicated tests below.
+  @Test("panel style mask must NOT contain .nonactivatingPanel")
   func panelStyleMaskExcludesNonactivating() {
     #expect(!SpotlightWindowController.panelStyleMask.contains(.nonactivatingPanel))
   }
@@ -45,9 +43,9 @@ struct SpotlightWindowControllerTests {
   }
 
   /// **Regression guard** -- macOS 13+ fullscreen Spaces are scoped to
-  /// application sets. `.canJoinAllSpaces` is not enough for an
-  /// LSUIElement HUD summoned over another app; the panel must also be
-  /// allowed to join other apps' fullscreen sets.
+  /// application sets. `.canJoinAllSpaces` is not enough for a HUD summoned
+  /// over another app; the panel must also be allowed to join other apps'
+  /// fullscreen sets.
   @Test("panel can join all applications -- required for cross-app fullscreen HUD")
   func panelCanJoinAllApplications() {
     let behavior = SpotlightWindowController.panelCollectionBehavior
@@ -103,6 +101,54 @@ struct SpotlightWindowControllerTests {
     let alpha = SpotlightWindowController.defaultUnfocusedAlpha
     #expect(alpha > 0.5)
     #expect(alpha < 1.0)
+  }
+
+  @Test("default HUD origin hugs the right edge with an inset")
+  func defaultHUDOriginHugsRightEdge() {
+    let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
+    let panelWidth: CGFloat = 400
+    let rightmostX = screen.maxX - panelWidth
+
+    let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
+
+    #expect(x == rightmostX - SpotlightWindowController.defaultEdgeInset)
+    #expect(x + panelWidth < screen.maxX, "leaves a gap on the right")
+    #expect(x > screen.midX, "sits in the right half")
+  }
+
+  @Test("default HUD origin stays on-screen after shifting right")
+  func defaultHUDOriginDoesNotOverflowRightEdge() {
+    let screen = NSRect(x: 100, y: 0, width: 640, height: 700)
+    let panelWidth: CGFloat = 620
+
+    let x = SpotlightWindowController.restingOriginX(in: screen, panelWidth: panelWidth)
+
+    #expect(x >= screen.minX)
+    #expect(x + panelWidth <= screen.maxX)
+  }
+
+  @Test("default HUD origin hugs the bottom edge with an inset")
+  func defaultHUDOriginHugsBottomEdge() {
+    let screen = NSRect(x: 0, y: 0, width: 1_000, height: 700)
+    let panelHeight: CGFloat = 360
+
+    let y = SpotlightWindowController.restingOriginY(in: screen, panelHeight: panelHeight)
+
+    // The origin is the panel's bottom edge: pinned near the bottom and growing
+    // upward, so the bottom-right corner stays anchored.
+    #expect(y == screen.minY + SpotlightWindowController.defaultEdgeInset)
+    #expect(y + panelHeight < screen.maxY, "grows upward, stays on screen")
+  }
+
+  @Test("a tall panel stays on-screen when bottom-anchored")
+  func tallPanelClampsWithinScreen() {
+    let screen = NSRect(x: 0, y: 0, width: 1_000, height: 400)
+    let panelHeight: CGFloat = 380
+
+    let y = SpotlightWindowController.restingOriginY(in: screen, panelHeight: panelHeight)
+
+    #expect(y >= screen.minY)
+    #expect(y + panelHeight <= screen.maxY)
   }
 
   @Test("construction is cheap and side-effect-free beyond font registration")

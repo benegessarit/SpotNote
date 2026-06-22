@@ -5,9 +5,12 @@ import SwiftUI
 /// User-configurable preferences, persisted to `UserDefaults`.
 @MainActor
 public final class ThemePreferences: ObservableObject {
-  nonisolated public static let minVisibleLines = 1
-  nonisolated public static let maxVisibleLinesCap = 30
-  nonisolated public static let defaultVisibleLines = 5
+  public static let minVisibleLines = 1
+  public static let maxVisibleLinesCap = 30
+  /// Default growth cap before the editor scrolls. Short notes still open
+  /// at the 9-row resting floor, while longer notes can expand well beyond
+  /// that before scrolling.
+  public static let defaultVisibleLines = 28
 
   private enum Key {
     static let selectedID = "theme.selected.id"
@@ -100,7 +103,7 @@ public final class ThemePreferences: ObservableObject {
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     self.selectedThemeID = defaults.string(forKey: Key.selectedID) ?? ThemeCatalog.defaultID
-    self.showLineNumbers = Self.boolOrDefault(defaults, Key.showLineNumbers, default: true)
+    self.showLineNumbers = Self.boolOrDefault(defaults, Key.showLineNumbers, default: false)
     self.showMenuBarIcon = Self.boolOrDefault(defaults, Key.showMenuBarIcon, default: true)
     self.showHints = Self.boolOrDefault(defaults, Key.showHints, default: true)
     self.vimMode = Self.boolOrDefault(defaults, Key.vimMode, default: false)

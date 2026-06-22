@@ -2,11 +2,11 @@ import AppKit
 
 /// Installs a minimal `NSApp.mainMenu` carrying the standard Edit items.
 ///
-/// Even for `LSUIElement` accessory apps whose menu bar is never displayed,
-/// the menu must exist for standard text-editing key equivalents (⌘A, ⌘C,
-/// ⌘V, ⌘X, ⌘Z, ⇧⌘Z) to flow through the responder chain into the focused
-/// `NSTextField`. Without a main menu the edit commands are silently
-/// dropped.
+/// Even when SpotNote hides itself from the Dock at runtime with the accessory
+/// activation policy, the menu must exist for standard text-editing key
+/// equivalents (⌘A, ⌘C, ⌘V, ⌘X, ⌘Z, ⇧⌘Z) to flow through the responder chain
+/// into the focused `NSTextField`. Without a main menu the edit commands are
+/// silently dropped.
 @MainActor
 enum MainMenu {
   static func install(onOpenSettings: @escaping () -> Void) {

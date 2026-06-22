@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AppKit
 import SwiftUI
 import Testing
@@ -40,8 +41,8 @@ struct MultilineEditorTokenTests {
     #expect(heights.last == EditorMetrics.panelHeight(forLines: 2, maxLines: 4))
   }
 
-  @Test("return after @cl normalization updates binding and grows to two rows")
-  func returnAfterChecklistNormalizationUpdatesHeight() {
+  @Test("return after @cl keeps literal text and grows to two rows")
+  func returnAfterChecklistLiteralUpdatesHeight() {
     var boundText = ""
     var heights: [CGFloat] = []
     let parent = MultilineEditor(
@@ -63,12 +64,14 @@ struct MultilineEditorTokenTests {
 
     insert("@cl", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
-    #expect(boundText == "☐")
+    #expect(boundText == "@cl")
+    #expect(textView.checklistLines.isEmpty)
 
     insert("\n", into: textView)
     coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: textView))
 
-    #expect(boundText == "☐\n")
+    #expect(boundText == "@cl\n")
+    #expect(textView.checklistLines.isEmpty)
     #expect(heights.last == EditorMetrics.panelHeight(forLines: 2, maxLines: 4))
   }
 
@@ -100,47 +103,6 @@ struct MultilineEditorTokenTests {
     context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
 
     #expect(context.boundText() == "@today!")
-  }
-
-  @Test("backspace after @cl rendering restores markdown literal and suppresses immediate re-render")
-  func backspaceAfterChecklistRenderingRestoresLiteral() throws {
-    let context = makeEditorContext()
-
-    insert("@cl", into: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-    pressBackspace(in: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-
-    #expect(context.boundText() == "[ ]")
-
-    insert(" item", into: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-
-    #expect(context.boundText() == "[ ] item")
-  }
-
-  @Test("cmd+z after @cl rendering restores markdown literal")
-  func commandZAfterChecklistRenderingRestoresMarkdownLiteral() throws {
-    let context = makeEditorContext()
-
-    insert("@cl", into: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-    pressCommandZ(in: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-
-    #expect(context.boundText() == "[ ]")
-  }
-
-  @Test("direct undo after @cl rendering restores markdown literal")
-  func directUndoAfterChecklistRenderingRestoresMarkdownLiteral() throws {
-    let context = makeEditorContext()
-
-    insert("@cl", into: context.textView)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-    _ = context.textView.tryToPerform(Selector(("undo:")), with: nil)
-    context.coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: context.textView))
-
-    #expect(context.boundText() == "[ ]")
   }
 
   @Test("backspace after @today rendering reverts even if AppKit leaves caret at original token end")
@@ -319,26 +281,50 @@ private func pressBackspace(in textView: PlaceholderTextView) {
 }
 
 @MainActor
-@Suite("Multiline editor embedded checklist toggles")
+@Suite("Multiline editor checklist toggles")
 struct MultilineEditorChecklistToggleTests {
-  @Test("shortcut toggles checklist marker in the middle of a line")
-  func shortcutTogglesEmbeddedChecklistMarker() {
-    let textView = makeChecklistTextView(text: "prefix ☐ cursor placement")
-    textView.setSelectedRange(NSRange(location: ("prefix ☐" as NSString).length, length: 0))
+  @Test("copy returns visible text only")
+  func copyReturnsVisibleTextOnly() {
+    let textView = makeChecklistTextView(text: "one\ntwo", checklistLines: [0: .unchecked, 1: .checked])
+    textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
 
-    textView.toggleChecklistShortcut(nil)
+    textView.copy(nil)
 
-    #expect(textView.string == "prefix ☑ cursor placement")
+    #expect(NSPasteboard.general.string(forType: .string) == "one\ntwo")
   }
 
-  @Test("click toggles checklist marker in the middle of a line")
-  func clickTogglesEmbeddedChecklistMarker() throws {
-    let textView = makeChecklistTextView(text: "prefix ☐ cursor placement")
-    let markerLocation = ("prefix " as NSString).length
+  @Test("deleting a checklist line drops its state and shifts later states")
+  func deletingChecklistLineShiftsLaterStates() {
+    let textView = makeChecklistTextView(
+      text: "one\ntwo\nthree",
+      checklistLines: [0: .unchecked, 1: .checked, 2: .unchecked]
+    )
+    let range = (textView.string as NSString).lineRange(
+      for: NSRange(location: ("one\n" as NSString).length, length: 0)
+    )
 
-    try clickCharacter(at: markerLocation, in: textView)
+    #expect(textView.shouldChangeText(in: range, replacementString: ""))
+    textView.replaceCharacters(in: range, with: "")
+    textView.didChangeText()
 
-    #expect(textView.string == "prefix ☑ cursor placement")
+    #expect(textView.string == "one\nthree")
+    #expect(textView.checklistLines == [0: .unchecked, 1: .unchecked])
+  }
+
+  @Test("inserting a line before a checklist line keeps the downstream state")
+  func insertingLineBeforeChecklistPreservesDownstreamState() {
+    let textView = makeChecklistTextView(
+      text: "one\ntwo",
+      checklistLines: [1: .checked]
+    )
+    let insertion = ("one\n" as NSString).length
+
+    #expect(textView.shouldChangeText(in: NSRange(location: insertion, length: 0), replacementString: "\n"))
+    textView.replaceCharacters(in: NSRange(location: insertion, length: 0), with: "\n")
+    textView.didChangeText()
+
+    #expect(textView.string == "one\n\ntwo")
+    #expect(textView.checklistLines == [2: .checked])
   }
 
   @Test("caret erase uses previously painted rect after selection moves")
@@ -364,10 +350,14 @@ struct MultilineEditorChecklistToggleTests {
     #expect(erase == painted)
   }
 
-  private func makeChecklistTextView(text: String) -> PlaceholderTextView {
+  private func makeChecklistTextView(
+    text: String,
+    checklistLines: [Int: ChecklistLineState] = [:]
+  ) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 200))
     textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
     textView.string = text
+    textView.checklistLines = checklistLines
     textView.textContainer?.lineFragmentPadding = 0
     textView.textContainer?.widthTracksTextView = true
     guard let storage = textView.textStorage,
@@ -384,41 +374,4 @@ struct MultilineEditorChecklistToggleTests {
     return textView
   }
 
-  private func clickCharacter(at location: Int, in textView: PlaceholderTextView) throws {
-    guard let layoutManager = textView.layoutManager,
-      let textContainer = textView.textContainer
-    else { return }
-    let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 640, height: 240),
-      styleMask: [],
-      backing: .buffered,
-      defer: false
-    )
-    window.contentView = textView
-    textView.frame = window.contentView?.bounds ?? textView.frame
-    layoutManager.ensureLayout(for: textContainer)
-    let glyphIndex = layoutManager.glyphIndexForCharacter(at: location)
-    let glyphRect = layoutManager.boundingRect(
-      forGlyphRange: NSRange(location: glyphIndex, length: 1),
-      in: textContainer
-    )
-    let point = NSPoint(
-      x: textView.textContainerOrigin.x + glyphRect.midX,
-      y: textView.textContainerOrigin.y + glyphRect.midY
-    )
-    let event = try #require(
-      NSEvent.mouseEvent(
-        with: .leftMouseDown,
-        location: textView.convert(point, to: nil),
-        modifierFlags: [],
-        timestamp: 0,
-        windowNumber: window.windowNumber,
-        context: nil,
-        eventNumber: 0,
-        clickCount: 1,
-        pressure: 1
-      )
-    )
-    textView.mouseDown(with: event)
-  }
 }

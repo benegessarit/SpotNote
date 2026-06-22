@@ -54,6 +54,29 @@ struct FindControllerTests {
 }
 
 @MainActor
+@Suite("CommandController")
+struct CommandControllerTests {
+  private func makeDefaults(_ tag: String = #function) -> UserDefaults {
+    let suite = "spotnote.command-controller.\(tag).\(UUID().uuidString)"
+    return UserDefaults(suiteName: suite) ?? .standard
+  }
+
+  @Test("command corpus excludes retired statusline controls")
+  func commandCorpusExcludesRetiredStatuslineControls() {
+    let defaults = makeDefaults()
+    let shortcuts = ShortcutStore(defaults: defaults)
+    let preferences = ThemePreferences(defaults: defaults)
+
+    let corpus = CommandController.buildCorpus(shortcuts: shortcuts, preferences: preferences)
+    let searchable = corpus.map { "\($0.title) \($0.subtitle)" }.joined(separator: "\n")
+
+    #expect(!searchable.localizedCaseInsensitiveContains("Hints bar"))
+    #expect(!searchable.localizedCaseInsensitiveContains("hint strip"))
+    #expect(!searchable.localizedCaseInsensitiveContains("Toggle hints"))
+  }
+}
+
+@MainActor
 @Suite("FuzzyController")
 struct FuzzyControllerTests {
   private func makeChat(_ text: String) -> Chat {
@@ -118,10 +141,10 @@ struct FuzzyControllerTests {
 
   @Test("rank highlights literal query terms before fuzzy fragments")
   func rankPrefersLiteralHighlight() throws {
-    let chat = makeChat("☐ this is some item\n☐ another item")
+    let chat = makeChat("[ ] this is some item\n[ ] another item")
     let ranked = FuzzyController.rank(query: "this", in: [chat], limit: 10)
     let result = try #require(ranked.first)
-    #expect(result.matchRanges == [TextRange(location: 2, length: 4)])
+    #expect(result.matchRanges == [TextRange(location: 4, length: 4)])
   }
 
   @Test("preview excerpt clamps large notes around the highlighted match")

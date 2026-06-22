@@ -258,7 +258,12 @@ extension PlaceholderTextView {
   }
 
   private func invalidateLineFlashRuler() {
-    enclosingScrollView?.verticalRulerView?.needsDisplay = true
+    if let ruler = enclosingScrollView?.verticalRulerView as? LineNumberRuler {
+      ruler.updateRequiredThickness()
+      ruler.needsDisplay = true
+    } else {
+      enclosingScrollView?.verticalRulerView?.needsDisplay = true
+    }
   }
 }
 

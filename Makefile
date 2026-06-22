@@ -1,7 +1,7 @@
 SHELL := /usr/bin/env bash
 S := ./scripts
 
-.PHONY: help setup build run release test fmt fmt-check lint analyze periphery complexity ci clean tools-check
+.PHONY: help setup build run release install verify-source test fmt fmt-check lint analyze periphery complexity ci clean tools-check
 
 help:
 	@echo "SpotNote — make targets (each delegates to scripts/<name>.sh):"
@@ -9,6 +9,8 @@ help:
 	@echo "  build        - compile debug and assemble .app"
 	@echo "  run          - build and launch SpotNote.app"
 	@echo "  release      - release-configuration .app"
+	@echo "  install      - release build, backup /Applications app, install, verify, launch"
+	@echo "  verify-source - prove this checkout is the stable custom SpotNote source"
 	@echo "  test         - swift test --parallel + coverage"
 	@echo "  fmt          - swift-format in place"
 	@echo "  fmt-check    - swift-format lint --strict"
@@ -24,6 +26,8 @@ setup:         ; $(S)/setup.sh
 build:         ; $(S)/build.sh debug
 run:           ; $(S)/run.sh debug
 release:       ; $(S)/build.sh release
+install:       ; $(S)/install-release.sh
+verify-source: ; $(S)/verify-source-of-truth.sh
 test:          ; $(S)/test.sh
 fmt:           ; $(S)/fmt.sh
 fmt-check:     ; $(S)/fmt-check.sh

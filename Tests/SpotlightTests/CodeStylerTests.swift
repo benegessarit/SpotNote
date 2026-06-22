@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Spotlight
@@ -76,5 +77,283 @@ struct SyntaxHighlighterTests {
     #expect(comments.count == 1)
     // The number `1` on the next line should still be tokenized.
     #expect(tokens.contains { $0.category == .number })
+  }
+}
+
+@MainActor
+@Suite("CodeStyler Markdown visual styling")
+struct CodeStylerVisualTests {
+  @Test("Markdown headings are visibly bolded without changing stored text")
+  func markdownHeadingsAreVisiblyBold() throws {
+    let text = "plain\n## Tray\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
+
+    let headingFont = try #require(storageFont(at: lineStart(1, in: text), in: textView))
+    let bodyFont = try #require(storageFont(at: 0, in: textView))
+
+    #expect(NSFontManager.shared.traits(of: headingFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("Markdown headings use a visibly distinct storage foreground")
+  func markdownHeadingsUseVisiblyDistinctStorageForeground() throws {
+    let theme = ThemeCatalog.mirage
+    let text = "plain\n## To Do\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+    textView.textStorage?.addAttribute(
+      .foregroundColor,
+      value: NSColor(theme.text),
+      range: NSRange(location: 0, length: (text as NSString).length)
+    )
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
+    )
+
+    #expect(colorDistance(headingColor, bodyColor) >= 0.24)
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("Markdown heading markers recolor every hash after stale attribute fragments")
+  func markdownHeadingMarkersRecolorEveryHashAfterStaleFragments() throws {
+    let theme = ThemeCatalog.mirage
+    let text = "## Tray\nnext"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+    CodeStyler.apply(to: textView, theme: theme)
+    textView.textStorage?.addAttribute(
+      .foregroundColor,
+      value: NSColor(theme.text),
+      range: NSRange(location: 1, length: 1)
+    )
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let firstHashColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let secondHashColor = try #require(storageColor(at: 1, in: textView)?.usingColorSpace(.sRGB))
+    let headingTextColor = try #require(storageColor(at: 3, in: textView)?.usingColorSpace(.sRGB))
+    let expectedHeading = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(firstHashColor, expectedHeading) < 0.01)
+    #expect(colorDistance(secondHashColor, expectedHeading) < 0.01)
+    #expect(colorDistance(headingTextColor, expectedHeading) < 0.01)
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("style refresh with the caret in a heading preserves heading-only bold")
+  func styleRefreshWithCaretInHeadingPreservesHeadingOnlyBold() throws {
+    let theme = ThemeCatalog.mirage
+    let font = SpotNoteFont.editor()
+    let text = "# To Do\n\n20m @email\n\n# Tray"
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let editor = MultilineEditor(
+      text: .constant(text),
+      theme: theme,
+      placeholder: "",
+      showLineNumbers: false,
+      font: font,
+      focusRequest: 0,
+      maxVisibleLines: 9,
+      extraChromeHeight: 0,
+      onHeightChange: { _ in }
+    )
+    let fullRange = NSRange(location: 0, length: (text as NSString).length)
+    textView.textStorage?.setAttributes(
+      [.font: font, .foregroundColor: NSColor(theme.text)],
+      range: fullRange
+    )
+    editor.applyCodeStyling(on: textView)
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    editor.applyStyle(textView: textView)
+    editor.applyCodeStyling(on: textView)
+
+    let toDoFont = try #require(storageFont(at: lineStart(0, in: text), in: textView))
+    let bodyFont = try #require(storageFont(at: lineStart(2, in: text), in: textView))
+    let trayFont = try #require(storageFont(at: lineStart(4, in: text), in: textView))
+    let bodyColor = try #require(storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB))
+    let toDoColor = try #require(storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB))
+    let trayColor = try #require(storageColor(at: lineStart(4, in: text) + 2, in: textView)?.usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(NSFontManager.shared.traits(of: trayFont).contains(.boldFontMask))
+    #expect(colorDistance(toDoColor, bodyColor) >= 0.24)
+    #expect(colorDistance(trayColor, bodyColor) >= 0.24)
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("theme change recolors existing body text")
+  func themeChangeRecolorsExistingBodyText() throws {
+    let text = "plain\n## To Do\nnext"
+    let font = SpotNoteFont.editor()
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let roseEditor = editor(text: text, theme: ThemeCatalog.rosePineMoonlight, font: font)
+    roseEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    let roseBody = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let roseText = try #require(NSColor(ThemeCatalog.rosePineMoonlight.text).usingColorSpace(.sRGB))
+    #expect(colorDistance(roseBody, roseText) < 0.01)
+
+    let draculaEditor = editor(text: text, theme: ThemeCatalog.dracula, font: font)
+    draculaEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let nextBodyColor = try #require(
+      storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
+    )
+    let draculaText = try #require(NSColor(ThemeCatalog.dracula.text).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(bodyColor, draculaText) < 0.01)
+    #expect(colorDistance(nextBodyColor, draculaText) < 0.01)
+    #expect(colorDistance(headingColor, draculaText) >= 0.24)
+  }
+
+  @Test("theme change recolors existing headings when body text color is unchanged")
+  func themeChangeRecolorsExistingHeadingsWhenBodyTextColorIsUnchanged() throws {
+    let text = "plain\n## To Do\nnext"
+    let font = SpotNoteFont.editor()
+    let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
+    textView.font = font
+    textView.string = text
+    let body = Color(red: 0.8, green: 0.82, blue: 0.86)
+    let oldTheme = testTheme(id: "old-heading", body: body, heading: Color(red: 1.0, green: 0.4, blue: 0.4))
+    let newTheme = testTheme(id: "new-heading", body: body, heading: Color(red: 0.4, green: 0.7, blue: 1.0))
+
+    editor(text: text, theme: oldTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    editor(text: text, theme: newTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
+
+    let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let headingColor = try #require(
+      storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
+    )
+    let expectedBody = try #require(NSColor(newTheme.text).usingColorSpace(.sRGB))
+    let expectedHeading = try #require(NSColor(newTheme.headingText).usingColorSpace(.sRGB))
+
+    #expect(colorDistance(bodyColor, expectedBody) < 0.01)
+    #expect(colorDistance(headingColor, expectedHeading) < 0.01)
+  }
+
+  @Test("Markdown-looking headings inside fenced code are not bolded")
+  func headingsInsideFencedCodeAreIgnored() {
+    let text = "```\n## not a heading\n```\n## Tray"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.obsidian)
+
+    let fencedFont = storageFont(at: lineStart(1, in: text), in: textView)
+    let headingFont = storageFont(at: lineStart(3, in: text), in: textView)
+
+    #expect(fencedFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == false)
+    #expect(headingFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true)
+  }
+
+  @Test("Markdown list dashes render with heavier visual weight without changing stored text")
+  func listDashesAreVisuallyWeighted() throws {
+    let text = "- call Elliot\nplain"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: ThemeCatalog.mirage)
+
+    let markerFont = try #require(storageFont(at: 0, in: textView))
+    let bodyFont = try #require(storageFont(at: 2, in: textView))
+    let markerColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let bodyColor = try #require(storageColor(at: 2, in: textView)?.usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: markerFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(markerFont.pointSize >= bodyFont.pointSize + 1)
+    #expect(markerColor.alphaComponent < bodyColor.alphaComponent)
+    #expect(textView.textStorage?.string == text)
+  }
+
+  @Test("bare x markers render with the theme accent without changing stored text")
+  func bareXMarkersUseThemeAccent() throws {
+    let theme = ThemeCatalog.dracula
+    let text = "x\n- call Elliot\nplain"
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+    textView.font = SpotNoteFont.editor()
+    textView.string = text
+
+    CodeStyler.apply(to: textView, theme: theme)
+
+    let markerFont = try #require(storageFont(at: 0, in: textView))
+    let bodyFont = try #require(storageFont(at: lineStart(2, in: text), in: textView))
+    let markerColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
+    let accent = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+
+    #expect(NSFontManager.shared.traits(of: markerFont).contains(.boldFontMask))
+    #expect(markerFont.pointSize >= bodyFont.pointSize + 1)
+    #expect(colorDistance(markerColor, accent) < 0.01)
+    #expect(textView.textStorage?.string == text)
+  }
+
+  private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
+    textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+  }
+
+  private func editor(text: String, theme: Theme, font: NSFont) -> MultilineEditor {
+    MultilineEditor(
+      text: .constant(text),
+      theme: theme,
+      placeholder: "",
+      showLineNumbers: false,
+      font: font,
+      focusRequest: 0,
+      maxVisibleLines: 9,
+      extraChromeHeight: 0,
+      onHeightChange: { _ in }
+    )
+  }
+
+  private func testTheme(id: String, body: Color, heading: Color) -> Theme {
+    Theme(
+      id: id,
+      name: id,
+      mode: .dark,
+      background: Color(red: 0.1, green: 0.1, blue: 0.12),
+      border: .clear,
+      text: body,
+      headingText: heading,
+      placeholder: Color(red: 0.5, green: 0.5, blue: 0.55)
+    )
+  }
+
+  private func storageColor(at location: Int, in textView: NSTextView) -> NSColor? {
+    textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
+  }
+
+  private func colorDistance(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
+    abs(lhs.redComponent - rhs.redComponent)
+      + abs(lhs.greenComponent - rhs.greenComponent)
+      + abs(lhs.blueComponent - rhs.blueComponent)
+  }
+
+  private func lineStart(_ index: Int, in text: String) -> Int {
+    guard index > 0 else { return 0 }
+    let lines = text.components(separatedBy: "\n")
+    let prefix = lines.prefix(index).joined(separator: "\n")
+    return (prefix as NSString).length + 1
   }
 }
