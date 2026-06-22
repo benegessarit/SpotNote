@@ -1,16 +1,24 @@
 # Spotlight resources
 
-SpotNote's editor asks AppKit for IBM Plex Mono by PostScript name
-`IBMPlexMono`. The app bundles `IBMPlexMono-Regular.ttf` here so the HUD does
-not silently fall back to Inter or the generic system font on machines without
-IBM Plex Mono installed system-wide. `FontLoader.registerBundledFonts()`
+SpotNote's editor asks AppKit for **MonoLisa** by PostScript name
+`MonoLisa-Regular`. MonoLisa is a licensed font, so it is **not** bundled or
+redistributed here — install it into `~/Library/Fonts` (regular + bold/italic
+weights) and the editor resolves it system-wide. Bold/italic styling derives
+from the installed weights via `NSFontManager` trait conversion in the code
+stylers.
+
+When MonoLisa is not installed, the editor falls back to the bundled
+`IBMPlexMono-Regular.ttf` (so the HUD never drops to Inter or a proportional
+system font), then to the system monospaced face. `FontLoader.registerBundledFonts()`
 registers bundled `.ttf` / `.otf` files process-locally before the editor asks
 for the font.
+
+Bundled fallback font:
 
 - `IBMPlexMono-Regular.ttf` or `IBMPlexMono-Regular.otf`
 - Optional matching weights, such as `IBMPlexMono-Bold.ttf`
 
-Easiest install:
+Installing the bundled fallback (only needed if you change which fallback ships):
 
 ```bash
 brew install --cask font-ibm-plex
