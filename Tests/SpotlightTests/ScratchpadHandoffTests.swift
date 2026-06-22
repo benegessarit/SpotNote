@@ -100,6 +100,45 @@ struct ScratchpadHandoffTests {
     #expect(!payload.text.contains("do not silently create a partial issue"))
   }
 
+  @Test("Linear payload carries structured data for deterministic ingress handling")
+  func linearPayloadCarriesStructuredData() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: LinearTaskHandoffRequest(
+        title: "Call Elliot",
+        targetStatus: .started,
+        labels: ["Amplify"],
+        dueDate: "2026-06-15"
+      ),
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.kind == "linear_issue")
+    #expect(data.title == "Call Elliot")
+    #expect(data.status == "Started")
+    #expect(data.labels == ["Amplify"])
+    #expect(data.dueDate == "2026-06-15")
+  }
+
+  @Test("Linear payload encodes a data object; habit payload omits it")
+  func dataFieldWireFormat() throws {
+    let linear = try ScratchpadHandoffClient.payload(
+      forLinearTask: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+    let linearJSON = try #require(String(data: JSONEncoder().encode(linear), encoding: .utf8))
+    #expect(linearJSON.contains("\"data\""))
+    #expect(linearJSON.contains("\"kind\":\"linear_issue\""))
+
+    let habit = try ScratchpadHandoffClient.payload(
+      forHabit: HabitHandoffRequest(habit: "Piano practice"),
+      id: "spotnote-habit-log:test"
+    )
+    let habitJSON = try #require(String(data: JSONEncoder().encode(habit), encoding: .utf8))
+    // Habits stay LLM-mediated, so they carry no structured data object.
+    #expect(!habitJSON.contains("\"data\""))
+    #expect(habit.intent == "habit_log")
+  }
+
   @Test("blank Linear title is rejected")
   func blankTitleRejected() {
     #expect(throws: ScratchpadHandoffError.emptyText) {

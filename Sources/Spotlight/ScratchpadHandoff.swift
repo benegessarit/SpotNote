@@ -67,7 +67,14 @@ struct ScratchpadHandoffClient: Sendable {
       id: id,
       intent: "linear_issue",
       text: LinearTaskHandoffPrompt.render(request: normalizedRequest),
-      source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Linear task")
+      source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Linear task"),
+      data: ScratchpadHandoffPayload.LinearData(
+        kind: "linear_issue",
+        title: normalizedRequest.title,
+        status: normalizedRequest.targetStatus.rawValue,
+        labels: normalizedRequest.labels,
+        dueDate: normalizedRequest.dueDate
+      )
     )
   }
 
@@ -113,10 +120,24 @@ struct ScratchpadHandoffPayload: Codable, Equatable, Sendable {
     let title: String
   }
 
+  /// Structured payload for deterministic, no-LLM handling at the ingress.
+  /// Present only for the Linear motions; when absent the receiving Hermes
+  /// session reads `text` and acts (the habit motion and any future intents
+  /// stay on that LLM-mediated path).
+  struct LinearData: Codable, Equatable, Sendable {
+    let kind: String
+    let title: String
+    let status: String
+    let labels: [String]
+    let dueDate: String?
+  }
+
   let id: String
   let intent: String
   let text: String
   let source: Source
+  /// Synthesized Codable omits this when nil, so non-Linear payloads are unchanged on the wire.
+  var data: LinearData?
 }
 
 struct ScratchpadHandoffReceipt: Equatable, Sendable {
