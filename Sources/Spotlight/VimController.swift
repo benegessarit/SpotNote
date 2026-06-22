@@ -411,10 +411,15 @@ enum VimCommandReference {
         ),
         Entry(
           id: "section-jumps",
-          usage: "gH\ngD\ngT",
+          usage: ",h\n,d\n,t\n,b",
           summary:
-            "Jump to a fresh bullet in `## Habits` (gH), `## Todo` (gD), or `## Tray` (gT)"
-            + " and start typing; the section is created if it doesn't exist yet."
+            "Jump to a fresh bullet in `## Habits` (,h), `## Todo` (,d), `## Tray` (,t),"
+            + " or `## Big Things` (,b) and start typing; the section is created if absent."
+        ),
+        Entry(
+          id: "tray-leader",
+          usage: "\\t",
+          summary: "`\\` leader: `\\t` appends the current line to tray.md."
         ),
         Entry(
           id: "noh",

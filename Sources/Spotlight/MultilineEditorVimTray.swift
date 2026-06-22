@@ -1,7 +1,7 @@
 import AppKit
 
 extension PlaceholderTextView {
-  /// `gT` -- jump to the in-note `## Tray` section, creating it at the
+  /// `,t` -- jump to the in-note `## Tray` section, creating it at the
   /// bottom when absent, and leave the editor in insert mode on a fresh
   /// bullet at the end of that section.
   @discardableResult
@@ -11,7 +11,7 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gH` -- jump to the in-note `## Habits` section, creating it just below the
+  /// `,h` -- jump to the in-note `## Habits` section, creating it just below the
   /// (jump-less) `## Big Things` section -- or at the top when there is none --
   /// and leave the editor in insert mode on a fresh habit bullet.
   @discardableResult
@@ -21,7 +21,7 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// `gD` -- jump to the in-note `## Todo` section, creating it (between
+  /// `,d` -- jump to the in-note `## Todo` section, creating it (between
   /// `## Habits` and `## Tray`) when absent, and leave the editor in insert
   /// mode on a fresh to-do bullet.
   @discardableResult
@@ -29,6 +29,30 @@ extension PlaceholderTextView {
     let target = ensureToDoInsertionLocation()
     revealVimSectionJumpTarget(target)
     return true
+  }
+
+  /// `,b` -- jump to the in-note `## Big Things` section, creating it at the
+  /// very top when absent, and leave the editor in insert mode on a fresh bullet.
+  @discardableResult
+  func jumpToBigThingsSectionForVim() -> Bool {
+    let target = ensureBigThingsInsertionLocation()
+    revealVimSectionJumpTarget(target)
+    return true
+  }
+
+  private func ensureBigThingsInsertionLocation() -> Int {
+    var nsString = string as NSString
+    if headingRange(matching: SpotNoteSectionHeadings.bigThings, in: nsString) == nil {
+      // Big Things is the top section: create it at the very start of the note.
+      let text = SpotNoteSectionHeadings.bigThings.canonicalLine
+      replaceTextForSectionJump(in: NSRange(location: 0, length: 0), with: text)
+      nsString = string as NSString
+    }
+    guard let heading = headingRange(matching: SpotNoteSectionHeadings.bigThings, in: nsString)
+    else {
+      return nsString.length
+    }
+    return ensureOpenBulletLineAfter(heading, in: nsString)
   }
 
   private func revealVimSectionJumpTarget(_ target: Int) {
@@ -129,7 +153,7 @@ extension PlaceholderTextView {
   /// Appends a fresh `- ` bullet at the END of the section under `heading`
   /// (after its last non-empty line, ignoring internal blank spacer lines),
   /// reusing a trailing blank line when one is already present. Returns the
-  /// caret location just past the inserted "- ". Shared by gH / gD / gT.
+  /// caret location just past the inserted "- ". Shared by ,h / ,d / ,t / ,b.
   private func ensureOpenBulletLineAfter(_ heading: NSRange, in nsString: NSString) -> Int {
     var location = heading.location + heading.length
     var insertion = heading.location + heading.length

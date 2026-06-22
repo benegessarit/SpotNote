@@ -12,8 +12,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "t", ignoring: "t", keyCode: 17))
 
     #expect(textView.string == "Tasks\n## TRAY\nfirst\nsecond\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
@@ -27,8 +27,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
 
     #expect(textView.string == "## TODO\n- email\n- cure\n- \n## TRAY\nrandom")
     #expect(textView.selectedRange.location == ("## TODO\n- email\n- cure\n- " as NSString).length)
@@ -42,8 +42,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "H", ignoring: "h", keyCode: 4, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "h", ignoring: "h", keyCode: 4))
 
     #expect(textView.string == "## Habits\n- email\n- cure\n- \n## Tray\nrandom")
     #expect(textView.selectedRange.location == ("## Habits\n- email\n- cure\n- " as NSString).length)
@@ -57,8 +57,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
 
     #expect(textView.string == "## HABITS\n- a\n# TODO\n- x\n- \n## TRAY")
     #expect(textView.vimEngine?.mode == .insert)
@@ -71,8 +71,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
 
     #expect(textView.string == "## Habits\n- a\n## Todo\n- \n## Tray\nx")
     #expect(textView.vimEngine?.mode == .insert)
@@ -85,8 +85,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "H", ignoring: "h", keyCode: 4, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "h", ignoring: "h", keyCode: 4))
 
     #expect(textView.string == "## Big Things\n- launch\n## Habits\n- \n## Tray\nx")
     #expect(textView.vimEngine?.mode == .insert)

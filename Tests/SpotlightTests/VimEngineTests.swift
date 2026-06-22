@@ -171,73 +171,73 @@ struct VimEngineTests {
     #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
   }
 
-  @Test("gy sends the current bullet to tray.md")
-  func gYSendsCurrentBulletToTrayNote() {
+  @Test("\\t sends the current bullet to tray.md")
+  func backslashTSendsCurrentBulletToTrayNote() {
     let engine = VimEngine()
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
     #expect(engine.mode == .normal)
   }
 
-  @Test("counted gy sends counted bullets to tray.md")
-  func countedGYSendsCountedBulletsToTrayNote() {
+  @Test("counted \\t sends counted bullets to tray.md")
+  func countedBackslashTSendsCountedBulletsToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
   }
 
-  @Test("visual gy sends the active selection to tray.md and exits visual mode")
-  func visualGYSendsSelectionToTrayNote() {
+  @Test("visual \\t sends the active selection to tray.md and exits visual mode")
+  func visualBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "v", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
     #expect(engine.mode == .normal)
   }
 
-  @Test("visual-line gy sends the active line selection to tray.md and exits visual mode")
-  func visualLineGYSendsSelectionToTrayNote() {
+  @Test("visual-line \\t sends the active line selection to tray.md and exits visual mode")
+  func visualLineBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "V", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
     #expect(engine.mode == .normal)
   }
 
-  @Test("gH jumps to the HABITS section")
-  func gShiftHJumpsToHabitsSection() {
+  @Test(",h jumps to the Habits section")
+  func commaHJumpsToHabitsSection() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "H", hasModifiers: false) == .jumpToHabitsSection)
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "h", hasModifiers: false) == .jumpToHabitsSection)
     #expect(engine.mode == .insert)
   }
 
-  @Test("gD jumps to the TODO section")
-  func gShiftDJumpsToToDoSection() {
+  @Test(",d jumps to the Todo section")
+  func commaDJumpsToToDoSection() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToToDoSection)
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "d", hasModifiers: false) == .jumpToToDoSection)
     #expect(engine.mode == .insert)
   }
 
-  @Test("gT jumps to the Tray section")
-  func gShiftTJumpsToTraySection() {
+  @Test(",t jumps to the Tray section")
+  func commaTJumpsToTraySection() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test("tt jumps to the Tray section")
-  func ttJumpsToTraySection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "t", hasModifiers: false) == .none)
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
     #expect(engine.handle(key: "t", hasModifiers: false) == .jumpToTraySection)
+    #expect(engine.mode == .insert)
+  }
+
+  @Test(",b jumps to the Big Things section")
+  func commaBJumpsToBigThingsSection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "b", hasModifiers: false) == .jumpToBigThingsSection)
     #expect(engine.mode == .insert)
   }
 

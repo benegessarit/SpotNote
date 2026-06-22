@@ -142,8 +142,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "t", ignoring: "t", keyCode: 17))
 
     #expect(textView.string == "Tasks\n## Tray\nfirst\nsecond\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
@@ -157,8 +157,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "t", ignoring: "t", keyCode: 17))
 
     #expect(textView.string == "Tasks\n## Tray\nfirst\n\nsecond\n\nthird\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
@@ -172,8 +172,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "T", ignoring: "t", keyCode: 17, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "t", ignoring: "t", keyCode: 17))
 
     #expect(textView.string == "Tasks\nalpha\n\n## Tray\n- ")
     #expect(textView.selectedRange.location == (textView.string as NSString).length)
@@ -187,8 +187,8 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.attachVimController(VimController())
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "D", ignoring: "d", keyCode: 2, modifiers: .shift))
+    textView.keyDown(with: keyEvent(characters: ",", ignoring: ",", keyCode: 43))
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
 
     #expect(textView.string == "## To Do\n- email\n- cure\n- \n## Tray\nrandom")
     #expect(textView.selectedRange.location == ("## To Do\n- email\n- cure\n- " as NSString).length)

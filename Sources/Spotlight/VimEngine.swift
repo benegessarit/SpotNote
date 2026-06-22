@@ -52,6 +52,7 @@ enum VimAction: Equatable, Sendable {
   case jumpToTraySection
   case jumpToHabitsSection
   case jumpToToDoSection
+  case jumpToBigThingsSection
   case gotoLine(Int)
   case enterVisual
   case extendVisual(Motion)
@@ -151,14 +152,18 @@ final class VimEngine {
       return .none
     case "g":
       return handlePendingG(key: key, count: count)
-    case "t":
-      return handlePendingT(key: key)
+    case ",":
+      return handlePendingComma(key: key)
+    case "\\":
+      return handlePendingBackslash(key: key, count: count)
     default:
       pendingBuffer = ""
       return .none
     }
   }
 
+  // `g` is the Linear handoff prefix: g + status sends the current bullet to
+  // David's personal Linear at that state. `gg` keeps the document-start motion.
   private func handlePendingG(key: String, count: Int) -> VimAction {
     pendingBuffer = ""
     if key == "g" { return .moveCursor(.documentStart) }
@@ -167,18 +172,25 @@ final class VimEngine {
     if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
     if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
     if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
-    if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
-    // Consistent section jumps (capital g-prefix): each jumps to its `## …`
-    // section and drops into insert on a fresh bullet.
-    if key == "H" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
-    if key == "D" { return jumpToSectionInsertAction(.jumpToToDoSection) }
-    if key == "T" { return jumpToSectionInsertAction(.jumpToTraySection) }
     return .none
   }
 
-  private func handlePendingT(key: String) -> VimAction {
+  // `,` is the section-jump prefix: jump to a `## …` section and drop into
+  // insert on a fresh bullet (creating the section if absent).
+  private func handlePendingComma(key: String) -> VimAction {
     pendingBuffer = ""
+    if key == "h" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
+    if key == "d" { return jumpToSectionInsertAction(.jumpToToDoSection) }
     if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
+    if key == "b" { return jumpToSectionInsertAction(.jumpToBigThingsSection) }
+    return .none
+  }
+
+  // `\` is a reusable leader. `\t` appends the current line to tray.md.
+  // (`\h` habit-completion handoff lands with its tracker wiring.)
+  private func handlePendingBackslash(key: String, count: Int) -> VimAction {
+    pendingBuffer = ""
+    if key == "t" { return .appendCurrentLineToTrayNote(count: count) }
     return .none
   }
 
@@ -188,7 +200,7 @@ final class VimEngine {
   }
 
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "g" || key == "c" || key == "t" {
+    if key == "d" || key == "g" || key == "c" || key == "," || key == "\\" {
       pendingBuffer = key
       return .none
     }
@@ -326,6 +338,10 @@ extension VimEngine {
       pendingBuffer = "g"
       return .none
     }
+    if key == "\\" {
+      pendingBuffer = "\\"
+      return .none
+    }
 
     // `<count>G` jumps to a specific line and snaps the visual range
     // to it; bare `G` falls through to the documentEnd motion.
@@ -352,7 +368,7 @@ extension VimEngine {
       clearAccumulator()
       return .extendVisualLine(.documentStart)
     }
-    if buffered == "g", key == "y" {
+    if buffered == "\\", key == "t" {
       clearAccumulator()
       mode = .normal
       return .appendCurrentLineToTrayNote(count: count)
@@ -394,6 +410,10 @@ extension VimEngine {
       pendingBuffer = "g"
       return .none
     }
+    if key == "\\" {
+      pendingBuffer = "\\"
+      return .none
+    }
     if key == "G", countAccumulator > 0 {
       let target = countAccumulator
       clearAccumulator()
@@ -417,7 +437,7 @@ extension VimEngine {
       clearAccumulator()
       return .extendVisual(.documentStart)
     }
-    if buffered == "g", key == "y" {
+    if buffered == "\\", key == "t" {
       clearAccumulator()
       mode = .normal
       return .appendCurrentLineToTrayNote(count: count)

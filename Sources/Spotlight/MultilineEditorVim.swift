@@ -230,6 +230,7 @@ extension PlaceholderTextView {
     case .jumpToTraySection: _ = jumpToTraySectionForVim()
     case .jumpToHabitsSection: _ = jumpToHabitsSectionForVim()
     case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
+    case .jumpToBigThingsSection: _ = jumpToBigThingsSectionForVim()
     default:
       return false
     }
