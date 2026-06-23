@@ -48,7 +48,7 @@ jobs:
           else
             log_opts="HEAD~1..HEAD"
           fi
-          go run github.com/gitleaks/gitleaks/v8@v8.30.1 git --log-opts "$log_opts" --no-banner --redact --exit-code 1 .
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts "$log_opts" --no-banner --redact --exit-code 1 .
 
   workflow-lint:
     name: workflow lint
