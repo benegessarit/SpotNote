@@ -1,0 +1,102 @@
+name: Repo Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-evidence:
+    name: smoke evidence
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require professional smoke evidence when runnable surfaces change
+        run: |
+          python3 scripts/ci/test_check_smoke_evidence.py
+          python3 scripts/ci/check_smoke_evidence.py --repo-root . --event-path "$GITHUB_EVENT_PATH"
+
+  secret-scan:
+    name: secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan for secrets with Gitleaks
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            log_opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            log_opts="${{ github.event.before }}..${{ github.sha }}"
+          else
+            log_opts="HEAD~1..HEAD"
+          fi
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts "$log_opts" --no-banner --redact --exit-code 1 .
+
+  workflow-lint:
+    name: workflow lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Lint GitHub Actions workflows with actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+
+  workflow-security:
+    name: workflow security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Audit GitHub Actions workflows with zizmor
+        uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
+        with:
+          inputs: .github/workflows
+          advanced-security: false
+          annotations: true
+          min-severity: high
+          min-confidence: medium
+
+  schema-validation:
+    name: schema validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Validate GitHub workflow schemas
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user check-jsonschema==0.37.3
+          export PATH="$HOME/.local/bin:$PATH"
+          shopt -s nullglob
+          workflows=(.github/workflows/*.yml .github/workflows/*.yaml)
+          if [ "${#workflows[@]}" -gt 0 ]; then
+            check-jsonschema --builtin-schema vendor.github-workflows "${workflows[@]}"
+            check-jsonschema --builtin-schema github-workflows-require-timeout "${workflows[@]}"
+          fi
