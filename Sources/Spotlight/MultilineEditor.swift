@@ -884,8 +884,8 @@ final class PlaceholderTextView: NSTextView {
   }
 
   func executeMotion(_ motion: Motion) {
-    if let delta = logicalLineDelta(for: motion) {
-      moveByLogicalLines(delta)
+    if let delta = verticalLineDelta(for: motion) {
+      moveByDisplayLines(delta)
       return
     }
     if executeVisibleBoundaryMotion(motion) { return }
@@ -1030,10 +1030,146 @@ final class PlaceholderTextView: NSTextView {
     return min(line.location + (prefix as NSString).length, contentEnd)
   }
 
-  private func logicalLineDelta(for motion: Motion) -> Int? {
+  private func verticalLineDelta(for motion: Motion) -> Int? {
     if case .up(let count) = motion { return -count }
     if case .down(let count) = motion { return count }
     return nil
+  }
+
+  /// `j`/`k` move by *display* line (one wrapped visual row), so a long wrapped
+  /// bullet is walked row-by-row instead of skipped whole. Implemented with
+  /// layout-fragment hit-testing — robust to fenced code blocks and rendered
+  /// markers, which is why we don't use AppKit's native `moveUp:`/`moveDown:`
+  /// (those once mis-stepped through code blocks). Falls back to logical-line
+  /// motion when layout geometry is unavailable. For unwrapped lines, one display
+  /// step equals one logical line, so the existing j/k contracts are preserved.
+  private func moveByDisplayLines(_ delta: Int) {
+    guard delta != 0 else { return }
+    guard let layoutManager, let textContainer else {
+      moveByLogicalLines(delta)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    layoutManager.ensureLayout(for: textContainer)
+    let caret = min(selectedRange.location, nsString.length)
+    guard
+      layoutManager.numberOfGlyphs > 0,
+      let start = displayCaretGeometry(
+        at: caret,
+        in: nsString,
+        layoutManager: layoutManager,
+        container: textContainer
+      )
+    else {
+      moveByLogicalLines(delta)
+      return
+    }
+    // Goal x is fixed for the whole motion (so a multi-row `3j` doesn't drift left
+    // when it passes a short row); it's the caret's current horizontal position.
+    let goalX = start.x
+    let down = delta > 0
+    var fragment = start.fragment
+    var location = caret
+    for _ in 0..<abs(delta) {
+      guard
+        let step = displayLineStep(
+          from: fragment,
+          goalX: goalX,
+          down: down,
+          nsString: nsString,
+          layoutManager: layoutManager,
+          container: textContainer
+        )
+      else { break }
+      location = step.location
+      guard let advanced = step.fragment else { break }  // moved, but no row beyond it
+      fragment = advanced
+    }
+    setInsertionPoint(min(location, nsString.length))
+    scrollVimLogicalMotionTargetIntoView()
+  }
+
+  /// One display-row step for `moveByDisplayLines`. Returns the new caret location
+  /// and the row it landed on (`fragment == nil` means it moved onto a trailing
+  /// empty line and stepping should stop); returns `nil` to stop without moving
+  /// (hit the top/bottom edge, or the hit-test didn't reach a new row).
+  private func displayLineStep(
+    from fragment: NSRect,
+    goalX: CGFloat,
+    down: Bool,
+    nsString: NSString,
+    layoutManager: NSLayoutManager,
+    container: NSTextContainer
+  ) -> (location: Int, fragment: NSRect?)? {
+    let usedRect = layoutManager.usedRect(for: container)
+    let probeY = down ? fragment.maxY + 1 : fragment.minY - 1
+    if !down, probeY < usedRect.minY { return nil }  // already on the first row
+    if down, probeY >= usedRect.maxY {
+      // Past the last laid-out row: step onto a trailing empty line if present.
+      let extra = layoutManager.extraLineFragmentRect
+      if !extra.isEmpty, probeY < extra.maxY { return (nsString.length, nil) }
+      return nil
+    }
+    var fraction: CGFloat = 0
+    let glyph = layoutManager.glyphIndex(
+      for: NSPoint(x: goalX, y: probeY),
+      in: container,
+      fractionOfDistanceThroughGlyph: &fraction
+    )
+    var index = layoutManager.characterIndexForGlyph(at: glyph)
+    if fraction > 0.5 { index += 1 }
+    let location = min(max(0, index), nsString.length)
+    guard
+      let next = displayCaretGeometry(
+        at: location,
+        in: nsString,
+        layoutManager: layoutManager,
+        container: container
+      ),
+      next.fragment.minY != fragment.minY
+    else { return nil }  // didn't advance to a new row
+    return (location, next.fragment)
+  }
+
+  /// The caret's line-fragment rect and horizontal position, both in text-container
+  /// coordinates (the space `glyphIndex(for:in:)` and `usedRect(for:)` use), so the
+  /// display-line mover can hit-test without view-coordinate conversions.
+  private func displayCaretGeometry(
+    at caret: Int,
+    in nsString: NSString,
+    layoutManager: NSLayoutManager,
+    container: NSTextContainer
+  ) -> (fragment: NSRect, x: CGFloat)? {
+    guard layoutManager.numberOfGlyphs > 0 else { return nil }
+    if caret == nsString.length, caret > 0, nsString.character(at: caret - 1) == 0x0A {
+      let extra = layoutManager.extraLineFragmentRect
+      if !extra.isEmpty { return (extra, extra.minX) }
+    }
+    let refChar = caret >= nsString.length ? max(0, nsString.length - 1) : caret
+    let glyph = min(
+      layoutManager.glyphIndexForCharacter(at: refChar),
+      max(0, layoutManager.numberOfGlyphs - 1)
+    )
+    let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+    let x: CGFloat
+    if caret <= 0 {
+      x = fragment.minX
+    } else if caret >= nsString.length || nsString.character(at: caret) == 0x0A {
+      let priorGlyph = layoutManager.glyphIndexForCharacter(at: caret - 1)
+      x =
+        layoutManager.boundingRect(
+          forGlyphRange: NSRange(location: priorGlyph, length: 1),
+          in: container
+        ).maxX
+    } else {
+      x =
+        layoutManager.boundingRect(
+          forGlyphRange: NSRange(location: glyph, length: 1),
+          in: container
+        ).minX
+    }
+    return (fragment, x)
   }
 
   private func moveByLogicalLines(_ delta: Int) {
