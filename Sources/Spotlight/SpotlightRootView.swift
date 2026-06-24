@@ -32,6 +32,7 @@ struct SpotlightRootView: View {
   let onSendHabit: (HabitHandoffRequest) async throws -> Void
   let onAppendDailyNote: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
+  let onAppendStateNote: (String) async throws -> URL
 
   private var theme: Theme { preferences.activeTheme }
 
@@ -174,6 +175,7 @@ struct SpotlightRootView: View {
       onSendHabit: onSendHabit,
       onAppendDailyNote: onAppendDailyNote,
       onAppendTrayNote: onAppendTrayNote,
+      onAppendStateNote: onAppendStateNote,
       onHeightChange: onHeightChange
     )
     .padding(.leading, EditorMetrics.leadingInset)

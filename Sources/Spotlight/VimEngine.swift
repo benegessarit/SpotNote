@@ -54,6 +54,7 @@ enum VimAction: Equatable, Sendable {
   case sendCurrentHabitDone(count: Int)
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
+  case appendCurrentLineToStateNote(count: Int)
   case normalizeDocument
   case jumpToTraySection
   case jumpToHabitsSection
@@ -303,6 +304,11 @@ extension VimEngine {
       mode = .normal
       return .appendCurrentLineToTrayNote(count: count)
     }
+    if buffered == "\\", key == "c" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToStateNote(count: count)
+    }
     return .none
   }
 
@@ -371,6 +377,11 @@ extension VimEngine {
       clearAccumulator()
       mode = .normal
       return .appendCurrentLineToTrayNote(count: count)
+    }
+    if buffered == "\\", key == "c" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToStateNote(count: count)
     }
     return .none
   }

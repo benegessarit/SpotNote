@@ -64,6 +64,10 @@ struct MultilineEditor: NSViewRepresentable {
   /// Appends current/counted lines to the misc thoughts dump (`tray.md`), then
   /// clears the original lines only after this durable write succeeds.
   var onAppendTrayNote: ((String) async throws -> URL)?
+  /// Appends current/counted bullet blocks to the hermes-build `State.md` as one
+  /// flattened `- ` line per block, then clears the originals only after the
+  /// durable write succeeds.
+  var onAppendStateNote: ((String) async throws -> URL)?
   /// Called from the AppKit delegate synchronously, so the panel resizes in
   /// the same runloop tick as the text change. A SwiftUI `@State` round-trip
   /// would defer the resize by one runloop, causing a visible flash.
@@ -89,6 +93,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onSendHabit = onSendHabit
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
+    textView.onAppendStateNote = onAppendStateNote
     return scroll
   }
 
@@ -146,6 +151,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onSendHabit = onSendHabit
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
+    textView.onAppendStateNote = onAppendStateNote
     textView.onChecklistLinesChange = onChecklistLinesChange
     applyStyleAndRefreshAttributesIfNeeded(on: textView)
     if textView.checklistLines != checklistLines {
@@ -645,6 +651,7 @@ final class PlaceholderTextView: NSTextView {
   var onSendHabit: ((HabitHandoffRequest) async throws -> Void)?
   var onAppendDailyNote: ((String) async throws -> URL)?
   var onAppendTrayNote: ((String) async throws -> URL)?
+  var onAppendStateNote: ((String) async throws -> URL)?
   var checklistLines: [Int: ChecklistLineState] = [:]
   var onChecklistLinesChange: (([Int: ChecklistLineState]) -> Void)?
   var linearTaskToday: Date?
@@ -1605,6 +1612,66 @@ final class PlaceholderTextView: NSTextView {
       ),
       commit: { _ = try await onAppendTrayNote($0) }
     )
+  }
+
+  func appendCurrentLinesToStateNote(_ count: Int) {
+    guard let onAppendStateNote else {
+      vimController?.showMessage("State.md handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedTrayNoteRange(count: max(1, count), in: nsString)
+    commitSelectedRange(
+      range,
+      preparing: { original, _ in Self.stateNotePayload(from: original) },
+      messages: LineCommitMessages(
+        empty: "No State text on this line",
+        progress: "Appending to State",
+        success: "Sent to hermes-build State",
+        changed: "Sent to State; line changed",
+        failure: "State append failed"
+      ),
+      commit: { _ = try await onAppendStateNote($0) }
+    )
+  }
+
+  /// Shapes captured bullet block(s) for the hermes-build State.md: one flattened
+  /// `- ` line per block (so `3\c` files three separate items, never one fused
+  /// run-on line). Returns nil when nothing usable remains.
+  static func stateNotePayload(from original: String) -> String? {
+    let lines =
+      splitIntoBulletBlocks(original)
+      .compactMap { LinearTaskTitleNormalizer.title(fromSpotNoteLine: $0) }
+      .map { "- " + $0 }
+    return lines.isEmpty ? nil : lines.joined(separator: "\n")
+  }
+
+  /// Groups the captured text into per-item segments using indentation as the
+  /// continuation signal (SpotNote indents wrapped/nested bullet lines): a
+  /// NON-indented, non-blank line starts a new item (a top-level bullet OR a plain
+  /// line), and any INDENTED line folds into the current item (so a wrapped
+  /// continuation flattens into the same `- ` line). Blanks are skipped. This makes
+  /// `2\c` over two distinct items emit two `- ` lines, while a wrapped bullet stays
+  /// one line.
+  static func splitIntoBulletBlocks(_ text: String) -> [String] {
+    var blocks: [String] = []
+    var current: [String] = []
+    func flush() {
+      if !current.isEmpty {
+        blocks.append(current.joined(separator: "\n"))
+        current = []
+      }
+    }
+    for rawLine in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+      let line = String(rawLine)
+      if line.allSatisfy({ $0 == " " || $0 == "\t" }) { continue }
+      let isIndented = line.first == " " || line.first == "\t"
+      if !isIndented { flush() }
+      current.append(line)
+    }
+    flush()
+    return blocks
   }
 
   private func selectedTrayNoteRange(count: Int, in nsString: NSString) -> NSRange {

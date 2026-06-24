@@ -247,6 +247,7 @@ extension PlaceholderTextView {
       sendCurrentHabitDone(count: count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .appendCurrentLineToTrayNote(let count): appendCurrentLinesToTrayNote(count)
+    case .appendCurrentLineToStateNote(let count): appendCurrentLinesToStateNote(count)
     default:
       return false
     }

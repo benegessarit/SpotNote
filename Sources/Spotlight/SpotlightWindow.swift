@@ -63,6 +63,7 @@ public final class SpotlightWindowController {
   private let handoffClient = ScratchpadHandoffClient()
   private let dailyNoteWriter = DailyNoteWriter()
   private let trayNoteWriter = TrayNoteWriter()
+  private let stateNoteWriter = StateNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private let onWillShowHUD: () -> Void
@@ -531,6 +532,9 @@ public final class SpotlightWindowController {
         },
         onAppendTrayNote: { [trayNoteWriter] text in
           try await trayNoteWriter.append(text)
+        },
+        onAppendStateNote: { [stateNoteWriter] text in
+          try await stateNoteWriter.append(text)
         }
       )
     )

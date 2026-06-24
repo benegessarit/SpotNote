@@ -101,12 +101,14 @@ extension VimEngine {
   // `\` is a reusable leader. `\t` appends the current line to tray.md;
   // `\h` logs the current `## Habits` bullet to the Life Dashboard habit tracker
   // (then clears the bullet, like the Linear handoff — David re-adds habits daily);
-  // `\f` tidies blank-line spacing around section headers (one line above and below
-  // each header, none above the top header), leaving bullets untouched.
+  // `\c` appends the current bullet(s) to the hermes-build State.md (one clean `- `
+  // line per block, then clears the source); `\f` tidies blank-line spacing around
+  // section headers (one line above and below each header, none above the top header).
   private func handlePendingBackslash(key: String, count: Int) -> VimAction {
     pendingBuffer = ""
     if key == "t" { return .appendCurrentLineToTrayNote(count: count) }
     if key == "h" { return .sendCurrentHabitDone(count: count) }
+    if key == "c" { return .appendCurrentLineToStateNote(count: count) }
     if key == "f" { return .normalizeDocument }
     return .none
   }

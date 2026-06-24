@@ -422,10 +422,11 @@ enum VimCommandReference {
         ),
         Entry(
           id: "leader",
-          usage: "\\t\n\\h\n\\f",
+          usage: "\\t\n\\h\n\\c\n\\f",
           summary:
             "`\\` leader: `\\t` appends the current line to tray.md; `\\h` logs the"
             + " current `## Habits` bullet to the Life Dashboard habit tracker (clears it after);"
+            + " `\\c` appends the current bullet to the hermes-build State.md (clears it after);"
             + " `\\f` (or `:fmt`) tidies blank-line spacing around section headers."
         ),
         Entry(

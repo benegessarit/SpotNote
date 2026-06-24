@@ -234,6 +234,44 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
+  @Test("\\c sends the current bullet to State.md")
+  func backslashCSendsCurrentBulletToStateNote() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted \\c sends counted bullets to State.md")
+  func countedBackslashCSendsCountedBulletsToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 3))
+  }
+
+  @Test("visual \\c sends the active selection to State.md and exits visual mode")
+  func visualBackslashCSendsSelectionToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("visual-line \\c sends the active line selection to State.md and exits visual mode")
+  func visualLineBackslashCSendsSelectionToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
   @Test(",h jumps to the Habits section")
   func commaHJumpsToHabitsSection() {
     let engine = VimEngine()
