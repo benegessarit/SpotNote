@@ -213,6 +213,62 @@ class SmokeEvidenceCliTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 1, proc.stdout)
             self.assertIn("fails closed", proc.stderr)
 
+    def test_empty_base_head_diff_does_not_fall_back_to_head_tilde_one(self) -> None:
+        """An empty base...head diff must scope to *no* changed files, never fall back
+        to HEAD~1...HEAD (which under-scopes and silently greenlights a real PR diff)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args],
+                    cwd=root,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+            git("init", "-q")
+            git("config", "user.email", "ci@example.com")
+            git("config", "user.name", "ci")
+            # base commit
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            git("add", "README.md")
+            git("commit", "-qm", "base")
+            base_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, stdout=subprocess.PIPE, check=True
+            ).stdout.strip()
+            # a commit that DOES touch a runnable surface (would be the HEAD~1 fallback target)
+            (root / "App.swift").write_text("// runnable\n", encoding="utf-8")
+            git("add", "App.swift")
+            git("commit", "-qm", "add runnable surface")
+            head_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, stdout=subprocess.PIPE, check=True
+            ).stdout.strip()
+
+            # Point base==head so base...head is EMPTY. With the bug, the checker would
+            # fall back to HEAD~1...HEAD, see App.swift, and require smoke (exit 1) with
+            # no body. Fail-closed-correct behavior: empty diff => no relevant files => exit 0.
+            event = root / "event.json"
+            event.write_text(
+                json.dumps(
+                    {"pull_request": {"body": "", "base": {"sha": head_sha}, "head": {"sha": head_sha}}}
+                ),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [sys.executable, str(MODULE_PATH), "--repo-root", str(root), "--event-path", str(event)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("no smoke-relevant files among 0 changed file(s)", proc.stdout)
+            self.assertNotIn("App.swift", proc.stdout)
+            # sanity: base_sha exists and differs from head so the test is meaningful
+            self.assertNotEqual(base_sha, head_sha)
+
 
 if __name__ == "__main__":
     unittest.main()

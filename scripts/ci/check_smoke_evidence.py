@@ -65,10 +65,17 @@ def changed_files(repo_root: Path, event: dict, explicit_file: Path | None) -> l
     if isinstance(pr, dict):
         base_sha = ((pr.get("base") or {}).get("sha") or "").strip()
         head_sha = ((pr.get("head") or {}).get("sha") or "").strip()
-        if base_sha and head_sha:
-            out = run_git(["diff", "--name-only", f"{base_sha}...{head_sha}"], cwd=repo_root)
-            if out:
-                return [line.strip() for line in out.splitlines() if line.strip()]
+        if not (base_sha and head_sha):
+            raise ChangedFilesError(
+                "pull_request event is missing base/head SHA, so the smoke evidence gate fails closed"
+            )
+        # Trust the base...head diff and return it directly, even when it is empty.
+        # An empty PR diff must NOT fall through to HEAD~1...HEAD: that under-scopes
+        # the gate (HEAD~1 is an unrelated commit on a multi-commit PR) and silently
+        # greenlights. run_git already raises ChangedFilesError if the diff command
+        # itself fails, so this fails closed on real failures.
+        out = run_git(["diff", "--name-only", f"{base_sha}...{head_sha}"], cwd=repo_root)
+        return [line.strip() for line in out.splitlines() if line.strip()]
 
     out = run_git(["diff", "--name-only", "HEAD~1...HEAD"], cwd=repo_root)
     return [line.strip() for line in out.splitlines() if line.strip()]
