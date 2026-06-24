@@ -1117,22 +1117,38 @@ final class PlaceholderTextView: NSTextView {
       in: container,
       fractionOfDistanceThroughGlyph: &fraction
     )
+    var glyphRange = NSRange()
+    let targetFragment = layoutManager.lineFragmentRect(
+      forGlyphAt: glyph,
+      effectiveRange: &glyphRange
+    )
+    guard targetFragment.minY != fragment.minY else { return nil }  // probe stayed on this row
     var index = layoutManager.characterIndexForGlyph(at: glyph)
-    if fraction > 0.5 { index += 1 }
+    // Honor right-edge affinity only when it stays on the target row. On the row's
+    // LAST glyph the `+1` would spill onto the next visual row, which resolves back
+    // to the row we came from — the bug that stranded `k` on a far-right column.
+    let lastGlyphInRow = glyphRange.location + glyphRange.length - 1
+    if fraction > 0.5, glyph < lastGlyphInRow { index += 1 }
     let location = min(max(0, index), nsString.length)
-    guard
-      let next = displayCaretGeometry(
-        at: location,
-        in: nsString,
-        layoutManager: layoutManager,
-        container: container
-      ),
-      next.fragment.minY != fragment.minY
-    else { return nil }  // didn't advance to a new row
-    return (location, next.fragment)
+    return (location, targetFragment)
   }
 
-  /// The caret's line-fragment rect and horizontal position, both in text-container
+  /// Top (container-space `minY`) of the display row the caret sits on, or `nil`
+  /// when geometry is unavailable. The first visual row reports `0`. Exposed for
+  /// motion tests that assert `k`/`j` reach the first/last display row.
+  func caretDisplayRowTop(at caret: Int) -> CGFloat? {
+    guard let layoutManager, let textContainer else { return nil }
+    layoutManager.ensureLayout(for: textContainer)
+    let nsString = string as NSString
+    return displayCaretGeometry(
+      at: caret,
+      in: nsString,
+      layoutManager: layoutManager,
+      container: textContainer
+    )?.fragment.minY
+  }
+
+  /// The caret's line-fragment rect and horizontal position, both in container
   /// coordinates (the space `glyphIndex(for:in:)` and `usedRect(for:)` use), so the
   /// display-line mover can hit-test without view-coordinate conversions.
   private func displayCaretGeometry(

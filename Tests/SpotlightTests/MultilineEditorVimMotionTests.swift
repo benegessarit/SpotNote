@@ -22,27 +22,6 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.selectedRange.location == ("plain\none\n" as NSString).length)
   }
 
-  @Test("j walks a wrapped line row-by-row instead of skipping it whole")
-  func downStepsThroughWrappedDisplayRows() {
-    // One logical line long enough to wrap into multiple visual rows at panelWidth,
-    // followed by a short line. Display-line j must land *inside* the wrapped line
-    // (on its 2nd row), not jump straight to "next".
-    let wrapped = String(repeating: "wrapped bullet text ", count: 9).trimmingCharacters(
-      in: .whitespaces
-    )
-    let textView = makeVimMotionTextView(text: "\(wrapped)\nnext")
-    let wrappedLength = (wrapped as NSString).length
-    textView.setSelectedRange(NSRange(location: 0, length: 0))
-
-    textView.executeMotion(.down(1))
-    let afterDown = textView.selectedRange.location
-    #expect(afterDown > 0)  // it moved
-    #expect(afterDown < wrappedLength)  // still inside the wrapped logical line, not on "next"
-
-    textView.executeMotion(.up(1))
-    #expect(textView.selectedRange.location == 0)  // k returns to the first row
-  }
-
   @Test("gg scrolls the document start to the top of a long visible note")
   func ggScrollsDocumentStartToTop() {
     let text = (0..<30).map { "line \($0)" }.joined(separator: "\n")
