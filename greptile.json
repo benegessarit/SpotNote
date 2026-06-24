@@ -1,0 +1,22 @@
+{
+  "skipReview": "AUTOMATIC",
+  "strictness": 2,
+  "commentTypes": ["logic", "syntax"],
+  "triggerOnUpdates": true,
+  "triggerOnDrafts": false,
+  "statusCheck": true,
+  "statusCommentsEnabled": true,
+  "shouldUpdateDescription": false,
+  "updateExistingSummaryComment": true,
+  "fixWithAI": false,
+  "instructions": "Use REVIEW.md as the review charter for this repository when explicitly triggered. Focus on correctness, security, regressions, lifecycle bugs, and privacy/data-loss risks. Do not duplicate CI, Bugbot, Repo Quality, formatting, or generic style feedback.",
+  "ignorePatterns": ".build/**\n.swiftpm/**\nDerivedData/**\n*.xcresult\n*.app\n*.dSYM\n*.log\n.claude/**\n.plans/**\n.tasks/**\nresults-*.md",
+  "customContext": {
+    "files": [
+      {
+        "path": "REVIEW.md",
+        "description": "Repository review charter and severity calibration for semantic PR reviewers."
+      }
+    ]
+  }
+}
