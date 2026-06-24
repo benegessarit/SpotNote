@@ -61,6 +61,8 @@ extension SpotlightWindowController {
     case .clearHighlight:
       runClearHighlight()
       return nil
+    case .formatDocument:
+      return runFormat()
     case .help:
       return VimController.Message(text: "Vim help lives in Settings → Vim.", kind: .info)
     default:
@@ -109,6 +111,14 @@ extension SpotlightWindowController {
     return VimController.Message(
       text: "\(count) substitution\(plural) \(scope)",
       kind: .success
+    )
+  }
+
+  private func runFormat() -> VimController.Message? {
+    let changed = vimController.normalizeHandler?() ?? false
+    return VimController.Message(
+      text: changed ? "Formatted" : "Already tidy",
+      kind: changed ? .success : .info
     )
   }
 

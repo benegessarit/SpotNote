@@ -648,6 +648,10 @@ final class PlaceholderTextView: NSTextView {
   var checklistLines: [Int: ChecklistLineState] = [:]
   var onChecklistLinesChange: (([Int: ChecklistLineState]) -> Void)?
   var linearTaskToday: Date?
+  /// Guards the irreversible network handoff (Linear / habit) against a fast
+  /// double-press creating two external writes: set before the in-flight Task,
+  /// cleared in its `defer`. Main-actor only, so no synchronization is needed.
+  private var isHandoffInFlight = false
   var flashHints: [VimFlashTarget] = []
   var flashLabelBuffer: String = ""
   var isShowingLineFlashHints = false
@@ -1351,18 +1355,27 @@ final class PlaceholderTextView: NSTextView {
     sendCurrentTaskToLinear(status: .triage, count: count)
   }
 
-  func sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int) {
+  func sendCurrentTaskToLinear(
+    status: LinearTaskTargetStatus,
+    workspace: LinearTaskWorkspace = .personal,
+    count: Int
+  ) {
     guard let onSendLinearTask else {
       vimController?.showMessage("Linear handoff unavailable", kind: .error, icon: .hermes)
       return
     }
     let range = selectedTaskRange(count: max(1, count), in: string as NSString)
+    // The Code motion (gc) lands in Triage with a Build label, matching the
+    // Code-workspace convention; personal motions carry only the bullet's #labels.
+    let extraLabels = workspace == .code ? ["Build"] : []
     commitSelectedRange(
       range,
       preparing: { [weak self] original, _ in
         LinearTaskMetadataParser.request(
           from: original,
           targetStatus: status,
+          workspace: workspace,
+          labels: extraLabels,
           today: self?.linearTaskToday ?? Date()
         )
       },
@@ -1498,9 +1511,15 @@ final class PlaceholderTextView: NSTextView {
       vimController?.showMessage(messages.empty, kind: .error, icon: .hermes)
       return
     }
+    guard !isHandoffInFlight else {
+      vimController?.showMessage(messages.progress, kind: .info, icon: .hermes)
+      return
+    }
+    isHandoffInFlight = true
     vimController?.showMessage(messages.progress, kind: .info, icon: .hermes)
     Task { @MainActor [weak self, range, original, payload, messages, commit] in
       guard let self else { return }
+      defer { self.isHandoffInFlight = false }
       do {
         try await commit(payload)
         let current = self.string as NSString

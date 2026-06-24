@@ -46,10 +46,15 @@ enum VimAction: Equatable, Sendable {
   case findPrevious
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
-  case sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int)
+  case sendCurrentTaskToLinear(
+    status: LinearTaskTargetStatus,
+    workspace: LinearTaskWorkspace,
+    count: Int
+  )
   case sendCurrentHabitDone(count: Int)
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
+  case normalizeDocument
   case jumpToTraySection
   case jumpToHabitsSection
   case jumpToToDoSection

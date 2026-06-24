@@ -48,6 +48,8 @@ final class VimController: ObservableObject {
   /// HUD closes so we don't leak the AppKit view across panel teardowns.
   var lineJumpHandler: ((Int) -> Bool)?
   var substituteHandler: ((SubstituteRequest) -> Int)?
+  /// `\f` / `:fmt` -- tidy header spacing; returns whether anything changed.
+  var normalizeHandler: (() -> Bool)?
 
   /// Top-level command runner installed by the `SpotlightWindowController`
   /// so commands can reach the session, find controller, theme catalog,
@@ -203,6 +205,7 @@ enum VimCommand: Equatable {
   case substitute(SubstituteRequest)
   case gotoLine(Int)
   case clearHighlight
+  case formatDocument
   case help
 }
 
@@ -231,6 +234,7 @@ enum VimCommandParser {
     "e": .newNote, "enew": .newNote,
     "bd": .deleteNote, "bdelete": .deleteNote,
     "noh": .clearHighlight, "nohlsearch": .clearHighlight,
+    "fmt": .formatDocument, "format": .formatDocument,
     "h": .help, "help": .help
   ]
 
@@ -418,10 +422,11 @@ enum VimCommandReference {
         ),
         Entry(
           id: "leader",
-          usage: "\\t\n\\h",
+          usage: "\\t\n\\h\n\\f",
           summary:
             "`\\` leader: `\\t` appends the current line to tray.md; `\\h` logs the"
-            + " current `## Habits` bullet to the Life Dashboard habit tracker (clears it after)."
+            + " current `## Habits` bullet to the Life Dashboard habit tracker (clears it after);"
+            + " `\\f` (or `:fmt`) tidies blank-line spacing around section headers."
         ),
         Entry(
           id: "noh",

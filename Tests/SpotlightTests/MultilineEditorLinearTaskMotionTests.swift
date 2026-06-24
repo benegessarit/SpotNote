@@ -58,6 +58,43 @@ struct MultilineEditorLinearTaskMotionTests {
     #expect(textView.string == "alpha\ngamma")
   }
 
+  @Test("gc handoff targets the Code workspace with a Build label")
+  func gcHandoffTargetsCodeWorkspaceWithBuildLabel() async throws {
+    let textView = makeTextView(text: "- ship the gc motion #SpotNote")
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    var captured: [LinearTaskHandoffRequest] = []
+    textView.onSendLinearTask = { request in
+      captured.append(request)
+    }
+
+    textView.sendCurrentTaskToLinear(status: .triage, workspace: .code, count: 1)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured.first?.workspace == .code)
+    #expect(captured.first?.targetStatus == .triage)
+    #expect(captured.first?.labels == ["Build", "SpotNote"])
+    #expect(captured.first?.title == "ship the gc motion")
+    #expect(!textView.string.contains("ship"))
+  }
+
+  @Test("a double-fired handoff sends only once (in-flight guard)")
+  func doubleFiredHandoffSendsOnce() async throws {
+    let textView = makeTextView(text: "- only once please")
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    var captured: [LinearTaskHandoffRequest] = []
+    textView.onSendLinearTask = { request in
+      captured.append(request)
+    }
+
+    // Two synchronous presses before the first send's Task runs: the first sets
+    // isHandoffInFlight, so the second must be ignored — only one external write.
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    try await waitUntil { captured.count == 1 }
+    try await Task.sleep(nanoseconds: 50_000_000)
+    #expect(captured.count == 1)
+  }
+
   private func makeTextView(text: String) -> PlaceholderTextView {
     let textView = PlaceholderTextView(
       frame: NSRect(x: 0, y: 0, width: EditorMetrics.panelWidth, height: 200)

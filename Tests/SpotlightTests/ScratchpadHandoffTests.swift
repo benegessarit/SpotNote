@@ -119,6 +119,50 @@ struct ScratchpadHandoffTests {
     #expect(data.dueDate == "2026-06-15")
   }
 
+  @Test("Code workspace payload routes to Code and carries a Build label")
+  func codeWorkspacePayloadRoutesToCode() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: LinearTaskHandoffRequest(
+        title: "Fix the parser",
+        targetStatus: .triage,
+        workspace: .code,
+        labels: ["Build"]
+      ),
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.workspace == "code")
+    #expect(data.labels == ["Build"])
+    #expect(payload.text.contains("Code Linear workspace"))
+    #expect(!payload.text.contains("personal Linear workspace"))
+  }
+
+  @Test("default workspace is personal on the wire")
+  func defaultWorkspaceIsPersonal() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.workspace == "personal")
+    #expect(payload.text.contains("personal Linear workspace"))
+  }
+
+  @Test("Code request merges the Build label with parsed labels, deduped")
+  func codeRequestMergesBuildLabel() throws {
+    let request = try #require(
+      LinearTaskMetadataParser.request(
+        from: "- ship gc motion #Build #SpotNote",
+        targetStatus: .triage,
+        workspace: .code,
+        labels: ["Build"]
+      )
+    )
+    #expect(request.workspace == .code)
+    #expect(request.labels == ["Build", "SpotNote"])
+    #expect(request.title == "ship gc motion")
+  }
+
   @Test("Linear payload encodes a data object; habit payload omits it")
   func dataFieldWireFormat() throws {
     let linear = try ScratchpadHandoffClient.payload(

@@ -17,6 +17,9 @@ extension PlaceholderTextView {
     controller.flashHandler = { [weak self] request in
       self?.performFlashJump(request) ?? false
     }
+    controller.normalizeHandler = { [weak self] in
+      self?.normalizeDocumentForVim() ?? false
+    }
   }
 
   /// Per-keystroke vim dispatch. Extracted from `keyDown` so the main
@@ -146,6 +149,25 @@ extension PlaceholderTextView {
     return count
   }
 
+  /// `\f` / `:fmt` -- tidy blank-line spacing around section headers (one blank
+  /// line above and below each header, none above the top header) without
+  /// disturbing bullets or multiline bullet bodies. Returns whether anything
+  /// changed so the caller can flash the right toast; undo-able via the standard
+  /// text-view change machinery.
+  @discardableResult
+  func normalizeDocumentForVim() -> Bool {
+    let current = string
+    let normalized = SpotNoteFormatter.normalize(current)
+    guard normalized != current else { return false }
+    let fullRange = NSRange(location: 0, length: (current as NSString).length)
+    guard shouldChangeText(in: fullRange, replacementString: normalized) else { return false }
+    replaceCharacters(in: fullRange, with: normalized)
+    didChangeText()
+    let cursor = min(selectedRange.location, (string as NSString).length)
+    setSelectedRange(NSRange(location: cursor, length: 0))
+    return true
+  }
+
   /// `s<char>` / `S<char>` -- a native, Flash-style one-character jump.
   /// The pure target selection lives in `VimFlash`; this method only applies
   /// the resulting AppKit caret/scroll side effects to the live text view.
@@ -191,6 +213,13 @@ extension PlaceholderTextView {
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
       for sub in actions { executeVimAction(sub) }
+    case .normalizeDocument:
+      let changed = normalizeDocumentForVim()
+      vimController?.showMessage(
+        changed ? "Formatted" : "Already tidy",
+        kind: changed ? .success : .info,
+        icon: .hermes
+      )
     default:
       return false
     }
@@ -212,8 +241,8 @@ extension PlaceholderTextView {
 
   private func executeHandoffVimAction(_ action: VimAction) -> Bool {
     switch action {
-    case .sendCurrentTaskToLinear(let status, let count):
-      sendCurrentTaskToLinear(status: status, count: count)
+    case .sendCurrentTaskToLinear(let status, let workspace, let count):
+      sendCurrentTaskToLinear(status: status, workspace: workspace, count: count)
     case .sendCurrentHabitDone(let count):
       sendCurrentHabitDone(count: count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)

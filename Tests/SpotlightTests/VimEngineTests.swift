@@ -158,7 +158,10 @@ struct VimEngineTests {
     for (key, status) in cases {
       let engine = VimEngine()
       #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-      #expect(engine.handle(key: key, hasModifiers: false) == .sendCurrentTaskToLinear(status: status, count: 1))
+      #expect(
+        engine.handle(key: key, hasModifiers: false)
+          == .sendCurrentTaskToLinear(status: status, workspace: .personal, count: 1)
+      )
       #expect(engine.mode == .normal)
     }
   }
@@ -168,7 +171,29 @@ struct VimEngineTests {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
+    #expect(
+      engine.handle(key: "p", hasModifiers: false)
+        == .sendCurrentTaskToLinear(status: .planned, workspace: .personal, count: 3)
+    )
+  }
+
+  @Test("gc sends the current bullet to the Code workspace at Triage")
+  func gcSendsCurrentBulletToCodeWorkspace() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
+    #expect(
+      engine.handle(key: "c", hasModifiers: false)
+        == .sendCurrentTaskToLinear(status: .triage, workspace: .code, count: 1)
+    )
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("\\f normalizes the document")
+  func backslashFNormalizesDocument() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "f", hasModifiers: false) == .normalizeDocument)
+    #expect(engine.mode == .normal)
   }
 
   @Test("\\t sends the current bullet to tray.md")
