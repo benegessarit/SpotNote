@@ -1,0 +1,68 @@
+# roborev configuration for SpotNote.
+#
+# Enables roborev local AI code review for this repo. Pins the review + fix agents
+# to claude-code (subscription-backed) so reviews never silently fall back to the
+# global default agent. The config file alone is inert — enable commit-time review
+# with `roborev install-hook` in your local clone.
+#
+# Auto-fix loop (`roborev refine`) is intended to run ONLY on a feature branch
+# headed for a PR (never main), so each fix lands as its own labeled
+# "Address review findings (job N)" commit reviewed in the PR diff + re-reviewed
+# by a fresh roborev job before merge. Recommended caps:
+#   roborev refine --min-severity high --max-iterations 3
+agent = "claude-code"
+review_agent = "claude-code"
+refine_agent = "claude-code"
+# Leave model unset so Claude Code uses the authenticated subscription default.
+display_name = "SpotNote"
+# Keep each review prompt isolated so roborev does not imitate stale prose from
+# previous review bodies.
+review_context_count = 0
+post_commit_review = "commit"
+review_reasoning = "standard"
+review_min_severity = "medium"
+auto_close_passing_reviews = true
+
+# Review source/config diffs only; skip build artifacts, generated files, and
+# secret-shaped paths.
+exclude_patterns = [
+  ".env",
+  "**/.env",
+  ".env.*",
+  "**/.env.*",
+  "*.pem",
+  "**/*.pem",
+  "*.key",
+  "**/*.key",
+  "auth.json",
+  "**/auth.json*",
+  "**/.build/**",
+  "**/build/**",
+  "**/.swiftpm/**",
+  "**/DerivedData/**",
+  "**/xcuserdata/**",
+  "*.app/**",
+  "**/*.xcodeproj/**",
+  "**/*.lcov",
+  "Tools/reports/**",
+  "dist/**",
+  "**/.cache/**",
+  "**/tmp/**",
+  "**/logs/**",
+]
+
+review_guidelines = """
+SpotNote is a Swift / SwiftUI macOS application (Swift Package Manager + XcodeGen).
+Review only the committed diff that remains after exclude_patterns are applied.
+
+Prioritize concrete correctness and safety issues:
+- runtime crash risks: force-unwraps (`!`), force-casts (`as!`), array index out
+  of range, division by zero, implicitly-unwrapped optionals that can be nil;
+- concurrency / main-actor violations, data races, retain cycles / leaks;
+- silent logic errors (off-by-one, wrong boundary, inverted condition);
+- swallowed errors and unhandled failure paths.
+
+Report only concrete Medium, High, or Critical issues with a clear location and a
+specific fix. Do not emit findings for pure style/taste; mention those only when
+they expose a real correctness, crash, concurrency, or data-loss risk.
+"""
