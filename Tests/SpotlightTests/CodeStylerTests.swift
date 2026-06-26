@@ -100,8 +100,8 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
-  @Test("Markdown headings use a visibly distinct storage foreground")
-  func markdownHeadingsUseVisiblyDistinctStorageForeground() throws {
+  @Test("Markdown headings use the body foreground with heavier font weight")
+  func markdownHeadingsUseBodyForegroundWithHeavierFontWeight() throws {
     let theme = ThemeCatalog.mirage
     let text = "plain\n## To Do\nnext"
     let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
@@ -115,12 +115,16 @@ struct CodeStylerVisualTests {
 
     CodeStyler.apply(to: textView, theme: theme)
 
+    let headingFont = try #require(storageFont(at: lineStart(1, in: text), in: textView))
+    let bodyFont = try #require(storageFont(at: 0, in: textView))
     let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let headingColor = try #require(
       storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
 
-    #expect(colorDistance(headingColor, bodyColor) >= 0.24)
+    #expect(NSFontManager.shared.traits(of: headingFont).contains(.boldFontMask))
+    #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(colorDistance(headingColor, bodyColor) < 0.01)
     #expect(textView.textStorage?.string == text)
   }
 
@@ -143,11 +147,11 @@ struct CodeStylerVisualTests {
     let firstHashColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let secondHashColor = try #require(storageColor(at: 1, in: textView)?.usingColorSpace(.sRGB))
     let headingTextColor = try #require(storageColor(at: 3, in: textView)?.usingColorSpace(.sRGB))
-    let expectedHeading = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+    let expectedText = try #require(NSColor(theme.text).usingColorSpace(.sRGB))
 
-    #expect(colorDistance(firstHashColor, expectedHeading) < 0.01)
-    #expect(colorDistance(secondHashColor, expectedHeading) < 0.01)
-    #expect(colorDistance(headingTextColor, expectedHeading) < 0.01)
+    #expect(colorDistance(firstHashColor, expectedText) < 0.01)
+    #expect(colorDistance(secondHashColor, expectedText) < 0.01)
+    #expect(colorDistance(headingTextColor, expectedText) < 0.01)
     #expect(textView.textStorage?.string == text)
   }
 
@@ -191,8 +195,8 @@ struct CodeStylerVisualTests {
     #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
     #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
     #expect(NSFontManager.shared.traits(of: trayFont).contains(.boldFontMask))
-    #expect(colorDistance(toDoColor, bodyColor) >= 0.24)
-    #expect(colorDistance(trayColor, bodyColor) >= 0.24)
+    #expect(colorDistance(toDoColor, bodyColor) < 0.01)
+    #expect(colorDistance(trayColor, bodyColor) < 0.01)
     #expect(textView.textStorage?.string == text)
   }
 
@@ -223,11 +227,11 @@ struct CodeStylerVisualTests {
 
     #expect(colorDistance(bodyColor, draculaText) < 0.01)
     #expect(colorDistance(nextBodyColor, draculaText) < 0.01)
-    #expect(colorDistance(headingColor, draculaText) >= 0.24)
+    #expect(colorDistance(headingColor, draculaText) < 0.01)
   }
 
-  @Test("theme change recolors existing headings when body text color is unchanged")
-  func themeChangeRecolorsExistingHeadingsWhenBodyTextColorIsUnchanged() throws {
+  @Test("theme change keeps existing headings on the body text color")
+  func themeChangeKeepsExistingHeadingsOnBodyTextColor() throws {
     let text = "plain\n## To Do\nnext"
     let font = SpotNoteFont.editor()
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
@@ -245,10 +249,9 @@ struct CodeStylerVisualTests {
       storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
     let expectedBody = try #require(NSColor(newTheme.text).usingColorSpace(.sRGB))
-    let expectedHeading = try #require(NSColor(newTheme.headingText).usingColorSpace(.sRGB))
 
     #expect(colorDistance(bodyColor, expectedBody) < 0.01)
-    #expect(colorDistance(headingColor, expectedHeading) < 0.01)
+    #expect(colorDistance(headingColor, expectedBody) < 0.01)
   }
 
   @Test("Markdown-looking headings inside fenced code are not bolded")

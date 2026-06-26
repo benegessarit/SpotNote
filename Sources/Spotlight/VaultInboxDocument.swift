@@ -38,7 +38,7 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   var defaultMarkdown: String {
     switch self {
-    case .tasks: return SpotNoteSectionHeadings.habits.canonicalLine
+    case .tasks: return ""
     }
   }
 
@@ -53,14 +53,9 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
       in: droppingLeadingNewlines(from: markdown)
     )
     // Normalize every recognized heading to its Title-Case canonical (so the note
-    // isn't a mix of `## HABITS` / `# todo` / `## Tray`). Give a truly
-    // header-less inbox a default Habits section so the HUD has structure, but
-    // NEVER prepend when the note already starts with one of its own sections
-    // (e.g. Big Things) -- the note's existing headers are respected as-is.
-    let normalized = normalizingSectionHeadings(in: body)
-    if startsWithRecognizedHeading(normalized) { return normalized }
-    guard !normalized.isEmpty else { return SpotNoteSectionHeadings.habits.canonicalLine }
-    return SpotNoteSectionHeadings.habits.canonicalLine + normalized
+    // isn't a mix of `## HABITS` / `# todo` / `## Tray`). Do not inject or reorder
+    // sections: header-less notes stay header-less, and fresh inboxes open blank.
+    return normalizingSectionHeadings(in: body)
   }
 
   private static func normalizingSectionHeadings(in markdown: String) -> String {
@@ -68,12 +63,6 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
       .split(separator: "\n", omittingEmptySubsequences: false)
       .map { SpotNoteSectionHeadings.canonicalHeading(for: String($0)) ?? String($0) }
       .joined(separator: "\n")
-  }
-
-  private static func startsWithRecognizedHeading(_ markdown: String) -> Bool {
-    let firstLine =
-      markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-    return SpotNoteSectionHeadings.canonicalHeading(for: String(firstLine)) != nil
   }
 
   private static func droppingLeadingNewlines(from markdown: String) -> String {

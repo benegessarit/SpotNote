@@ -6,7 +6,7 @@ import AppKit
 ///
 /// - Backticks stay as literal characters in the document.
 /// - Inline `` `code` `` spans get a subtle background + dimmed fences.
-/// - Markdown headings get bold + brighter visual attributes; the stored
+/// - Markdown headings get a heavier font in the normal text color; the stored
 ///   Markdown string stays plain text.
 /// - Triple-fenced blocks are NOT background-tinted; instead the inner
 ///   code is tokenized via `SyntaxHighlighter` and colored per category.
@@ -208,7 +208,7 @@ enum CodeStyler {
     return CodeStylerHeading.Style(
       baseFont: textView.font,
       bodyForeground: bodyForeground,
-      headingForeground: NSColor(theme.headingText)
+      headingForeground: bodyForeground
     )
   }
 

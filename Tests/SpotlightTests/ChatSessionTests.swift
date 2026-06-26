@@ -44,7 +44,7 @@ struct ChatSessionTests {
     #expect(session.currentChecklistLines == [0: .checked])
   }
 
-  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes")
+  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes without adding Habits")
   func bootstrapPrefersVaultInbox() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
@@ -61,8 +61,8 @@ struct ChatSessionTests {
     await session.bootstrap()
 
     #expect(session.currentID == vaultInbox.id)
-    #expect(session.currentText == "## Habits\nEmail down @ 120\nWrite pass email for Cure51")
-    #expect(session.currentChecklistLines == [1: .unchecked, 2: .unchecked])
+    #expect(session.currentText == "Email down @ 120\nWrite pass email for Cure51")
+    #expect(session.currentChecklistLines == [0: .unchecked, 1: .unchecked])
     #expect(session.chats.first?.id == vaultInbox.id)
   }
 
@@ -76,15 +76,15 @@ struct ChatSessionTests {
     let session = ChatSession(store: store, vaultInbox: vaultInbox)
 
     await session.bootstrap()
-    #expect(session.currentText == "## Habits\nold inbox\ndone item")
-    #expect(session.currentChecklistLines == [1: .unchecked, 2: .checked])
+    #expect(session.currentText == "old inbox\ndone item")
+    #expect(session.currentChecklistLines == [0: .unchecked, 1: .checked])
 
-    session.currentText = "## Habits\nupdated inbox   \ndone item\t"
+    session.currentText = "updated inbox   \ndone item\t"
     session.persistIfNeeded()
     await session.flush()
 
     let saved = try String(contentsOf: inboxURL, encoding: .utf8)
-    #expect(saved == "## Habits\n[   ] updated inbox\n[ x ] done item")
+    #expect(saved == "[   ] updated inbox\n[ x ] done item")
   }
 
   @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting Habits")
@@ -120,9 +120,28 @@ struct ChatSessionTests {
 
     await session.bootstrap()
     #expect(session.currentVaultState == .tasks)
-    #expect(session.currentText == "## Habits\nexisting task")
-    #expect(session.currentChecklistLines == [1: .unchecked])
-    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## Habits\n[   ] existing task")
+    #expect(session.currentText == "existing task")
+    #expect(session.currentChecklistLines == [0: .unchecked])
+    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "[   ] existing task")
+  }
+
+  @Test("missing vault inbox opens blank instead of inserting Habits")
+  func missingVaultInboxOpensBlankWithoutDefaultHeading() async throws {
+    let dir = try makeTempDirectory()
+    let store = try ChatStore(directory: dir.appending(path: "store"), debounce: .milliseconds(20))
+    let tasksURL = dir.appending(path: "spotnote-inbox.md", directoryHint: .notDirectory)
+    let session = ChatSession(
+      store: store,
+      vaultDocuments: [
+        VaultNoteDocument(state: .tasks, url: tasksURL, debounce: .milliseconds(20))
+      ]
+    )
+
+    await session.bootstrap()
+
+    #expect(session.currentVaultState == .tasks)
+    #expect(session.currentText.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: tasksURL.path))
   }
 
   @Test("undo delete restores checklist state")

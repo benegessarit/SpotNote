@@ -29,9 +29,9 @@ struct CodeStylerSectionTests {
     let normalBody = try #require(
       storageColor(at: lineStart(8, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
-    let expectedHeading = try #require(NSColor(theme.headingText).usingColorSpace(.sRGB))
+    let expectedText = try #require(NSColor(theme.text).usingColorSpace(.sRGB))
 
-    #expect(colorDistance(trayHeading, expectedHeading) < 0.01)
+    #expect(colorDistance(trayHeading, expectedText) < 0.01)
     #expect(trayBody.alphaComponent < todoBody.alphaComponent)
     #expect(trayBody.alphaComponent > 0.70)
     #expect(normalBody.alphaComponent == todoBody.alphaComponent)
