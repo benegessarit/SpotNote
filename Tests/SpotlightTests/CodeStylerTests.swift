@@ -94,9 +94,14 @@ struct CodeStylerVisualTests {
 
     let headingFont = try #require(storageFont(at: lineStart(1, in: text), in: textView))
     let bodyFont = try #require(storageFont(at: 0, in: textView))
+    let headingStrokeWidth = try #require(
+      storageStrokeWidth(at: lineStart(1, in: text), in: textView)
+    )
 
     #expect(NSFontManager.shared.traits(of: headingFont).contains(.boldFontMask))
     #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(headingStrokeWidth < -0.1)
+    #expect(storageStrokeWidth(at: 0, in: textView) == nil)
     #expect(textView.textStorage?.string == text)
   }
 
@@ -121,9 +126,14 @@ struct CodeStylerVisualTests {
     let headingColor = try #require(
       storageColor(at: lineStart(1, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
     )
+    let headingStrokeWidth = try #require(
+      storageStrokeWidth(at: lineStart(1, in: text), in: textView)
+    )
 
     #expect(NSFontManager.shared.traits(of: headingFont).contains(.boldFontMask))
     #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
+    #expect(headingStrokeWidth < -0.1)
+    #expect(storageStrokeWidth(at: 0, in: textView) == nil)
     #expect(colorDistance(headingColor, bodyColor) < 0.01)
     #expect(textView.textStorage?.string == text)
   }
@@ -163,17 +173,7 @@ struct CodeStylerVisualTests {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
     textView.font = font
     textView.string = text
-    let editor = MultilineEditor(
-      text: .constant(text),
-      theme: theme,
-      placeholder: "",
-      showLineNumbers: false,
-      font: font,
-      focusRequest: 0,
-      maxVisibleLines: 9,
-      extraChromeHeight: 0,
-      onHeightChange: { _ in }
-    )
+    let editor = makeEditor(text: text, theme: theme, font: font)
     let fullRange = NSRange(location: 0, length: (text as NSString).length)
     textView.textStorage?.setAttributes(
       [.font: font, .foregroundColor: NSColor(theme.text)],
@@ -188,9 +188,15 @@ struct CodeStylerVisualTests {
     let toDoFont = try #require(storageFont(at: lineStart(0, in: text), in: textView))
     let bodyFont = try #require(storageFont(at: lineStart(2, in: text), in: textView))
     let trayFont = try #require(storageFont(at: lineStart(4, in: text), in: textView))
-    let bodyColor = try #require(storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB))
-    let toDoColor = try #require(storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB))
-    let trayColor = try #require(storageColor(at: lineStart(4, in: text) + 2, in: textView)?.usingColorSpace(.sRGB))
+    let bodyColor = try #require(
+      storageColor(at: lineStart(2, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let toDoColor = try #require(
+      storageColor(at: lineStart(0, in: text), in: textView)?.usingColorSpace(.sRGB)
+    )
+    let trayColor = try #require(
+      storageColor(at: lineStart(4, in: text) + 2, in: textView)?.usingColorSpace(.sRGB)
+    )
 
     #expect(NSFontManager.shared.traits(of: toDoFont).contains(.boldFontMask))
     #expect(!NSFontManager.shared.traits(of: bodyFont).contains(.boldFontMask))
@@ -207,13 +213,13 @@ struct CodeStylerVisualTests {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 240))
     textView.font = font
     textView.string = text
-    let roseEditor = editor(text: text, theme: ThemeCatalog.rosePineMoonlight, font: font)
+    let roseEditor = makeEditor(text: text, theme: ThemeCatalog.rosePineMoonlight, font: font)
     roseEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
     let roseBody = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let roseText = try #require(NSColor(ThemeCatalog.rosePineMoonlight.text).usingColorSpace(.sRGB))
     #expect(colorDistance(roseBody, roseText) < 0.01)
 
-    let draculaEditor = editor(text: text, theme: ThemeCatalog.dracula, font: font)
+    let draculaEditor = makeEditor(text: text, theme: ThemeCatalog.dracula, font: font)
     draculaEditor.applyStyleAndRefreshAttributesIfNeeded(on: textView)
 
     let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
@@ -238,11 +244,23 @@ struct CodeStylerVisualTests {
     textView.font = font
     textView.string = text
     let body = Color(red: 0.8, green: 0.82, blue: 0.86)
-    let oldTheme = testTheme(id: "old-heading", body: body, heading: Color(red: 1.0, green: 0.4, blue: 0.4))
-    let newTheme = testTheme(id: "new-heading", body: body, heading: Color(red: 0.4, green: 0.7, blue: 1.0))
+    let oldTheme = testTheme(
+      id: "old-heading",
+      body: body,
+      heading: Color(red: 1.0, green: 0.4, blue: 0.4)
+    )
+    let newTheme = testTheme(
+      id: "new-heading",
+      body: body,
+      heading: Color(red: 0.4, green: 0.7, blue: 1.0)
+    )
 
-    editor(text: text, theme: oldTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
-    editor(text: text, theme: newTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(on: textView)
+    makeEditor(text: text, theme: oldTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(
+      on: textView
+    )
+    makeEditor(text: text, theme: newTheme, font: font).applyStyleAndRefreshAttributesIfNeeded(
+      on: textView
+    )
 
     let bodyColor = try #require(storageColor(at: 0, in: textView)?.usingColorSpace(.sRGB))
     let headingColor = try #require(
@@ -265,9 +283,13 @@ struct CodeStylerVisualTests {
 
     let fencedFont = storageFont(at: lineStart(1, in: text), in: textView)
     let headingFont = storageFont(at: lineStart(3, in: text), in: textView)
+    let fencedStrokeWidth = storageStrokeWidth(at: lineStart(1, in: text), in: textView)
+    let headingStrokeWidth = storageStrokeWidth(at: lineStart(3, in: text), in: textView)
 
     #expect(fencedFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == false)
     #expect(headingFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true)
+    #expect(fencedStrokeWidth == nil)
+    #expect((headingStrokeWidth ?? 0) < -0.1)
   }
 
   @Test("Markdown list dashes render with heavier visual weight without changing stored text")
@@ -312,51 +334,65 @@ struct CodeStylerVisualTests {
     #expect(textView.textStorage?.string == text)
   }
 
-  private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
-    textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
-  }
+}
 
-  private func editor(text: String, theme: Theme, font: NSFont) -> MultilineEditor {
-    MultilineEditor(
-      text: .constant(text),
-      theme: theme,
-      placeholder: "",
-      showLineNumbers: false,
-      font: font,
-      focusRequest: 0,
-      maxVisibleLines: 9,
-      extraChromeHeight: 0,
-      onHeightChange: { _ in }
-    )
-  }
+@MainActor private func storageFont(at location: Int, in textView: NSTextView) -> NSFont? {
+  textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+}
 
-  private func testTheme(id: String, body: Color, heading: Color) -> Theme {
-    Theme(
-      id: id,
-      name: id,
-      mode: .dark,
-      background: Color(red: 0.1, green: 0.1, blue: 0.12),
-      border: .clear,
-      text: body,
-      headingText: heading,
-      placeholder: Color(red: 0.5, green: 0.5, blue: 0.55)
-    )
+@MainActor private func storageStrokeWidth(at location: Int, in textView: NSTextView) -> CGFloat? {
+  guard
+    let number = textView.textStorage?.attribute(
+      .strokeWidth,
+      at: location,
+      effectiveRange: nil
+    ) as? NSNumber
+  else {
+    return nil
   }
+  return CGFloat(number.doubleValue)
+}
 
-  private func storageColor(at location: Int, in textView: NSTextView) -> NSColor? {
-    textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
-  }
+@MainActor private func makeEditor(text: String, theme: Theme, font: NSFont) -> MultilineEditor {
+  MultilineEditor(
+    text: .constant(text),
+    theme: theme,
+    placeholder: "",
+    showLineNumbers: false,
+    font: font,
+    focusRequest: 0,
+    maxVisibleLines: 9,
+    extraChromeHeight: 0,
+    onHeightChange: { _ in }
+  )
+}
 
-  private func colorDistance(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
-    abs(lhs.redComponent - rhs.redComponent)
-      + abs(lhs.greenComponent - rhs.greenComponent)
-      + abs(lhs.blueComponent - rhs.blueComponent)
-  }
+private func testTheme(id: String, body: Color, heading: Color) -> Theme {
+  Theme(
+    id: id,
+    name: id,
+    mode: .dark,
+    background: Color(red: 0.1, green: 0.1, blue: 0.12),
+    border: .clear,
+    text: body,
+    headingText: heading,
+    placeholder: Color(red: 0.5, green: 0.5, blue: 0.55)
+  )
+}
 
-  private func lineStart(_ index: Int, in text: String) -> Int {
-    guard index > 0 else { return 0 }
-    let lines = text.components(separatedBy: "\n")
-    let prefix = lines.prefix(index).joined(separator: "\n")
-    return (prefix as NSString).length + 1
-  }
+@MainActor private func storageColor(at location: Int, in textView: NSTextView) -> NSColor? {
+  textView.textStorage?.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
+}
+
+private func colorDistance(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
+  abs(lhs.redComponent - rhs.redComponent)
+    + abs(lhs.greenComponent - rhs.greenComponent)
+    + abs(lhs.blueComponent - rhs.blueComponent)
+}
+
+private func lineStart(_ index: Int, in text: String) -> Int {
+  guard index > 0 else { return 0 }
+  let lines = text.components(separatedBy: "\n")
+  let prefix = lines.prefix(index).joined(separator: "\n")
+  return (prefix as NSString).length + 1
 }

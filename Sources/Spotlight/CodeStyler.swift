@@ -203,12 +203,16 @@ enum CodeStyler {
   }
 
   @MainActor
-  private static func headingStyle(for textView: NSTextView, theme: Theme) -> CodeStylerHeading.Style {
+  private static func headingStyle(
+    for textView: NSTextView,
+    theme: Theme
+  ) -> CodeStylerHeading.Style {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerHeading.Style(
       baseFont: textView.font,
       bodyForeground: bodyForeground,
-      headingForeground: bodyForeground
+      headingForeground: bodyForeground,
+      headingStrokeWidth: -1.15
     )
   }
 
