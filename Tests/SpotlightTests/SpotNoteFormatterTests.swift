@@ -6,8 +6,8 @@ import Testing
 struct SpotNoteFormatterTests {
   @Test("top header gets no blank line above; interior headers get one above and below")
   func headerSpacingAroundTopAndInterior() {
-    let input = "## Big Things\n- a\n## Habits\n- b"
-    let expected = "## Big Things\n\n- a\n\n## Habits\n\n- b"
+    let input = "## A\n- a\n## B\n- b"
+    let expected = "## A\n\n- a\n\n## B\n\n- b"
     #expect(SpotNoteFormatter.normalize(input) == expected)
   }
 
@@ -55,7 +55,7 @@ struct SpotNoteFormatterTests {
   @Test("the transform is idempotent")
   func idempotent() {
     let inputs = [
-      "## Big Things\n- a\n## Habits\n- b",
+      "## A\n- a\n## B\n- b",
       "\n\n## H\n\n\n- a\n\n## H2\nx",
       "- only bullets\n  continued\n- more"
     ]

@@ -243,8 +243,6 @@ extension PlaceholderTextView {
     switch action {
     case .sendCurrentTaskToLinear(let status, let workspace, let count):
       sendCurrentTaskToLinear(status: status, workspace: workspace, count: count)
-    case .sendCurrentHabitDone(let count):
-      sendCurrentHabitDone(count: count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .appendCurrentLineToTrayNote(let count): appendCurrentLinesToTrayNote(count)
     case .appendCurrentLineToStateNote(let count): appendCurrentLinesToStateNote(count)
@@ -260,9 +258,7 @@ extension PlaceholderTextView {
     case .gotoLine(let line):
       _ = jumpToLine(line)
     case .jumpToTraySection: _ = jumpToTraySectionForVim()
-    case .jumpToHabitsSection: _ = jumpToHabitsSectionForVim()
     case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
-    case .jumpToBigThingsSection: _ = jumpToBigThingsSectionForVim()
     default:
       return false
     }

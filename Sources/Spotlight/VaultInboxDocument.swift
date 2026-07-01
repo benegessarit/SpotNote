@@ -6,18 +6,6 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   public var id: String { rawValue }
 
-  public var displayName: String {
-    switch self {
-    case .tasks: return "Tasks"
-    }
-  }
-
-  public var switchLabel: String {
-    switch self {
-    case .tasks: return "\(displayName) 󰄱"
-    }
-  }
-
   public var defaultID: UUID {
     switch self {
     case .tasks:

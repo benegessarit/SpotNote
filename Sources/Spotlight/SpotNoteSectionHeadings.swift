@@ -1,15 +1,11 @@
 import Foundation
 
 enum SpotNoteSectionHeadings {
-  static let bigThings = Definition(canonical: "## Big Things", aliases: [])
-  static let habits = Definition(canonical: "## Habits", aliases: [])
   static let todo = Definition(canonical: "## Todo", aliases: ["## To Do"])
   static let tray = Definition(canonical: "## Tray", aliases: [])
 
-  /// All sections, ordered so that overlapping spellings resolve correctly when
-  /// normalizing a heading line: a non-leading `## TODO` is a Todo section, not
-  /// the Habits legacy alias. (Matching is case- and heading-level-insensitive.)
-  static let all: [Definition] = [bigThings, todo, tray, habits]
+  /// Known navigable sections. Matching is case- and heading-level-insensitive.
+  static let all: [Definition] = [todo, tray]
 
   /// The canonical (Title-Case) form of `line` if it names a known section,
   /// else nil. Used to normalize a note's headings to a consistent spelling.

@@ -47,13 +47,6 @@ enum ChatTransferService {
     return try panel.urls.flatMap(readArchive)
   }
 
-  static func share(chats: [Chat], from view: NSView) throws {
-    guard !chats.isEmpty else { throw TransferError.emptySelection }
-    let url = try writeTemporaryArchive(chats: chats)
-    let picker = NSSharingServicePicker(items: [url])
-    picker.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
-  }
-
   @discardableResult
   static func writeArchive(chats: [Chat], to url: URL) throws -> URL {
     guard !chats.isEmpty else { throw TransferError.emptySelection }
@@ -86,16 +79,6 @@ enum ChatTransferService {
       return "\(title.isEmpty ? "SpotNote Chat" : title).sn"
     }
     return "SpotNote Chats \(dateStamp()).sn"
-  }
-
-  private static func writeTemporaryArchive(chats: [Chat]) throws -> URL {
-    let directory = FileManager.default.temporaryDirectory.appending(
-      path: "SpotNote-Share-\(UUID().uuidString)",
-      directoryHint: .isDirectory
-    )
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let url = directory.appending(path: suggestedFileName(for: chats), directoryHint: .notDirectory)
-    return try writeArchive(chats: chats, to: url)
   }
 
   private static func sanitizedTitle(from text: String) -> String {

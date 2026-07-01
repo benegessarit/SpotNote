@@ -58,7 +58,6 @@ public final class SpotlightWindowController {
   private let shortcuts: ShortcutStore
   let findController = FindController()
   private let fuzzyController = FuzzyController()
-  private let commandController = CommandController()
   private let copyController = CopyController()
   private let handoffClient = ScratchpadHandoffClient()
   private let dailyNoteWriter = DailyNoteWriter()
@@ -132,10 +131,6 @@ public final class SpotlightWindowController {
     var height: CGFloat = 0
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
-    } else if commandController.isVisible {
-      height += CommandPalette.reservedHeight
-    } else if session.navigationPreview != nil {
-      height += NavigationOverlay.reservedHeight
     }
     return height
   }
@@ -180,51 +175,10 @@ public final class SpotlightWindowController {
     self.onDidHideHUD = onDidHideHUD
     FontLoader.registerBundledFonts()
     observeActiveApp()
-    installModifierMonitor()
-    observeNavigationPreview()
     observeFuzzyPreview()
     observeToastMessages()
     installVimCommandRunner()
     Task { [session] in await session.bootstrap() }
-  }
-
-  /// Watches for modifier-only key transitions so the navigation
-  /// overlay can stay visible while the user holds the cycle modifier
-  /// (⌃ by default for ⌃N/⌃P). Releasing the key resumes the normal
-  /// auto-dismiss timer in `ChatSession.setNavigationHeldOpen(_:)`.
-  private func installModifierMonitor() {
-    _ = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-      guard let self else { return event }
-      let held = event.modifierFlags.contains(.control)
-      Task { @MainActor [session = self.session] in
-        session.setNavigationHeldOpen(held)
-      }
-      return event
-    }
-  }
-
-  /// Flips `navAnchor` between `.none` and `.pendingFirstResize` as the
-  /// navigation overlay's visibility toggles. On dismissal we clear the
-  /// editor anchor and request an animated next-resize so the panel
-  /// smoothly returns to its rest position (the drift accumulated
-  /// during bottom-pinned cycling otherwise leaves the editor sitting
-  /// where the now-gone nav list used to be).
-  private func observeNavigationPreview() {
-    session.$navigationPreview
-      .map { $0 != nil }
-      .removeDuplicates()
-      .sink { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self else { return }
-          // The panel is bottom-anchored, so the overlay simply grows the panel
-          // upward from the fixed bottom edge; keep the bottom pin on both
-          // appear and dismiss.
-          if let bottom = self.pinnedBottomY {
-            self.navAnchor = .bottomPinned(bottom)
-          }
-        }
-      }
-      .store(in: &cancellables)
   }
 
   private func observeFuzzyPreview() {
@@ -368,38 +322,29 @@ public final class SpotlightWindowController {
     if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive, session.currentVaultState == state {
       close()
     } else {
-      openVaultState(state, announcing: false)
+      openVaultState(state)
     }
   }
 
   public func openHUD() {
-    openVaultState(.tasks, announcing: false)
+    openVaultState(.tasks)
   }
 
-  private func openVaultState(_ state: VaultNoteState, announcing: Bool) {
+  private func openVaultState(_ state: VaultNoteState) {
     Task { @MainActor [weak self] in
       guard let self else { return }
-      await self.session.switchVaultState(state, announcing: announcing)
+      await self.session.switchVaultState(state)
       self.focusOrShow()
     }
   }
 
-  /// Summons the HUD on the most recently edited note with the caret
+  /// Summons the Tasks note with the caret
   /// already at the end. Bound to the `appendToLastNote` global chord
-  /// (default ⌘⇧.). Falls back to plain show if the chat list hasn't
-  /// finished bootstrapping yet.
+  /// (default ⌘⇧.).
   public func handleAppendToLastNote() {
-    if panel == nil || panel?.isVisible == false {
-      focusOrShow()
-    } else {
-      NSApp.activate(ignoringOtherApps: true)
-      if let panel { bringPanelToFront(panel) }
-    }
-    if let mostRecent = session.chats.first {
-      session.jump(to: mostRecent)
-    }
+    openVaultState(.tasks)
     // Defer the caret bump one runloop tick so SwiftUI has a chance to
-    // propagate the new chat's text into the NSTextView before we ask
+    // propagate the Tasks note into the NSTextView before we ask
     // for end-of-text.
     DispatchQueue.main.async { [weak self] in
       self?.focusTrigger.requestCaretEnd()
@@ -513,7 +458,6 @@ public final class SpotlightWindowController {
         shortcuts: shortcuts,
         find: findController,
         fuzzy: fuzzyController,
-        command: commandController,
         vimController: vimController,
         onHeightChange: { [weak self] height in
           self?.setPanelHeight(height, animated: false)
@@ -523,9 +467,6 @@ public final class SpotlightWindowController {
         },
         onSendLinearTask: { [handoffClient] request in
           _ = try await handoffClient.sendLinearTask(request)
-        },
-        onSendHabit: { [handoffClient] request in
-          _ = try await handoffClient.sendHabit(request)
         },
         onAppendDailyNote: { [dailyNoteWriter] text in
           try await dailyNoteWriter.append(text)
@@ -728,46 +669,19 @@ extension SpotlightWindowController {
     )
   }
   /// Called from `SpotlightPanel.performKeyEquivalent(with:)` so every
-  /// chord in the HUD -- chat navigation, settings, undo, tutorial
-  /// toggle -- flows through a single user-customizable binding table
+  /// chord in the HUD -- settings, handoff, copy, and editor helpers --
+  /// flows through a single user-customizable binding table
   /// AND participates in AppKit's key-equivalent responder chain.
   /// Returning `true` tells macOS the event was consumed (no beep).
   ///
   private func handleKeyEquivalent(_ event: NSEvent) -> Bool {
     // #lizard forgives
-    if MainActor.assumeIsolated({ commandController.isVisible }) {
-      if event.keyCode == 53 {
-        MainActor.assumeIsolated { commandController.close() }
-        return true
-      }
-      if event.keyCode == 36 || event.keyCode == 76 {
-        return true
-      }
-    }
     let mask: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
     let mods = ShortcutModifierSet(event.modifierFlags.intersection(mask))
     let chars = Shortcut.normalize(event.charactersIgnoringModifiers ?? "")
     let resolved = MainActor.assumeIsolated { shortcuts.match(key: chars, modifiers: mods) }
     guard let action = resolved else { return false }
     if action == .toggleHotkey || action == .appendToLastNote { return false }
-    if MainActor.assumeIsolated({ commandController.isVisible }) {
-      switch action {
-      case .olderChat, .newerChat:
-        let delta = action == .olderChat ? 1 : -1
-        Task { @MainActor [weak self] in self?.commandController.moveSelection(by: delta) }
-        return true
-      default: break
-      }
-    }
-    if MainActor.assumeIsolated({ fuzzyController.isVisible }) {
-      switch action {
-      case .olderChat, .newerChat:
-        let delta = action == .olderChat ? 1 : -1
-        Task { @MainActor [weak self] in self?.fuzzyController.moveSelection(by: delta) }
-        return true
-      default: break
-      }
-    }
     if !shouldHandle(action: action) {
       if action == .copyContent {
         MainActor.assumeIsolated {
@@ -777,17 +691,12 @@ extension SpotlightWindowController {
       }
       return false
     }
-    if action == .newChat || action == .deleteChat, event.isARepeat { return true }
     Task { @MainActor [weak self] in self?.dispatch(action) }
     return true
   }
 
-  /// Pass-through gates for context-sensitive shortcuts (undo with no
-  /// pending delete, copy with an active selection).
+  /// Pass-through gates for context-sensitive shortcuts, such as copy with an active selection.
   private func shouldHandle(action: ShortcutAction) -> Bool {
-    if action == .undoDelete {
-      return MainActor.assumeIsolated { session.lastDeleted != nil }
-    }
     if action == .copyContent {
       let hasSelection = MainActor.assumeIsolated {
         (panel?.firstResponder as? NSTextView).map { $0.selectedRange.length > 0 } ?? false
@@ -800,20 +709,9 @@ extension SpotlightWindowController {
   // #lizard forgives
   private func dispatch(_ action: ShortcutAction) {
     switch action {
-    case .newChat, .olderChat, .newerChat, .deleteChat, .undoDelete:
-      dispatchSessionAction(action)
     case .findInNote:
       if fuzzyController.isVisible { fuzzyController.close() }
-      if commandController.isVisible { commandController.close() }
       findController.toggle(text: session.currentText)
-    case .fuzzyFindAll:
-      if findController.isVisible { findController.close() }
-      if commandController.isVisible { commandController.close() }
-      fuzzyController.toggle(corpus: session.chats)
-    case .commandPalette:
-      if findController.isVisible { findController.close() }
-      if fuzzyController.isVisible { fuzzyController.close() }
-      commandController.toggle(shortcuts: shortcuts, preferences: preferences)
     case .insertTodayBadge:
       _ = panel?.firstResponder?.tryToPerform(
         #selector(PlaceholderTextView.insertTodayBadgeToken(_:)),
@@ -829,38 +727,10 @@ extension SpotlightWindowController {
         #selector(PlaceholderTextView.appendCurrentLineToDailyNoteShortcut(_:)),
         with: nil
       )
-    case .pinNote:
-      Task { await session.togglePin() }
-    case .shareCurrentChat:
-      shareCurrentChat()
     case .copyContent:
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
     case .toggleHotkey, .appendToLastNote: break
-    }
-  }
-
-  private func shareCurrentChat() {
-    guard let chat = session.currentChatSnapshot(), let view = panel?.contentView else {
-      NSSound.beep()
-      return
-    }
-    do {
-      try ChatTransferService.share(chats: [chat], from: view)
-    } catch {
-      NSSound.beep()
-    }
-  }
-
-  private func dispatchSessionAction(_ action: ShortcutAction) {
-    let session = self.session
-    switch action {
-    case .newChat: Task { await session.newChat() }
-    case .olderChat: Task { await session.cycleOlder() }
-    case .newerChat: Task { await session.cycleNewer() }
-    case .deleteChat: Task { await session.deleteCurrent() }
-    case .undoDelete: Task { await session.undoDelete() }
-    default: break
     }
   }
 

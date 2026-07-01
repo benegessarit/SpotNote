@@ -119,20 +119,20 @@ struct ScratchpadHandoffTests {
     #expect(data.dueDate == "2026-06-15")
   }
 
-  @Test("Code workspace payload routes to Code and carries a Build label")
+  @Test("Code workspace payload routes to Code and carries a Develop label")
   func codeWorkspacePayloadRoutesToCode() throws {
     let payload = try ScratchpadHandoffClient.payload(
       forLinearTask: LinearTaskHandoffRequest(
         title: "Fix the parser",
         targetStatus: .triage,
         workspace: .code,
-        labels: ["Build"]
+        labels: ["Develop"]
       ),
       id: "spotnote-linear-task:test"
     )
     let data = try #require(payload.data)
     #expect(data.workspace == "code")
-    #expect(data.labels == ["Build"])
+    #expect(data.labels == ["Develop"])
     #expect(payload.text.contains("Code Linear workspace"))
     #expect(!payload.text.contains("personal Linear workspace"))
   }
@@ -148,22 +148,22 @@ struct ScratchpadHandoffTests {
     #expect(payload.text.contains("personal Linear workspace"))
   }
 
-  @Test("Code request merges the Build label with parsed labels, deduped")
-  func codeRequestMergesBuildLabel() throws {
+  @Test("Code request merges the Develop label with parsed labels, deduped")
+  func codeRequestMergesDevelopLabel() throws {
     let request = try #require(
       LinearTaskMetadataParser.request(
-        from: "- ship gc motion #Build #SpotNote",
+        from: "- ship gc motion #Develop #SpotNote",
         targetStatus: .triage,
         workspace: .code,
-        labels: ["Build"]
+        labels: ["Develop"]
       )
     )
     #expect(request.workspace == .code)
-    #expect(request.labels == ["Build", "SpotNote"])
+    #expect(request.labels == ["Develop", "SpotNote"])
     #expect(request.title == "ship gc motion")
   }
 
-  @Test("Linear payload encodes a data object; habit payload omits it")
+  @Test("Linear payload encodes a data object")
   func dataFieldWireFormat() throws {
     let linear = try ScratchpadHandoffClient.payload(
       forLinearTask: "Call Elliot",
@@ -172,15 +172,6 @@ struct ScratchpadHandoffTests {
     let linearJSON = try #require(String(data: JSONEncoder().encode(linear), encoding: .utf8))
     #expect(linearJSON.contains("\"data\""))
     #expect(linearJSON.contains("\"kind\":\"linear_issue\""))
-
-    let habit = try ScratchpadHandoffClient.payload(
-      forHabit: HabitHandoffRequest(habit: "Piano practice"),
-      id: "spotnote-habit-log:test"
-    )
-    let habitJSON = try #require(String(data: JSONEncoder().encode(habit), encoding: .utf8))
-    // Habits stay LLM-mediated, so they carry no structured data object.
-    #expect(!habitJSON.contains("\"data\""))
-    #expect(habit.intent == "habit_log")
   }
 
   @Test("blank Linear title is rejected")

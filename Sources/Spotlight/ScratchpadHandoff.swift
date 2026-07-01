@@ -30,14 +30,6 @@ struct ScratchpadHandoffClient: Sendable {
     return try await send(payload: payload)
   }
 
-  func sendHabit(
-    _ request: HabitHandoffRequest,
-    id: String = Self.habitID()
-  ) async throws -> ScratchpadHandoffReceipt {
-    let payload = try Self.payload(forHabit: request, id: id)
-    return try await send(payload: payload)
-  }
-
   private func send(payload: ScratchpadHandoffPayload) async throws -> ScratchpadHandoffReceipt {
     let body = try JSONEncoder().encode(payload)
     var request = URLRequest(url: endpoint)
@@ -83,29 +75,11 @@ struct ScratchpadHandoffClient: Sendable {
     )
   }
 
-  static func payload(
-    forHabit request: HabitHandoffRequest,
-    id: String
-  ) throws -> ScratchpadHandoffPayload {
-    let habit = request.habit.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !habit.isEmpty else { throw ScratchpadHandoffError.emptyText }
-    return ScratchpadHandoffPayload(
-      id: id,
-      intent: "habit_log",
-      text: HabitHandoffPrompt.render(habit: habit),
-      source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Habit log")
-    )
-  }
-
   private static func receipt(from data: Data) throws -> ScratchpadHandoffReceipt {
     if data.isEmpty { return ScratchpadHandoffReceipt(captureID: nil) }
     let decoded = try JSONDecoder().decode(LocalIngressResponse.self, from: data)
     guard decoded.accepted else { throw ScratchpadHandoffError.notAccepted }
     return ScratchpadHandoffReceipt(captureID: decoded.captureID)
-  }
-
-  private static func habitID() -> String {
-    "spotnote-habit-log:\(UUID().uuidString.lowercased())"
   }
 
   private static func linearTaskID() -> String {
@@ -195,12 +169,6 @@ struct LinearTaskHandoffRequest: Equatable, Sendable {
       dueDate: dueDate
     )
   }
-}
-
-struct HabitHandoffRequest: Equatable, Sendable {
-  /// The cleaned habit text (bullet/checkbox markers already stripped), e.g.
-  /// "Piano practice @15m" or "Cardio with 3brown1blue".
-  let habit: String
 }
 
 enum ScratchpadHandoffError: Error, Equatable {
@@ -293,8 +261,8 @@ enum LinearTaskMetadataParser {
     let dueDate = dueDate(in: cleaned, today: today, calendar: calendar)
     let title = strippedMetadata(from: cleaned)
     guard !title.isEmpty else { return nil }
-    // Caller-supplied labels (e.g. the Code motion's "Build") lead; parsed #labels
-    // follow. `deduped` is case-insensitive, so a typed #Build won't duplicate it.
+    // Caller-supplied labels (e.g. the Code motion's "Develop") lead; parsed #labels
+    // follow. `deduped` is case-insensitive, so a typed #Develop won't duplicate it.
     return LinearTaskHandoffRequest(
       title: title,
       targetStatus: targetStatus,
@@ -407,27 +375,5 @@ enum LinearTaskHandoffPrompt {
       Task title:
       \(request.title)
       """
-  }
-}
-
-enum HabitHandoffPrompt {
-  static func render(habit: String) -> String {
-    """
-    SpotNote habit completion.
-
-    David just completed a habit and wants it logged in his Life Dashboard habit tracker.
-    Mark today's matching habit done by running the habit CLI — do NOT create a Linear issue,
-    a daily-note entry, or any other artifact.
-
-    Run: python3 $HERMES_HOME/scripts/life_dashboard_habits.py done "<habit>"
-    The script maps aliases (e.g. cardio/run/lift -> Workout, jhana/meditation -> Meditate,
-    "piano practice" -> Piano) and checks today's row. If the habit is unknown it errors with the
-    known set; relay that blocker rather than guessing.
-
-    Completed habit (verbatim bullet text):
-    \(habit)
-
-    Reply with the logged habit and its checkbox, or the blocker if it could not be logged.
-    """
   }
 }

@@ -51,15 +51,12 @@ enum VimAction: Equatable, Sendable {
     workspace: LinearTaskWorkspace,
     count: Int
   )
-  case sendCurrentHabitDone(count: Int)
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
   case appendCurrentLineToStateNote(count: Int)
   case normalizeDocument
   case jumpToTraySection
-  case jumpToHabitsSection
   case jumpToToDoSection
-  case jumpToBigThingsSection
   case gotoLine(Int)
   case enterVisual
   case extendVisual(Motion)

@@ -115,12 +115,10 @@ struct SpotlightRootToastTests {
       shortcuts: ShortcutStore(defaults: defaults),
       find: FindController(),
       fuzzy: FuzzyController(),
-      command: CommandController(),
       vimController: vimController,
       onHeightChange: { recorder.values.append($0) },
       onEscape: {},
       onSendLinearTask: { _ in },
-      onSendHabit: { _ in },
       onAppendDailyNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-daily.md") },
       onAppendTrayNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-tray.md") },
       onAppendStateNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-state.md") }

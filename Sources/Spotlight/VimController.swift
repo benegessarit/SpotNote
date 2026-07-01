@@ -196,8 +196,6 @@ final class VimController: ObservableObject {
 enum VimCommand: Equatable {
   case quit
   case writeNoOp
-  case newNote
-  case deleteNote
   case setLineNumbers(Bool)
   case setVimMode(Bool)
   case setTheme(String)
@@ -231,8 +229,6 @@ enum VimCommandParser {
   private static let headwordTable: [String: VimCommand] = [
     "q": .quit, "quit": .quit, "x": .quit,
     "w": .writeNoOp, "write": .writeNoOp, "wq": .writeNoOp,
-    "e": .newNote, "enew": .newNote,
-    "bd": .deleteNote, "bdelete": .deleteNote,
     "noh": .clearHighlight, "nohlsearch": .clearHighlight,
     "fmt": .formatDocument, "format": .formatDocument,
     "h": .help, "help": .help
@@ -360,16 +356,6 @@ enum VimCommandReference {
           id: "x",
           usage: ":x",
           summary: "Close the HUD."
-        ),
-        Entry(
-          id: "e",
-          usage: ":e\n:enew",
-          summary: "Start a new note."
-        ),
-        Entry(
-          id: "bd",
-          usage: ":bd\n:bdelete",
-          summary: "Delete the current note."
         )
       ]
     ),
@@ -415,17 +401,16 @@ enum VimCommandReference {
         ),
         Entry(
           id: "section-jumps",
-          usage: ",h\n,d\n,t\n,b",
+          usage: ",d\n,t",
           summary:
-            "Jump to a fresh bullet in `## Habits` (,h), `## Todo` (,d), `## Tray` (,t),"
-            + " or `## Big Things` (,b) and start typing; the section is created if absent."
+            "Jump to a fresh bullet in `## Todo` (,d) or `## Tray` (,t) and start typing;"
+            + " the section is created if absent."
         ),
         Entry(
           id: "leader",
-          usage: "\\t\n\\h\n\\c\n\\f",
+          usage: "\\t\n\\c\n\\f",
           summary:
-            "`\\` leader: `\\t` appends the current line to tray.md; `\\h` logs the"
-            + " current `## Habits` bullet to the Life Dashboard habit tracker (clears it after);"
+            "`\\` leader: `\\t` appends the current line to tray.md;"
             + " `\\c` appends the current bullet to the hermes-build State.md (clears it after);"
             + " `\\f` (or `:fmt`) tidies blank-line spacing around section headers."
         ),

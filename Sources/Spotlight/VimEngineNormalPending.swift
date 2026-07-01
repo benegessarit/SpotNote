@@ -5,8 +5,8 @@ import Foundation
 /// - `d`/`c`/`ci`: delete / change operators.
 /// - `g`: Linear handoff (`gd/gp/gs/gt/gl` → personal; `gc` → Code workspace); `gg`
 ///   keeps the document-start motion.
-/// - `,`: section jumps (`,h/,d/,t/,b`) that drop into insert on a fresh bullet.
-/// - `\`: reusable leader (`\t` tray-append, `\h` habit-log, `\f` tidy header spacing).
+/// - `,`: section jumps (`,d/,t`) that drop into insert on a fresh bullet.
+/// - `\`: reusable leader (`\t` tray-append, `\c` state-append, `\f` tidy header spacing).
 extension VimEngine {
   func handlePending(key: String) -> VimAction {
     let count = resolvedCount
@@ -61,7 +61,7 @@ extension VimEngine {
 
   // `g` is the Linear handoff prefix. `g` + status sends the current bullet to
   // David's personal Linear at that state (gd/gp/gt/gs/gl). `gc` sends it to his
-  // Code workspace at Triage (the editor adds the Build label). `gg` keeps the
+  // Code workspace at Triage (the editor adds the Develop label). `gg` keeps the
   // document-start motion.
   private func handlePendingG(key: String, count: Int) -> VimAction {
     pendingBuffer = ""
@@ -91,23 +91,18 @@ extension VimEngine {
   // insert on a fresh bullet (creating the section if absent).
   private func handlePendingComma(key: String) -> VimAction {
     pendingBuffer = ""
-    if key == "h" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
     if key == "d" { return jumpToSectionInsertAction(.jumpToToDoSection) }
     if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
-    if key == "b" { return jumpToSectionInsertAction(.jumpToBigThingsSection) }
     return .none
   }
 
-  // `\` is a reusable leader. `\t` appends the current line to tray.md;
-  // `\h` logs the current `## Habits` bullet to the Life Dashboard habit tracker
-  // (then clears the bullet, like the Linear handoff — David re-adds habits daily);
-  // `\c` appends the current bullet(s) to the hermes-build State.md (one clean `- `
-  // line per block, then clears the source); `\f` tidies blank-line spacing around
-  // section headers (one line above and below each header, none above the top header).
+  // `\` is a reusable leader. `\t` appends the current line to tray.md; `\c`
+  // appends the current bullet(s) to the hermes-build State.md (one clean `- ` line
+  // per block, then clears the source); `\f` tidies blank-line spacing around section
+  // headers (one line above and below each header, none above the top header).
   private func handlePendingBackslash(key: String, count: Int) -> VimAction {
     pendingBuffer = ""
     if key == "t" { return .appendCurrentLineToTrayNote(count: count) }
-    if key == "h" { return .sendCurrentHabitDone(count: count) }
     if key == "c" { return .appendCurrentLineToStateNote(count: count) }
     if key == "f" { return .normalizeDocument }
     return .none

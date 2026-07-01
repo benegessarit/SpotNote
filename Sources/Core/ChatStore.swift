@@ -113,13 +113,6 @@ public actor ChatStore {
     return inserted
   }
 
-  public func togglePin(id: UUID) throws {
-    guard var chat = chats[id] else { return }
-    chat.isPinned.toggle()
-    chats[id] = chat
-    try persistNow(chat)
-  }
-
   public func delete(id: UUID) throws {
     pendingWrites[id]?.cancel()
     pendingWrites[id] = nil

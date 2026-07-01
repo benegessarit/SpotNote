@@ -46,14 +46,6 @@ extension SpotlightWindowController {
       return nil
     case .writeNoOp:
       return VimController.Message(text: "No need. SpotNote autosaves.", kind: .info)
-    case .newNote:
-      let target = session
-      Task { await target.newChat() }
-      return nil
-    case .deleteNote:
-      let target = session
-      Task { await target.deleteCurrent() }
-      return nil
     case .substitute(let req):
       return runSubstitute(req)
     case .gotoLine(let line):

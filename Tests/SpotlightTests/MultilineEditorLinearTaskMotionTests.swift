@@ -58,8 +58,8 @@ struct MultilineEditorLinearTaskMotionTests {
     #expect(textView.string == "alpha\ngamma")
   }
 
-  @Test("gc handoff targets the Code workspace with a Build label")
-  func gcHandoffTargetsCodeWorkspaceWithBuildLabel() async throws {
+  @Test("gc handoff targets the Code workspace with a Develop label")
+  func gcHandoffTargetsCodeWorkspaceWithDevelopLabel() async throws {
     let textView = makeTextView(text: "- ship the gc motion #SpotNote")
     textView.setSelectedRange(NSRange(location: 0, length: 0))
     var captured: [LinearTaskHandoffRequest] = []
@@ -72,7 +72,7 @@ struct MultilineEditorLinearTaskMotionTests {
 
     #expect(captured.first?.workspace == .code)
     #expect(captured.first?.targetStatus == .triage)
-    #expect(captured.first?.labels == ["Build", "SpotNote"])
+    #expect(captured.first?.labels == ["Develop", "SpotNote"])
     #expect(captured.first?.title == "ship the gc motion")
     #expect(!textView.string.contains("ship"))
   }

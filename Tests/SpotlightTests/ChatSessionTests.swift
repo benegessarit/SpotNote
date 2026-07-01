@@ -44,7 +44,7 @@ struct ChatSessionTests {
     #expect(session.currentChecklistLines == [0: .checked])
   }
 
-  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes without adding Habits")
+  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes without adding default sections")
   func bootstrapPrefersVaultInbox() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
@@ -87,7 +87,7 @@ struct ChatSessionTests {
     #expect(saved == "[   ] updated inbox\n[ x ] done item")
   }
 
-  @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting Habits")
+  @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting default sections")
   func bootstrapNormalizesTodoHeadingCase() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
@@ -125,7 +125,7 @@ struct ChatSessionTests {
     #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "[   ] existing task")
   }
 
-  @Test("missing vault inbox opens blank instead of inserting Habits")
+  @Test("missing vault inbox opens blank instead of inserting a default section")
   func missingVaultInboxOpensBlankWithoutDefaultHeading() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir.appending(path: "store"), debounce: .milliseconds(20))
@@ -142,27 +142,6 @@ struct ChatSessionTests {
     #expect(session.currentVaultState == .tasks)
     #expect(session.currentText.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: tasksURL.path))
-  }
-
-  @Test("undo delete restores checklist state")
-  func undoDeleteRestoresChecklistState() async throws {
-    let dir = try makeTempDirectory()
-    let writer = try ChatStore(directory: dir, debounce: .milliseconds(20))
-    let chat = try await writer.create()
-    await writer.update(id: chat.id, text: "[ x ] done item")
-    await writer.flush()
-    let reader = try ChatStore(directory: dir, debounce: .milliseconds(20))
-    let session = ChatSession(store: reader)
-
-    await session.bootstrap()
-    #expect(session.currentText == "done item")
-    #expect(session.currentChecklistLines == [0: .checked])
-
-    await session.deleteCurrent()
-    await session.undoDelete()
-
-    #expect(session.currentText == "done item")
-    #expect(session.currentChecklistLines == [0: .checked])
   }
 
   private func makeTempDirectory() throws -> URL {

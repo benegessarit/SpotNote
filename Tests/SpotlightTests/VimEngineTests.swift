@@ -272,28 +272,25 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test(",h jumps to the Habits section")
-  func commaHJumpsToHabitsSection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "h", hasModifiers: false) == .jumpToHabitsSection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test("\\h logs the current habit bullet")
-  func backslashHLogsCurrentHabit() {
+  @Test("removed Habit leader no longer dispatches")
+  func removedHabitLeaderNoLongerDispatches() {
     let engine = VimEngine()
     #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "h", hasModifiers: false) == .sendCurrentHabitDone(count: 1))
+    #expect(engine.handle(key: "h", hasModifiers: false) == .none)
     #expect(engine.mode == .normal)
   }
 
-  @Test("counted \\h logs counted habit bullets")
-  func countedBackslashHLogsCountedHabits() {
-    let engine = VimEngine()
-    _ = engine.handle(key: "2", hasModifiers: false)
-    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "h", hasModifiers: false) == .sendCurrentHabitDone(count: 2))
+  @Test("removed section jumps no longer enter insert mode")
+  func removedSectionJumpsNoLongerEnterInsertMode() {
+    let hEngine = VimEngine()
+    #expect(hEngine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(hEngine.handle(key: "h", hasModifiers: false) == .none)
+    #expect(hEngine.mode == .normal)
+
+    let bEngine = VimEngine()
+    #expect(bEngine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(bEngine.handle(key: "b", hasModifiers: false) == .none)
+    #expect(bEngine.mode == .normal)
   }
 
   @Test(",d jumps to the Todo section")
@@ -309,14 +306,6 @@ struct VimEngineTests {
     let engine = VimEngine()
     #expect(engine.handle(key: ",", hasModifiers: false) == .none)
     #expect(engine.handle(key: "t", hasModifiers: false) == .jumpToTraySection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test(",b jumps to the Big Things section")
-  func commaBJumpsToBigThingsSection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "b", hasModifiers: false) == .jumpToBigThingsSection)
     #expect(engine.mode == .insert)
   }
 

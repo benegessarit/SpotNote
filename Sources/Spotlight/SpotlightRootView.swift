@@ -19,7 +19,6 @@ struct SpotlightRootView: View {
   @ObservedObject var shortcuts: ShortcutStore
   @ObservedObject var find: FindController
   @ObservedObject var fuzzy: FuzzyController
-  @ObservedObject var command: CommandController
   let vimController: VimController
   /// Called synchronously from the editor delegate when the text's line
   /// count changes, so the panel resize happens in the same runloop tick
@@ -29,7 +28,6 @@ struct SpotlightRootView: View {
   /// already in normal mode).
   let onEscape: () -> Void
   let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
-  let onSendHabit: (HabitHandoffRequest) async throws -> Void
   let onAppendDailyNote: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
   let onAppendStateNote: (String) async throws -> URL
@@ -60,10 +58,6 @@ struct SpotlightRootView: View {
     if find.isVisible { total += EditorMetrics.findBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
-    } else if command.isVisible {
-      total += CommandPalette.reservedHeight
-    } else if session.navigationPreview != nil {
-      total += NavigationOverlay.reservedHeight
     }
     return total
   }
@@ -84,41 +78,19 @@ struct SpotlightRootView: View {
         .padding(.bottom, EditorMetrics.outerPadding)
         .frame(height: FuzzyPalette.reservedHeight)
         .transition(.opacity)
-      } else if command.isVisible {
-        CommandPalette(controller: command, theme: theme)
-          .padding(.horizontal, EditorMetrics.outerPadding)
-          .padding(.bottom, EditorMetrics.outerPadding)
-          .frame(height: CommandPalette.reservedHeight)
-          .transition(.opacity)
-      } else if let preview = session.navigationPreview {
-        NavigationOverlay(
-          preview: preview,
-          theme: theme,
-          shortcuts: shortcuts,
-          canUndo: session.lastDeleted != nil
-        )
-        .padding(.horizontal, EditorMetrics.outerPadding)
-        .padding(.bottom, EditorMetrics.outerPadding)
-        .frame(height: NavigationOverlay.reservedHeight)
-        .transition(.opacity)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .colorScheme(theme.mode == .dark ? .dark : .light)
-    .animation(.easeOut(duration: 0.10), value: session.navigationPreview != nil)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
-    .animation(.easeOut(duration: 0.10), value: command.isVisible)
-    .onChange(of: session.chats) { _, newChats in
-      fuzzy.updateCorpus(newChats)
+    .onChange(of: session.chats) { _, updatedChats in
+      fuzzy.updateCorpus(updatedChats)
     }
     .onChange(of: find.isVisible) { _, isVisible in
       if !isVisible { focusTrigger.pulse() }
     }
     .onChange(of: fuzzy.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onChange(of: command.isVisible) { _, isVisible in
       if !isVisible { focusTrigger.pulse() }
     }
     .onAppear {
@@ -131,7 +103,7 @@ struct SpotlightRootView: View {
   }
 
   private var hasAttachedBottom: Bool {
-    session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
+    fuzzy.isVisible
   }
 
   // Near-opaque tint: the panel should read as a solid surface with only a hint
@@ -172,7 +144,6 @@ struct SpotlightRootView: View {
       vimController: vimController,
       onEscape: onEscape,
       onSendLinearTask: onSendLinearTask,
-      onSendHabit: onSendHabit,
       onAppendDailyNote: onAppendDailyNote,
       onAppendTrayNote: onAppendTrayNote,
       onAppendStateNote: onAppendStateNote,
