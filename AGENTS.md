@@ -63,7 +63,7 @@ For agent/CI launch checks that must not steal David's active Space, use the exp
 SPOTNOTE_FINAL_LAUNCH_MODE=headless ./scripts/install-release.sh
 ```
 
-Headless launch uses `SPOTNOTE_HEADLESS_TEST=1`, initializes the app bundle, verifies no visible SpotNote windows were created, then exits/cleans up. Normal user launch remains HUD-first.
+Headless launch uses `SPOTNOTE_HEADLESS_TEST=1`, initializes the app bundle, verifies no visible SpotNote windows were created, then exits/cleans up. Normal user launch remains HUD-first. If `SPOTNOTE_FINAL_LAUNCH_MODE=headless` is used for final install verification, it exits by design; before handing SpotNote back to David, relaunch `/Applications/SpotNote.app` normally and read back `pgrep -fl '/Applications/SpotNote.app|SpotNote'` so the global-hotkey app is resident.
 
 ## Manual smoke after install
 
