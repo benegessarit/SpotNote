@@ -197,6 +197,29 @@ struct ScratchpadHandoffTests {
 
     #expect(receipt.captureID == "spotnote-linear-task:test")
   }
+
+  @Test("deterministic Linear receipt exposes the created identifier for the toast")
+  func deterministicLinearReceiptExposesIdentifier() async throws {
+    let responseBody = """
+      {"accepted":true,"capture_id":"PER-999","identifier":"PER-999","url":"https://linear.app/x/PER-999","deterministic":true}
+      """
+    let response = Data(responseBody.utf8)
+    let endpoint = try #require(URL(string: "http://127.0.0.1:8645/api/local-ingress/marginal"))
+    let client = ScratchpadHandoffClient(
+      endpoint: endpoint,
+      session: StubURLSession(data: response, statusCode: 201)
+    )
+
+    let receipt = try await client.sendLinearTask(
+      title: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+
+    #expect(receipt.captureID == "PER-999")
+    #expect(receipt.identifier == "PER-999")
+    #expect(receipt.url == "https://linear.app/x/PER-999")
+    #expect(receipt.linearSuccessMessage == "Created PER-999 in Linear")
+  }
 }
 
 private final class StubURLSession: URLSessionProtocol, @unchecked Sendable {

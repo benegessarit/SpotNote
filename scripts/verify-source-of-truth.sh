@@ -80,7 +80,8 @@ require_grep "rose-pine-moonlight" "Sources/Spotlight/Theme.swift"
 require_grep "dracula" "Sources/Spotlight/Theme.swift"
 require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swift"
 require_grep "Sending to Linear" "Sources/Spotlight/MultilineEditor.swift"
-require_grep "Sent to Hermes for Linear" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "Created \(identifier) in Linear" "Sources/Spotlight/ScratchpadHandoff.swift"
+reject_grep "Sent to Hermes for Linear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "defaultHUDOriginHugsRightEdge" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 require_grep "defaultHUDOriginHugsBottomEdge" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 require_grep "defaultEdgeInset: CGFloat =" "Sources/Spotlight/SpotlightWindow.swift"
@@ -157,10 +158,12 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
     "catppuccin-frappe" \
     "rose-pine-moonlight" \
     "ScratchpadHandoffClient" \
-    "Sending to Linear" \
-    "Sent to Hermes for Linear"; do
+    "Sending to Linear"; do
     /usr/bin/grep -F -- "$needle" <<<"$STRINGS" >/dev/null || fail "installed binary missing string: $needle"
   done
+  if /usr/bin/grep -F -- "Sent to Hermes for Linear" <<<"$STRINGS" >/dev/null; then
+    fail "installed binary still contains retired Linear handoff toast wording"
+  fi
   if /usr/bin/grep -F -- "VimStatusLine" <<<"$STRINGS" >/dev/null; then
     fail "installed binary still contains VimStatusLine"
   fi

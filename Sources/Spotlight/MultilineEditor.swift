@@ -53,7 +53,7 @@ struct MultilineEditor: NSViewRepresentable {
   /// Sends a normalized current-line title to the local Hermes/Marginal
   /// ingress, which creates the Linear issue without embedding Linear
   /// credentials in SpotNote.
-  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt)?
 
   /// Appends current/counted lines to today's vault daily note. The editor
   /// clears the original lines only after this durable write succeeds.
@@ -642,7 +642,7 @@ final class PlaceholderTextView: NSTextView {
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
-  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt)?
   var onAppendDailyNote: ((String) async throws -> URL)?
   var onAppendTrayNote: ((String) async throws -> URL)?
   var onAppendStateNote: ((String) async throws -> URL)?
@@ -1536,11 +1536,14 @@ final class PlaceholderTextView: NSTextView {
       messages: LineCommitMessages(
         empty: "No Linear task on this bullet",
         progress: "Sending to Linear",
-        success: "Sent to Hermes for Linear",
+        success: "Sent to Linear",
         changed: "Linear sent; bullet changed",
         failure: "Linear send failed"
       ),
-      commit: { try await onSendLinearTask($0) }
+      commit: {
+        let receipt = try await onSendLinearTask($0)
+        return receipt.linearSuccessMessage
+      }
     )
   }
 
@@ -1561,7 +1564,10 @@ final class PlaceholderTextView: NSTextView {
         changed: "Daily note updated; line changed",
         failure: "Daily note append failed"
       ),
-      commit: { _ = try await onAppendDailyNote($0) }
+      commit: {
+        _ = try await onAppendDailyNote($0)
+        return nil
+      }
     )
   }
 
@@ -1583,7 +1589,10 @@ final class PlaceholderTextView: NSTextView {
         changed: "Sent to tray.md; line changed",
         failure: "tray.md append failed"
       ),
-      commit: { _ = try await onAppendTrayNote($0) }
+      commit: {
+        _ = try await onAppendTrayNote($0)
+        return nil
+      }
     )
   }
 
@@ -1605,7 +1614,10 @@ final class PlaceholderTextView: NSTextView {
         changed: "Sent to State; line changed",
         failure: "State append failed"
       ),
-      commit: { _ = try await onAppendStateNote($0) }
+      commit: {
+        _ = try await onAppendStateNote($0)
+        return nil
+      }
     )
   }
 
@@ -1673,7 +1685,7 @@ final class PlaceholderTextView: NSTextView {
     count: Int,
     preparing payloadFor: @escaping (String, NSRange) -> Payload?,
     messages: LineCommitMessages,
-    commit: @escaping (Payload) async throws -> Void
+    commit: @escaping (Payload) async throws -> String?
   ) {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
@@ -1690,7 +1702,7 @@ final class PlaceholderTextView: NSTextView {
     _ range: NSRange,
     preparing payloadFor: @escaping (String, NSRange) -> Payload?,
     messages: LineCommitMessages,
-    commit: @escaping (Payload) async throws -> Void
+    commit: @escaping (Payload) async throws -> String?
   ) {
     let nsString = string as NSString
     guard nsString.length > 0,
@@ -1713,7 +1725,7 @@ final class PlaceholderTextView: NSTextView {
       guard let self else { return }
       defer { self.isHandoffInFlight = false }
       do {
-        try await commit(payload)
+        let successMessage = try await commit(payload) ?? messages.success
         let current = self.string as NSString
         guard range.location + range.length <= current.length,
           current.substring(with: range) == original
@@ -1729,7 +1741,7 @@ final class PlaceholderTextView: NSTextView {
         self.didChangeText()
         let cursor = min(range.location, (self.string as NSString).length)
         self.setSelectedRange(NSRange(location: cursor, length: 0))
-        self.vimController?.showMessage(messages.success, kind: .success, icon: .hermes)
+        self.vimController?.showMessage(successMessage, kind: .success, icon: .hermes)
       } catch {
         self.vimController?.showMessage(messages.failure, kind: .error, icon: .hermes)
       }

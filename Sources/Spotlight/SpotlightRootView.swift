@@ -27,7 +27,7 @@ struct SpotlightRootView: View {
   /// Invoked when Esc should dismiss the HUD (vim off, or vim on and
   /// already in normal mode).
   let onEscape: () -> Void
-  let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
+  let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt
   let onAppendDailyNote: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
   let onAppendStateNote: (String) async throws -> URL

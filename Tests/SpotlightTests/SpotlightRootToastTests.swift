@@ -21,7 +21,7 @@ struct SpotlightRootToastTests {
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
 
-    fixture.vimController.showMessage("Sent to Hermes for Linear", kind: .success, icon: .hermes)
+    fixture.vimController.showMessage("Created PER-999 in Linear", kind: .success, icon: .hermes)
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
@@ -118,7 +118,7 @@ struct SpotlightRootToastTests {
       vimController: vimController,
       onHeightChange: { recorder.values.append($0) },
       onEscape: {},
-      onSendLinearTask: { _ in },
+      onSendLinearTask: { _ in ScratchpadHandoffReceipt(captureID: "PER-1", identifier: "PER-1") },
       onAppendDailyNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-daily.md") },
       onAppendTrayNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-tray.md") },
       onAppendStateNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-state.md") }

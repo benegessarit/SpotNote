@@ -79,7 +79,11 @@ struct ScratchpadHandoffClient: Sendable {
     if data.isEmpty { return ScratchpadHandoffReceipt(captureID: nil) }
     let decoded = try JSONDecoder().decode(LocalIngressResponse.self, from: data)
     guard decoded.accepted else { throw ScratchpadHandoffError.notAccepted }
-    return ScratchpadHandoffReceipt(captureID: decoded.captureID)
+    return ScratchpadHandoffReceipt(
+      captureID: decoded.captureID,
+      identifier: decoded.identifier,
+      url: decoded.url
+    )
   }
 
   private static func linearTaskID() -> String {
@@ -122,6 +126,32 @@ struct ScratchpadHandoffPayload: Codable, Equatable, Sendable {
 
 struct ScratchpadHandoffReceipt: Equatable, Sendable {
   let captureID: String?
+  let identifier: String?
+  let url: String?
+
+  init(captureID: String?, identifier: String? = nil, url: String? = nil) {
+    self.captureID = captureID
+    self.identifier = identifier
+    self.url = url
+  }
+
+  var linearSuccessMessage: String? {
+    if let identifier = trimmed(identifier), !identifier.isEmpty {
+      return "Created \(identifier) in Linear"
+    }
+    if let captureID = trimmed(captureID), Self.looksLikeLinearIdentifier(captureID) {
+      return "Created \(captureID) in Linear"
+    }
+    return nil
+  }
+
+  private static func looksLikeLinearIdentifier(_ value: String) -> Bool {
+    value.range(of: #"^[A-Z]+-\d+$"#, options: .regularExpression) != nil
+  }
+
+  private func trimmed(_ value: String?) -> String? {
+    value?.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
 }
 
 enum LinearTaskTargetStatus: String, Equatable, Sendable {
@@ -181,11 +211,15 @@ enum ScratchpadHandoffError: Error, Equatable {
 private struct LocalIngressResponse: Decodable {
   let accepted: Bool
   let captureID: String?
+  let identifier: String?
+  let url: String?
 
   private enum CodingKeys: String, CodingKey {
     case accepted
     case captureID
     case captureIDSnake = "capture_id"
+    case identifier
+    case url
   }
 
   init(from decoder: Decoder) throws {
@@ -194,6 +228,8 @@ private struct LocalIngressResponse: Decodable {
     captureID =
       try container.decodeIfPresent(String.self, forKey: .captureID)
       ?? container.decodeIfPresent(String.self, forKey: .captureIDSnake)
+    identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
+    url = try container.decodeIfPresent(String.self, forKey: .url)
   }
 }
 

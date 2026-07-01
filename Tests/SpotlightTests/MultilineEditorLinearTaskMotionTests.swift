@@ -24,6 +24,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-1", identifier: "PER-1")
     }
 
     textView.sendCurrentTaskToLinear(status: .done, count: 1)
@@ -46,6 +47,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-2", identifier: "PER-2")
     }
 
     textView.sendCurrentTaskToLinear(status: .triage, count: 1)
@@ -65,6 +67,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "DAB-42", identifier: "DAB-42")
     }
 
     textView.sendCurrentTaskToLinear(status: .triage, workspace: .code, count: 1)
@@ -84,6 +87,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-3", identifier: "PER-3")
     }
 
     // Two synchronous presses before the first send's Task runs: the first sets
@@ -93,6 +97,23 @@ struct MultilineEditorLinearTaskMotionTests {
     try await waitUntil { captured.count == 1 }
     try await Task.sleep(nanoseconds: 50_000_000)
     #expect(captured.count == 1)
+  }
+
+  @Test("Linear handoff success toast names the created issue")
+  func linearHandoffSuccessToastNamesCreatedIssue() async throws {
+    let textView = makeTextView(text: "- file this")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    textView.onSendLinearTask = { _ in
+      ScratchpadHandoffReceipt(captureID: "PER-999", identifier: "PER-999")
+    }
+
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    try await waitUntil { controller.message?.text == "Created PER-999 in Linear" }
+
+    #expect(controller.message?.kind == .success)
+    #expect(textView.string.isEmpty)
   }
 
   private func makeTextView(text: String) -> PlaceholderTextView {
