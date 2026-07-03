@@ -204,12 +204,12 @@ enum CodeStyler {
 
   @MainActor
   private static func headingStyle(
-    for textView: NSTextView,
+    for _: NSTextView,
     theme: Theme
   ) -> CodeStylerHeading.Style {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerHeading.Style(
-      baseFont: textView.font,
+      baseFont: SpotNoteFont.editor(),
       bodyForeground: bodyForeground,
       headingForeground: bodyForeground,
       headingStrokeWidth: -1.15
@@ -218,12 +218,12 @@ enum CodeStyler {
 
   @MainActor
   private static func listMarkerStyle(
-    for textView: NSTextView,
+    for _: NSTextView,
     theme: Theme
   ) -> CodeStylerListMarkers.Style {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerListMarkers.Style(
-      baseFont: textView.font,
+      baseFont: SpotNoteFont.editor(),
       markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78),
       doneMarkerForeground: NSColor(theme.headingText)
     )
