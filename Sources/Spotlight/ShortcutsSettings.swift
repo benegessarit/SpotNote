@@ -17,7 +17,7 @@ struct ShortcutsPane: View {
 
       ShortcutGroup(
         title: "Global",
-        actions: [.toggleHotkey, .appendToLastNote],
+        actions: [.toggleHotkey],
         store: shortcuts
       )
       ShortcutGroup(

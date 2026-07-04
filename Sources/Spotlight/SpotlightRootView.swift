@@ -6,10 +6,9 @@ import SwiftUI
 final class FocusTrigger: ObservableObject {
   @Published private(set) var tick: Int = 0
   /// Bumped to ask the editor to move its caret to the very end of the
-  /// current note's text. Used by the append-to-last-note global hotkey.
+  /// current note's text (editor-side plumbing kept for in-app callers).
   @Published private(set) var caretEndTick: Int = 0
   func pulse() { tick &+= 1 }
-  func requestCaretEnd() { caretEndTick &+= 1 }
 }
 
 struct SpotlightRootView: View {

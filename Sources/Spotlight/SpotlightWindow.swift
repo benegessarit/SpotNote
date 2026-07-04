@@ -338,19 +338,6 @@ public final class SpotlightWindowController {
     }
   }
 
-  /// Summons the Tasks note with the caret
-  /// already at the end. Bound to the `appendToLastNote` global chord
-  /// (default ⌘⇧.).
-  public func handleAppendToLastNote() {
-    openVaultState(.tasks)
-    // Defer the caret bump one runloop tick so SwiftUI has a chance to
-    // propagate the Tasks note into the NSTextView before we ask
-    // for end-of-text.
-    DispatchQueue.main.async { [weak self] in
-      self?.focusTrigger.requestCaretEnd()
-    }
-  }
-
   public func reloadLibrary() {
     Task { @MainActor [weak self] in
       guard let self else { return }
