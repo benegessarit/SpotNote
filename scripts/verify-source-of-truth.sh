@@ -127,7 +127,7 @@ require_grep ",d jumps to the Todo section" "Tests/SpotlightTests/VimEngineTests
 require_grep "gT ignores internal Tray blank lines" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
 require_grep "Captures/tray.md" "Sources/Spotlight/TrayNoteDestination.swift"
 require_grep "appendCurrentLineToStateNote" "Sources/Spotlight/VimEngine.swift"
-require_grep "Work/hermes-build/State.md" "Sources/Spotlight/StateNoteDestination.swift"
+require_grep "Work/hermes-build/Notes/State.md" "Sources/Spotlight/StateNoteDestination.swift"
 require_grep "tray has no separate global open shortcut" "Tests/SpotlightTests/ShortcutStoreTests.swift"
 require_grep "SPOTNOTE_HEADLESS_TEST" "Sources/SpotNoteApp/AppDelegate.swift"
 require_grep "SPOTNOTE_HEADLESS_TEST=1" "scripts/headless-smoke.sh"

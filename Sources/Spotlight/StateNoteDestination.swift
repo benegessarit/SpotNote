@@ -6,7 +6,7 @@ enum StateNoteWriterError: Error, Equatable {
 
 struct StateNotePathResolver: Sendable {
   static let defaultURL = URL(
-    fileURLWithPath: "/Users/davidbeyer/Documents/knowledge/Work/hermes-build/State.md",
+    fileURLWithPath: "/Users/davidbeyer/Documents/knowledge/Work/hermes-build/Notes/State.md",
     isDirectory: false
   )
 
