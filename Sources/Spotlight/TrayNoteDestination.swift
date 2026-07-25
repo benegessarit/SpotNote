@@ -6,7 +6,7 @@ enum TrayNoteWriterError: Error, Equatable {
 
 struct TrayNotePathResolver: Sendable {
   static let defaultURL = URL(
-    fileURLWithPath: "/Users/davidbeyer/Documents/knowledge/Captures/tray.md",
+    fileURLWithPath: "/Users/davidbeyer/Documents/knowledge/Captures/Trays/spotnote-tray.md",
     isDirectory: false
   )
 

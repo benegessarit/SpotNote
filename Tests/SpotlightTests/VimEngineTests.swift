@@ -196,7 +196,7 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test("\\t sends the current bullet to tray.md")
+  @Test("\\t sends the current bullet to the tray note")
   func backslashTSendsCurrentBulletToTrayNote() {
     let engine = VimEngine()
 
@@ -205,7 +205,7 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test("counted \\t sends counted bullets to tray.md")
+  @Test("counted \\t sends counted bullets to the tray note")
   func countedBackslashTSendsCountedBulletsToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
@@ -214,7 +214,7 @@ struct VimEngineTests {
     #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
   }
 
-  @Test("visual \\t sends the active selection to tray.md and exits visual mode")
+  @Test("visual \\t sends the active selection to the tray note and exits visual mode")
   func visualBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "v", hasModifiers: false)
@@ -224,7 +224,7 @@ struct VimEngineTests {
     #expect(engine.mode == .normal)
   }
 
-  @Test("visual-line \\t sends the active line selection to tray.md and exits visual mode")
+  @Test("visual-line \\t sends the active line selection to the tray note and exits visual mode")
   func visualLineBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "V", hasModifiers: false)

@@ -410,7 +410,7 @@ enum VimCommandReference {
           id: "leader",
           usage: "\\t\n\\c\n\\f",
           summary:
-            "`\\` leader: `\\t` appends the current line to tray.md;"
+            "`\\` leader: `\\t` appends the current line to spotnote-tray.md;"
             + " `\\c` appends the current bullet to the hermes-build State.md (clears it after);"
             + " `\\f` (or `:fmt`) tidies blank-line spacing around section headers."
         ),

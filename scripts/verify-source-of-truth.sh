@@ -125,7 +125,7 @@ reject_grep ",h jumps to" "Tests/SpotlightTests/VimEngineTests.swift"
 reject_grep ",b jumps to" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep ",d jumps to the Todo section" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "gT ignores internal Tray blank lines" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
-require_grep "Captures/tray.md" "Sources/Spotlight/TrayNoteDestination.swift"
+require_grep "Captures/Trays/spotnote-tray.md" "Sources/Spotlight/TrayNoteDestination.swift"
 require_grep "appendCurrentLineToStateNote" "Sources/Spotlight/VimEngine.swift"
 require_grep "Work/hermes-build/Notes/State.md" "Sources/Spotlight/StateNoteDestination.swift"
 require_grep "tray has no separate global open shortcut" "Tests/SpotlightTests/ShortcutStoreTests.swift"
@@ -177,8 +177,8 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
       fail "installed binary still contains retired tray contract: $retired_tray_contract"
     fi
   done
-  /usr/bin/grep -F -- "Sent to tray.md" <<<"$STRINGS" >/dev/null \
-    || fail "installed binary missing tray.md append confirmation string"
+  /usr/bin/grep -F -- "Sent to spotnote-tray.md" <<<"$STRINGS" >/dev/null \
+    || fail "installed binary missing spotnote-tray.md append confirmation string"
   if /usr/bin/grep -F -- "## Habits" <<<"$STRINGS" >/dev/null; then
     fail "installed binary still contains retired Habits heading contract string"
   fi

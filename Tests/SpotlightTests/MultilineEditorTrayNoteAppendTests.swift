@@ -45,7 +45,7 @@ struct MultilineEditorTrayNoteAppendTests {
     #expect(textView.string == "plain\n- gamma")
   }
 
-  @Test("\\t motion sends the current bullet block to tray.md")
+  @Test("\\t motion sends the current bullet block to the tray note")
   func backslashTMotionSendsCurrentBulletBlockToTrayNote() async throws {
     let text = "plain\n- beta\n  wrapped context\n- gamma"
     let textView = makeTextView(text: text)

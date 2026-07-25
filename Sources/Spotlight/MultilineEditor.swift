@@ -58,7 +58,7 @@ struct MultilineEditor: NSViewRepresentable {
   /// Appends current/counted lines to today's vault daily note. The editor
   /// clears the original lines only after this durable write succeeds.
   var onAppendDailyNote: ((String) async throws -> URL)?
-  /// Appends current/counted lines to the misc thoughts dump (`tray.md`), then
+  /// Appends current/counted lines to the misc thoughts dump (`spotnote-tray.md`), then
   /// clears the original lines only after this durable write succeeds.
   var onAppendTrayNote: ((String) async throws -> URL)?
   /// Appends current/counted bullet blocks to the hermes-build `State.md` as one
@@ -1573,7 +1573,7 @@ final class PlaceholderTextView: NSTextView {
 
   func appendCurrentLinesToTrayNote(_ count: Int) {
     guard let onAppendTrayNote else {
-      vimController?.showMessage("tray.md handoff unavailable", kind: .error, icon: .hermes)
+      vimController?.showMessage("spotnote-tray.md handoff unavailable", kind: .error, icon: .hermes)
       return
     }
     let nsString = string as NSString
@@ -1583,11 +1583,11 @@ final class PlaceholderTextView: NSTextView {
       range,
       preparing: { original, _ in TrayNotePayload.normalized(original) },
       messages: LineCommitMessages(
-        empty: "No tray.md text on this line",
-        progress: "Appending to tray.md",
-        success: "Sent to tray.md",
-        changed: "Sent to tray.md; line changed",
-        failure: "tray.md append failed"
+        empty: "No spotnote-tray.md text on this line",
+        progress: "Appending to spotnote-tray.md",
+        success: "Sent to spotnote-tray.md",
+        changed: "Sent to spotnote-tray.md; line changed",
+        failure: "spotnote-tray.md append failed"
       ),
       commit: {
         _ = try await onAppendTrayNote($0)

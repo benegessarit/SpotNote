@@ -96,7 +96,7 @@ extension VimEngine {
     return .none
   }
 
-  // `\` is a reusable leader. `\t` appends the current line to tray.md; `\c`
+  // `\` is a reusable leader. `\t` appends the current line to spotnote-tray.md; `\c`
   // appends the current bullet(s) to the hermes-build State.md (one clean `- ` line
   // per block, then clears the source); `\f` tidies blank-line spacing around section
   // headers (one line above and below each header, none above the top header).
