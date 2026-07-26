@@ -75,12 +75,4 @@ Prioritize concrete Medium, High, or Critical defects:
 - tests that pass without exercising changed behavior, or missing regression coverage when a realistic failure could escape.
 
 Do not report style-only findings, speculative rewrites, or generic requests for more tests.
-
-Return exactly one JSON object with no Markdown or surrounding prose:
-{"schema_version":1,"reviewed_ref":"<exact commit SHA or range/ref>","verdict":"pass|below_threshold|actionable","findings":[],"summary":"human summary"}
-
-For actionable findings, include only Medium-or-higher items with keys
-`severity`, `title`, `evidence`, `recommendation`, and optional `path` / `line`.
-Write severity as `medium`, `high`, or `critical`. Use `pass` when there are
-no findings and `below_threshold` when every observation is below Medium.
 """
