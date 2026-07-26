@@ -1,0 +1,86 @@
+# Local RoboRev policy for SpotNote. The hook dispatches every commit;
+# the exact-SHA receipt remains advisory evidence, never merge authority.
+agent = "codex"
+review_agent = "codex"
+refine_agent = "codex"
+model = "gpt-5.6-sol"
+display_name = "SpotNote"
+review_context_count = 0
+post_commit_review = "commit"
+review_reasoning = "maximum"
+refine_reasoning = "maximum"
+review_min_severity = "medium"
+auto_close_passing_reviews = true
+max_prompt_size = 120000
+
+exclude_patterns = [
+  ".env",
+  "**/.env",
+  ".env.*",
+  "**/.env.*",
+  "*.envrc",
+  "**/*.envrc",
+  "*.pem",
+  "**/*.pem",
+  "*.key",
+  "**/*.key",
+  "*.p12",
+  "**/*.p12",
+  "*.pfx",
+  "**/*.pfx",
+  "auth.json",
+  "**/auth.json*",
+  "credentials*",
+  "**/credentials*",
+  "secrets*",
+  "**/secrets*",
+  "node_modules/**",
+  "**/node_modules/**",
+  "**/.build/**",
+  "**/DerivedData/**",
+  "**/.swiftpm/**",
+  "*.app/**",
+  "**/*.app/**",
+  ".venv/**",
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/*.egg-info/**",
+  ".codegraph/**",
+  "**/.codegraph/**",
+  ".roborev/**",
+  "**/.roborev/**",
+  ".cache/**",
+  "**/.cache/**",
+  "**/tmp/**",
+  "**/logs/**",
+  "*.log",
+  "**/*.log",
+  "coverage/**",
+  "**/coverage/**",
+  "**/*.db",
+  "**/*.db-wal",
+  "**/*.db-shm",
+  "**/*.sqlite",
+  "**/*.sqlite3",
+]
+
+review_guidelines = """
+A Swift and AppKit macOS note editor with Vim motions, Linear handoff, and vault-backed Markdown storage.
+Review only the committed diff that remains after exclude_patterns are applied.
+Prioritize concrete Medium, High, or Critical defects:
+- functional regressions, incorrect state transitions, boundary mistakes, and silent failure;
+- data loss, privacy or secret exposure, unsafe file/process behavior, and concurrency bugs;
+- missing error handling or validation at user, filesystem, process, network, and persistence boundaries;
+- tests that pass without exercising changed behavior, or missing regression coverage when a realistic failure could escape.
+
+Do not report style-only findings, speculative rewrites, or generic requests for more tests.
+
+Return exactly one JSON object with no Markdown or surrounding prose:
+{"schema_version":1,"reviewed_ref":"<exact commit SHA or range/ref>","verdict":"pass|below_threshold|actionable","findings":[],"summary":"human summary"}
+
+For actionable findings, include only Medium-or-higher items with keys
+`severity`, `title`, `evidence`, `recommendation`, and optional `path` / `line`.
+Write severity as `medium`, `high`, or `critical`. Use `pass` when there are
+no findings and `below_threshold` when every observation is below Medium.
+"""
