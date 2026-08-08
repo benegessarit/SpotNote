@@ -110,6 +110,10 @@ struct SpotlightRootView: View {
         .overlay(surfaceShape.fill(theme.background.opacity(glassTintOpacity)))
     }
     .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
+    // The titled main panel reports its (hidden) titlebar as a top safe-area
+    // inset; the surface must extend under it so the traffic lights sit on the
+    // panel like Raycast Notes instead of floating above it.
+    .ignoresSafeArea(.container, edges: .top)
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
