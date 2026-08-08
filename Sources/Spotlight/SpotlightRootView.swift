@@ -54,7 +54,7 @@ struct SpotlightRootView: View {
   }
 
   private var extraChromeHeight: CGFloat {
-    var total: CGFloat = EditorMetrics.toolbarHeight
+    var total: CGFloat = EditorMetrics.toolbarHeight + EditorMetrics.composerHeight
     if find.isVisible { total += EditorMetrics.findBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
@@ -118,10 +118,10 @@ struct SpotlightRootView: View {
   private var editorCardShape: UnevenRoundedRectangle {
     let flat = hasAttachedBottom
     return UnevenRoundedRectangle(
-      topLeadingRadius: 26,
-      bottomLeadingRadius: flat ? 0 : 26,
-      bottomTrailingRadius: flat ? 0 : 26,
-      topTrailingRadius: 26,
+      topLeadingRadius: 19,
+      bottomLeadingRadius: flat ? 0 : 19,
+      bottomTrailingRadius: flat ? 0 : 19,
+      topTrailingRadius: 19,
       style: .continuous
     )
   }
@@ -136,7 +136,7 @@ struct SpotlightRootView: View {
         onOpenNotes: { fuzzy.toggle(corpus: session.chats) },
         onTogglePin: { preferences.dimOnFocusLoss.toggle() },
         onCycleTheme: cycleTheme,
-        onInsertBullet: insertTrailingBullet,
+        onInsertBullet: { appendBulletLine() },
         onToggleLineNumbers: { preferences.showLineNumbers.toggle() },
         onToggleFind: { find.toggle(text: session.currentText) }
       )
@@ -165,6 +165,7 @@ struct SpotlightRootView: View {
       .padding(.leading, EditorMetrics.leadingInset)
       .padding(.trailing, EditorMetrics.trailingInset)
       .padding(.vertical, EditorMetrics.verticalInset)
+      ComposerBar(theme: theme) { appendBulletLine($0) }
     }
     .glassEffect(
       .regular.tint(theme.background.opacity(glassTintOpacity)),
@@ -183,11 +184,12 @@ struct SpotlightRootView: View {
     preferences.selectedThemeID = themes[(index + 1) % themes.count].id
   }
 
-  /// Appends a fresh `- ` bullet on its own line and moves the caret to it.
-  private func insertTrailingBullet() {
+  /// Appends a fresh `- ` bullet line (optionally pre-filled) and moves the
+  /// caret to its end.
+  private func appendBulletLine(_ content: String = "") {
     var text = session.currentText
     if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
-    text += "- "
+    text += "- " + content
     session.currentText = text
     session.persistIfNeeded()
     focusTrigger.pulseCaretEnd()

@@ -145,9 +145,9 @@ struct ThemePreferencesTests {
 
   @Test("catalog restores neutral and custom themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 15)
+    #expect(ThemeCatalog.darkThemes.count == 16)
     #expect(ThemeCatalog.lightThemes.count == 6)
-    #expect(ThemeCatalog.all.count == 21)
+    #expect(ThemeCatalog.all.count == 22)
   }
 
   @Test("showLineNumbers defaults to false on first launch")

@@ -38,7 +38,7 @@ struct SpotlightRootToastTests {
       EditorMetrics.panelHeight(
         forLines: EditorMetrics.lineCount(in: fixture.session.currentText),
         maxLines: fixture.preferences.maxVisibleLines
-      ) + EditorMetrics.toolbarHeight
+      ) + EditorMetrics.toolbarHeight + EditorMetrics.composerHeight
 
     #expect(fixture.preferences.showHints == true)
     #expect(fixture.recorder.values.last == expectedRootHeight)

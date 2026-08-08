@@ -78,6 +78,7 @@ struct DarkThemePaletteTests {
 
   private func expectedDarkThemeColors() -> [ExpectedThemeColors] {
     [
+      ExpectedThemeColors(id: "slash-dark", body: Color(testHex: 0xFFFFFF), heading: Color(testHex: 0xF2F2F2)),
       ExpectedThemeColors(id: "fahrenheit", body: Color(testHex: 0xFFFFCE), heading: Color(testHex: 0xFD9F4D)),
       ExpectedThemeColors(id: "catppuccin-frappe", body: Color(testHex: 0xC6D0F5), heading: Color(testHex: 0xCA9EE6)),
       ExpectedThemeColors(id: "catppuccin-mocha", body: Color(testHex: 0xCDD6F4), heading: Color(testHex: 0xCBA6F7)),

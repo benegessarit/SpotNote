@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Top HUD chrome: circular controls flanking a segmented formatting pill,
-/// in the macOS 26 Liquid Glass capture-panel layout. Controls use subtle
-/// translucent fills rather than nested `glassEffect` shapes — the panel
-/// itself is the glass surface, and Apple's guidance is not to stack glass
-/// on glass.
+/// Top HUD chrome in the SlashNote capture-panel layout: small circular
+/// controls on the left (close, notes, pin), and a right cluster holding the
+/// segmented formatting pill plus the tag/find circle. Sizing and alpha values
+/// come from the SlashNote site demo CSS (24px circles, white 8% fills,
+/// white 50% glyphs) — controls use flat translucent fills, not nested glass;
+/// the panel itself is the glass surface.
 struct GlassToolbar: View {
   let theme: Theme
   let isPinned: Bool
@@ -17,24 +18,27 @@ struct GlassToolbar: View {
   let onToggleLineNumbers: () -> Void
   let onToggleFind: () -> Void
 
-  private static let controlDiameter: CGFloat = 34
-  private static let segmentWidth: CGFloat = 44
+  private static let controlDiameter: CGFloat = 24
+  private static let segmentWidth: CGFloat = 30
 
   private var controlFill: Color {
-    theme.mode == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)
+    theme.mode == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+  }
+
+  private var glyphColor: Color {
+    theme.text.opacity(0.60)
   }
 
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 6) {
       circleButton("xmark", help: "Close", action: onClose)
       circleButton("doc", help: "Switch note", action: onOpenNotes)
       circleButton(isPinned ? "pin.fill" : "pin", help: "Stay fully visible", action: onTogglePin)
       Spacer(minLength: 0)
       formatPill
-      Spacer(minLength: 0)
       circleButton("number", help: "Find in note", action: onToggleFind)
     }
-    .padding(.horizontal, 14)
+    .padding(.horizontal, 10)
     .frame(height: EditorMetrics.toolbarHeight)
   }
 
@@ -52,13 +56,12 @@ struct GlassToolbar: View {
       )
     }
     .background(Capsule(style: .continuous).fill(controlFill))
-    .overlay(Capsule(style: .continuous).strokeBorder(theme.border, lineWidth: 1))
   }
 
   private var pillDivider: some View {
     Rectangle()
       .fill(theme.border)
-      .frame(width: 1, height: Self.controlDiameter - 14)
+      .frame(width: 1, height: 12)
   }
 
   private func circleButton(
@@ -68,11 +71,10 @@ struct GlassToolbar: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: systemName)
-        .font(.system(size: 14, weight: .medium))
-        .foregroundStyle(theme.text)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(glyphColor)
         .frame(width: Self.controlDiameter, height: Self.controlDiameter)
         .background(Circle().fill(controlFill))
-        .overlay(Circle().strokeBorder(theme.border, lineWidth: 1))
         .contentShape(Circle())
     }
     .buttonStyle(.plain)
@@ -87,8 +89,8 @@ struct GlassToolbar: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: systemName)
-        .font(.system(size: 14, weight: .medium))
-        .foregroundStyle(emphasized ? theme.headingText : theme.text)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(emphasized ? theme.text : glyphColor)
         .frame(width: Self.segmentWidth, height: Self.controlDiameter)
         .contentShape(Rectangle())
     }

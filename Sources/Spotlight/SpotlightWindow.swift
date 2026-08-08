@@ -125,11 +125,11 @@ public final class SpotlightWindowController {
     return height
   }
 
-  /// Layout below the editor card inside the panel -- fuzzy palette or
-  /// nav overlay, mutually exclusive. Used by `focusOrShow` to predict
-  /// SwiftUI's panel height before activating.
+  /// Layout below the editor card inside the panel: the always-present
+  /// composer bar, plus the fuzzy palette when visible. Used by `focusOrShow`
+  /// to predict SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
-    var height: CGFloat = 0
+    var height: CGFloat = EditorMetrics.composerHeight
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
     }

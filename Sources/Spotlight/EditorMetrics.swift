@@ -30,8 +30,12 @@ enum EditorMetrics {
   static let findBarHeight: CGFloat = 40
   /// Fixed height of the top glass toolbar chrome, always present above the
   /// editor. Mirrored into `SpotlightWindowController.chromeAboveEditor` so
-  /// panel-height prediction and the SwiftUI render agree.
-  static let toolbarHeight: CGFloat = 52
+  /// panel-height prediction and the SwiftUI render agree. 40pt matches the
+  /// SlashNote capture-panel header (site demo CSS `h-10`).
+  static let toolbarHeight: CGFloat = 40
+  /// Fixed height of the bottom composer bar inside the card. Mirrored into
+  /// `SpotlightWindowController.chromeBelowEditor`.
+  static let composerHeight: CGFloat = 48
   /// Minimum default row count for the roomy HUD. Keeps short inbox-style
   /// notes open at roughly twice the previous four-line panel height.
   static let roomyVisibleLinesFloor = 9

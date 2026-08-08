@@ -29,7 +29,12 @@ struct EditorMetricsTests {
 
   @Test("glass toolbar reserves fixed chrome height above the editor")
   func toolbarReservesFixedChromeHeight() {
-    #expect(EditorMetrics.toolbarHeight == 52)
+    #expect(EditorMetrics.toolbarHeight == 40)
+  }
+
+  @Test("composer bar reserves fixed chrome height below the editor")
+  func composerReservesFixedChromeHeight() {
+    #expect(EditorMetrics.composerHeight == 48)
   }
 
   @Test("panelHeight stays roomy for short notes before growing")
