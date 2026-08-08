@@ -116,20 +116,19 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel: the always-present glass
-  /// toolbar, plus the find bar when visible. Used to map between `panel.top`
-  /// and `editorTopY`.
+  /// Layout above the editor card inside the panel (find bar when visible).
+  /// Used to map between `panel.top` and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
-    var height: CGFloat = EditorMetrics.toolbarHeight
+    var height: CGFloat = 0
     if findController.isVisible { height += EditorMetrics.findBarHeight }
     return height
   }
 
-  /// Layout below the editor card inside the panel: the always-present
-  /// composer bar, plus the fuzzy palette when visible. Used by `focusOrShow`
-  /// to predict SwiftUI's panel height before activating.
+  /// Layout below the editor card inside the panel -- fuzzy palette or
+  /// nav overlay, mutually exclusive. Used by `focusOrShow` to predict
+  /// SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
-    var height: CGFloat = EditorMetrics.composerHeight
+    var height: CGFloat = 0
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
     }

@@ -135,20 +135,6 @@ enum ThemeCatalog {
     cursor: Color(red: 248 / 255, green: 248 / 255, blue: 242 / 255)  // Foreground
   )
 
-  /// Slash Dark -- palette lifted from the SlashNote capture panel (site demo
-  /// CSS ground truth + pixel-sampled app renders, 2026-08-08): near-black
-  /// #1B1B1B card, white-alpha controls and border, dimmed white placeholder.
-  static let slashDark = Theme(
-    id: "slash-dark",
-    name: "Slash Dark",
-    mode: .dark,
-    background: Color(red: 27 / 255, green: 27 / 255, blue: 27 / 255),
-    border: Color.white.opacity(0.10),
-    text: Color.white.opacity(0.90),
-    headingText: Color(red: 242 / 255, green: 242 / 255, blue: 242 / 255),
-    placeholder: Color.white.opacity(0.25)
-  )
-
   static let nvimDark = Theme(
     id: "nvim-dark",
     name: "Nvim Dark",
@@ -310,8 +296,8 @@ enum ThemeCatalog {
   )
 
   static let darkThemes: [Theme] = [
-    slashDark, fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage,
-    dracula, nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
+    fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula,
+    nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
   ]
   static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes

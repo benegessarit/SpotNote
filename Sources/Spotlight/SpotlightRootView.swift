@@ -9,7 +9,6 @@ final class FocusTrigger: ObservableObject {
   /// current note's text (editor-side plumbing kept for in-app callers).
   @Published private(set) var caretEndTick: Int = 0
   func pulse() { tick &+= 1 }
-  func pulseCaretEnd() { caretEndTick &+= 1 }
 }
 
 struct SpotlightRootView: View {
@@ -54,7 +53,7 @@ struct SpotlightRootView: View {
   }
 
   private var extraChromeHeight: CGFloat {
-    var total: CGFloat = EditorMetrics.toolbarHeight + EditorMetrics.composerHeight
+    var total: CGFloat = 0
     if find.isVisible { total += EditorMetrics.findBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
@@ -106,12 +105,10 @@ struct SpotlightRootView: View {
     fuzzy.isVisible
   }
 
-  // Translucent tint over the Liquid Glass surface: enough theme color to keep
-  // text readable, low enough that the native material shows through like the
-  // Messages sidebar (2026-08-08: David chose native translucency over the old
-  // read-as-solid contract).
-  static let darkGlassTintOpacity = 0.55
-  static let lightGlassTintOpacity = 0.55
+  // Near-opaque tint: the panel should read as a solid surface with only a hint
+  // of the blurred material behind it, not a translucent glass pane.
+  static let darkGlassTintOpacity = 0.90
+  static let lightGlassTintOpacity = 0.90
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
@@ -120,81 +117,49 @@ struct SpotlightRootView: View {
   private var editorCardShape: UnevenRoundedRectangle {
     let flat = hasAttachedBottom
     return UnevenRoundedRectangle(
-      topLeadingRadius: 19,
-      bottomLeadingRadius: flat ? 0 : 19,
-      bottomTrailingRadius: flat ? 0 : 19,
-      topTrailingRadius: 19,
+      topLeadingRadius: 10,
+      bottomLeadingRadius: flat ? 0 : 10,
+      bottomTrailingRadius: flat ? 0 : 10,
+      topTrailingRadius: 10,
       style: .continuous
     )
   }
 
   private var editorCard: some View {
-    VStack(spacing: 0) {
-      GlassToolbar(
-        theme: theme,
-        isPinned: !preferences.dimOnFocusLoss,
-        showsLineNumbers: preferences.showLineNumbers,
-        onClose: onEscape,
-        onOpenNotes: { fuzzy.toggle(corpus: session.chats) },
-        onTogglePin: { preferences.dimOnFocusLoss.toggle() },
-        onCycleTheme: cycleTheme,
-        onInsertBullet: { appendBulletLine() },
-        onToggleLineNumbers: { preferences.showLineNumbers.toggle() },
-        onToggleFind: { find.toggle(text: session.currentText) }
-      )
-      MultilineEditor(
-        text: editorText,
-        checklistLines: session.currentChecklistLines,
-        onChecklistLinesChange: { session.updateChecklistLines($0) },
-        theme: theme,
-        placeholder: editorPlaceholder,
-        showLineNumbers: preferences.showLineNumbers,
-        font: editorFont,
-        focusRequest: focusTrigger.tick,
-        caretEndRequest: focusTrigger.caretEndTick,
-        maxVisibleLines: preferences.maxVisibleLines,
-        extraChromeHeight: extraChromeHeight,
-        findHighlight: find.currentMatch,
-        vimModeEnabled: preferences.vimMode,
-        vimController: vimController,
-        onEscape: onEscape,
-        onSendLinearTask: onSendLinearTask,
-        onAppendDailyNote: onAppendDailyNote,
-        onAppendTrayNote: onAppendTrayNote,
-        onAppendStateNote: onAppendStateNote,
-        onHeightChange: onHeightChange
-      )
-      .padding(.leading, EditorMetrics.leadingInset)
-      .padding(.trailing, EditorMetrics.trailingInset)
-      .padding(.vertical, EditorMetrics.verticalInset)
-      ComposerBar(theme: theme) { appendBulletLine($0) }
-    }
-    .glassEffect(
-      .regular.tint(theme.background.opacity(glassTintOpacity)),
-      in: editorCardShape
+    MultilineEditor(
+      text: editorText,
+      checklistLines: session.currentChecklistLines,
+      onChecklistLinesChange: { session.updateChecklistLines($0) },
+      theme: theme,
+      placeholder: editorPlaceholder,
+      showLineNumbers: preferences.showLineNumbers,
+      font: editorFont,
+      focusRequest: focusTrigger.tick,
+      caretEndRequest: focusTrigger.caretEndTick,
+      maxVisibleLines: preferences.maxVisibleLines,
+      extraChromeHeight: extraChromeHeight,
+      findHighlight: find.currentMatch,
+      vimModeEnabled: preferences.vimMode,
+      vimController: vimController,
+      onEscape: onEscape,
+      onSendLinearTask: onSendLinearTask,
+      onAppendDailyNote: onAppendDailyNote,
+      onAppendTrayNote: onAppendTrayNote,
+      onAppendStateNote: onAppendStateNote,
+      onHeightChange: onHeightChange
     )
+    .padding(.leading, EditorMetrics.leadingInset)
+    .padding(.trailing, EditorMetrics.trailingInset)
+    .padding(.vertical, EditorMetrics.verticalInset)
+    .background {
+      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+        .clipShape(editorCardShape)
+        .overlay(editorCardShape.fill(theme.background.opacity(glassTintOpacity)))
+    }
     .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
     .padding(.top, EditorMetrics.outerPadding)
     .padding(.horizontal, EditorMetrics.outerPadding)
     .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
-  }
-
-  private func cycleTheme() {
-    let themes = ThemeCatalog.all
-    guard !themes.isEmpty else { return }
-    let index = themes.firstIndex { $0.id == preferences.selectedThemeID } ?? -1
-    preferences.selectedThemeID = themes[(index + 1) % themes.count].id
-  }
-
-  /// Appends a fresh `- ` bullet line (optionally pre-filled) and moves the
-  /// caret to its end.
-  private func appendBulletLine(_ content: String = "") {
-    var text = session.currentText
-    if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
-    text += "- " + content
-    session.currentText = text
-    session.persistIfNeeded()
-    focusTrigger.pulseCaretEnd()
   }
 
   private var editorPlaceholder: String {

@@ -16,7 +16,7 @@ Do not install from `.hermes/kanban`, `.paperclip-*`, `/tmp`, or other disposabl
 
 ## Requirements
 
-macOS 26+ (Liquid Glass chrome), Xcode 26+ (Swift 6 toolchain).
+macOS 14+, Xcode 16+ (Swift 6 toolchain).
 
 ## Quick start
 

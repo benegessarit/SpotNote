@@ -34,14 +34,13 @@ struct SpotlightRootToastTests {
     try await waitUntil { !fixture.recorder.values.isEmpty }
     await settleSwiftUI()
     let stableCallbackCount = fixture.recorder.values.count
-    let expectedRootHeight =
-      EditorMetrics.panelHeight(
-        forLines: EditorMetrics.lineCount(in: fixture.session.currentText),
-        maxLines: fixture.preferences.maxVisibleLines
-      ) + EditorMetrics.toolbarHeight + EditorMetrics.composerHeight
+    let expectedEditorHeight = EditorMetrics.panelHeight(
+      forLines: EditorMetrics.lineCount(in: fixture.session.currentText),
+      maxLines: fixture.preferences.maxVisibleLines
+    )
 
     #expect(fixture.preferences.showHints == true)
-    #expect(fixture.recorder.values.last == expectedRootHeight)
+    #expect(fixture.recorder.values.last == expectedEditorHeight)
 
     fixture.preferences.showHints = false
     await settleSwiftUI()

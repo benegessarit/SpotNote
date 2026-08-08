@@ -1,9 +1,9 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
   name: "SpotNote",
-  platforms: [.macOS(.v26)],
+  platforms: [.macOS(.v14)],
   products: [
     .executable(name: "SpotNoteApp", targets: ["SpotNoteApp"])
   ],
