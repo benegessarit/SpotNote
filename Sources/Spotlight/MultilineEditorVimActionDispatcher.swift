@@ -60,6 +60,8 @@ enum VimActionDispatcher {
     case .enterLineFlash(let count):
       view.vimController?.enterPrompt(.lineFlash(count: count))
       view.refreshLineFlashHints()
+    case .enterWordHint:
+      view.enterWordHintPrompt()
     case .findNext: view.vimController?.findStep(1)
     case .findPrevious: view.vimController?.findStep(-1)
     default: return false

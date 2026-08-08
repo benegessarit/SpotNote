@@ -70,6 +70,8 @@ extension PlaceholderTextView {
     switch controller.prompt?.kind {
     case .flash, .lineFlash:
       return handleFlashPromptKey(event: event, controller: controller, mods: mods)
+    case .wordHint:
+      return handleWordHintPromptKey(event: event, controller: controller, mods: mods)
     default:
       break
     }
@@ -310,7 +312,7 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
-  private func linewiseRange(from anchor: Int, to caret: Int) -> NSRange {
+  func linewiseRange(from anchor: Int, to caret: Int) -> NSRange {
     let nsString = string as NSString
     let lo = min(anchor, caret)
     let hi = max(anchor, caret)

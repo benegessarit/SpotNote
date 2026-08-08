@@ -48,7 +48,7 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
-  private func characterwiseRange(from anchor: Int, to caret: Int) -> NSRange {
+  func characterwiseRange(from anchor: Int, to caret: Int) -> NSRange {
     let length = (string as NSString).length
     guard length > 0 else { return NSRange(location: 0, length: 0) }
     let clampedAnchor = min(max(0, anchor), length)

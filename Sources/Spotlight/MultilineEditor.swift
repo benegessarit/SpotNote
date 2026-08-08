@@ -657,6 +657,8 @@ final class PlaceholderTextView: NSTextView {
   var flashLabelBuffer: String = ""
   var isShowingLineFlashHints = false
   var flashTemporaryAttributeRanges: [NSRange] = []
+  var wordHintTargets: [VimFlashTarget] = []
+  var wordHintBuffer: String = ""
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -1906,6 +1908,7 @@ final class PlaceholderTextView: NSTextView {
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
     drawFlashHints(in: dirtyRect)
+    drawWordHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [

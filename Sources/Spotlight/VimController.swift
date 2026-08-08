@@ -9,6 +9,7 @@ final class VimController: ObservableObject {
     case search
     case flash(VimFlashDirection, count: Int, scope: VimFlashScope)
     case lineFlash(count: Int)
+    case wordHint
   }
 
   enum MessageKind: Equatable { case info, success, error }
@@ -129,7 +130,7 @@ final class VimController: ObservableObject {
       } else {
         applySearchOutcome(searchHandler?(buffer))
       }
-    case .flash, .lineFlash:
+    case .flash, .lineFlash, .wordHint:
       return true
     }
     return true

@@ -309,13 +309,10 @@ struct VimEngineTests {
     #expect(engine.mode == .insert)
   }
 
-  @Test("s opens a whole-document forward Flash jump prompt")
-  func flashForwardPrompt() {
+  @Test("s opens the hop-style word-hint jump")
+  func wordHintPrompt() {
     let engine = VimEngine()
-    #expect(
-      engine.handle(key: "s", hasModifiers: false)
-        == .enterFlash(.forward, count: 1, scope: .document)
-    )
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterWordHint)
     #expect(engine.mode == .normal)
   }
 
@@ -361,8 +358,8 @@ struct VimEngineTests {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
     #expect(
-      engine.handle(key: "s", hasModifiers: false)
-        == .enterFlash(.forward, count: 3, scope: .document)
+      engine.handle(key: "f", hasModifiers: false)
+        == .enterFlash(.forward, count: 3, scope: .currentLine)
     )
     #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }

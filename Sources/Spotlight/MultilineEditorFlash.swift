@@ -247,10 +247,13 @@ extension PlaceholderTextView {
   func clearFlashHints() {
     guard
       !flashHints.isEmpty || !flashLabelBuffer.isEmpty || isShowingLineFlashHints
-        || !flashTemporaryAttributeRanges.isEmpty
+        || !flashTemporaryAttributeRanges.isEmpty || !wordHintTargets.isEmpty
+        || !wordHintBuffer.isEmpty
     else { return }
     flashHints = []
     flashLabelBuffer = ""
+    wordHintTargets = []
+    wordHintBuffer = ""
     isShowingLineFlashHints = false
     clearFlashTextAppearance()
     invalidateLineFlashRuler()

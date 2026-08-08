@@ -46,6 +46,7 @@ enum VimAction: Equatable, Sendable {
   case findPrevious
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
+  case enterWordHint
   case sendCurrentTaskToLinear(
     status: LinearTaskTargetStatus,
     workspace: LinearTaskWorkspace,
@@ -202,7 +203,7 @@ final class VimEngine {
 
   private func flashAction(for key: String, count: Int) -> VimAction? {
     switch key {
-    case "s": return .enterFlash(.forward, count: count, scope: .document)
+    case "s": return .enterWordHint
     case "S": return .enterFlash(.backward, count: count, scope: .document)
     case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
     case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
@@ -320,9 +321,11 @@ extension VimEngine {
     case "d", "x":
       mode = .normal
       return .deleteVisualLineSelection
-    case "c", "s":
+    case "c":
       mode = .insert
       return .changeVisualLineSelection
+    case "s":
+      return .enterWordHint
     default:
       return .none
     }
@@ -397,9 +400,11 @@ extension VimEngine {
     case "d", "x":
       mode = .normal
       return .deleteVisualSelection
-    case "c", "s":
+    case "c":
       mode = .insert
       return .changeVisualSelection
+    case "s":
+      return .enterWordHint
     default:
       return .none
     }

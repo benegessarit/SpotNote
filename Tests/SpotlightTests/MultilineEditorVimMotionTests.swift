@@ -373,18 +373,59 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.flashHints.map(\.location) == [secondLineStart + 3, secondLineStart + 5, secondLineStart + 9])
   }
 
-  @Test("s keyDown starts a dimmed Flash prompt without entering s into the query")
+  @Test("f keyDown starts a dimmed Flash prompt without entering f into the query")
   func flashTriggerStartsEmptyDimmedPrompt() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")
     let controller = VimController()
     textView.attachVimController(controller)
     textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
 
     #expect(controller.prompt?.buffer.isEmpty == true)
     #expect(textView.flashHints.isEmpty)
     #expect(temporaryForegroundColor(at: 0, in: textView) != nil)
+  }
+
+  @Test("s keyDown labels every word start instantly and a label key jumps")
+  func wordHintKeyDownLabelsAndJumps() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+
+    #expect(controller.prompt?.kind == .wordHint)
+    #expect(textView.wordHintTargets.map(\.location) == [0, 6, 11])
+    #expect(textView.wordHintTargets.map(\.label) == ["a", "s", "d"])
+    #expect(temporaryForegroundColor(at: 3, in: textView) != nil)
+
+    textView.keyDown(with: keyEvent(characters: "d", ignoring: "d", keyCode: 2))
+
+    #expect(controller.prompt == nil)
+    #expect(textView.wordHintTargets.isEmpty)
+    #expect(textView.selectedRange.location == 11)
+    #expect(temporaryForegroundColor(at: 3, in: textView) == nil)
+  }
+
+  @Test("word-hint escape cancels without moving the caret")
+  func wordHintEscapeCancels() {
+    let textView = makeVimMotionTextView(text: "alpha beta gamma")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.vimModeEnabled = true
+    textView.setSelectedRange(NSRange(location: 2, length: 0))
+
+    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    #expect(controller.prompt?.kind == .wordHint)
+    textView.keyDown(with: keyEvent(characters: "\u{1B}", ignoring: "\u{1B}", keyCode: 53))
+
+    #expect(controller.prompt == nil)
+    #expect(textView.wordHintTargets.isEmpty)
+    #expect(textView.selectedRange.location == 2)
   }
 
   @Test("regular Flash colors typed query characters before showing labels")
@@ -395,7 +436,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.vimModeEnabled = true
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
     textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
 
     let firstTargetLocation = ("x " as NSString).length
@@ -415,7 +456,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.vimModeEnabled = true
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
     textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
     textView.keyDown(with: keyEvent(characters: "o", ignoring: "o", keyCode: 31))
 
@@ -425,7 +466,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
   }
 
-  @Test("s query plus visible label keyDown jumps and clears Flash")
+  @Test("f query plus visible label keyDown jumps and clears Flash")
   func flashKeyDownQueryAndLabelJumps() {
     let textView = makeVimMotionTextView(text: "zero alpha beta alpha")
     let controller = VimController()
@@ -433,7 +474,7 @@ struct MultilineEditorVimLogicalLineMotionTests {
     textView.vimModeEnabled = true
     textView.setSelectedRange(NSRange(location: 0, length: 0))
 
-    textView.keyDown(with: keyEvent(characters: "s", ignoring: "s", keyCode: 1))
+    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
     textView.keyDown(with: keyEvent(characters: "a", ignoring: "a", keyCode: 0))
     textView.keyDown(with: keyEvent(characters: "l", ignoring: "l", keyCode: 37))
     let firstTarget = textView.flashHints[0]
