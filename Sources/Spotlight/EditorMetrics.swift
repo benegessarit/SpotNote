@@ -28,6 +28,10 @@ enum EditorMetrics {
   static let panelWidth: CGFloat = 760
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
+  /// Fixed height of the top glass toolbar chrome, always present above the
+  /// editor. Mirrored into `SpotlightWindowController.chromeAboveEditor` so
+  /// panel-height prediction and the SwiftUI render agree.
+  static let toolbarHeight: CGFloat = 52
   /// Minimum default row count for the roomy HUD. Keeps short inbox-style
   /// notes open at roughly twice the previous four-line panel height.
   static let roomyVisibleLinesFloor = 9

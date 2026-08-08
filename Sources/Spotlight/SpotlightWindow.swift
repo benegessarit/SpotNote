@@ -116,10 +116,11 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel (find bar when visible).
-  /// Used to map between `panel.top` and `editorTopY`.
+  /// Layout above the editor card inside the panel: the always-present glass
+  /// toolbar, plus the find bar when visible. Used to map between `panel.top`
+  /// and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
-    var height: CGFloat = 0
+    var height: CGFloat = EditorMetrics.toolbarHeight
     if findController.isVisible { height += EditorMetrics.findBarHeight }
     return height
   }

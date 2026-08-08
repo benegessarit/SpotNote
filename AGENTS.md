@@ -26,6 +26,7 @@ The local David build intentionally differs from upstream SpotNote:
 - Short notes open roomy/tall: `EditorMetrics.roomyVisibleLinesFloor == 9`, which makes the four-line inbox panel about 2x the old height.
 - The HUD opens in the bottom-right corner of the visible frame, inset by `SpotlightWindowController.defaultEdgeInset` from the right and bottom edges, and is bottom-anchored so it grows upward as content reflows. Guarded by `SpotlightWindowControllerTests.defaultHUDOriginHugsRightEdge` and `defaultHUDOriginHugsBottomEdge`.
 - The editor card has no top-right copy icon; keep copy available through keyboard/menu actions instead of visible chrome.
+- The HUD is a macOS 26 Liquid Glass shell: the card background is `glassEffect` with the theme's near-opaque tint (radius-26 continuous corners), and a fixed `GlassToolbar` (`EditorMetrics.toolbarHeight == 52`) sits above the editor — X dismisses, doc opens the fuzzy note switcher, pin toggles `dimOnFocusLoss`, the center pill cycles themes / inserts a trailing `- ` bullet / toggles line numbers, and `#` toggles the find bar. Toolbar height is mirrored in both `SpotlightRootView.extraChromeHeight` and `SpotlightWindowController.chromeAboveEditor`; the old `SpotNoteVisualEffectView` NSVisualEffectView wrapper is deleted.
 
 ## Safe edit flow
 
