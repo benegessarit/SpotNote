@@ -7,16 +7,13 @@ import SwiftUI
 
 @MainActor
 public final class SpotlightWindowController {
-  /// Borderless mask for the auxiliary panels (toast, fuzzy preview).
+  /// Borderless mask for every panel (main HUD, toast, fuzzy preview).
+  /// The Raycast-style traffic lights are drawn by `RaycastTrafficLights`
+  /// in SwiftUI -- Raycast Notes positions and colors its own lights, and
+  /// a titled window cannot reproduce them (wrong offsets, no hide-on-
+  /// resign), so the shell owns them instead of AppKit.
   nonisolated static let panelStyleMask: NSWindow.StyleMask = [
     .borderless, .fullSizeContentView
-  ]
-  /// The MAIN panel only: titled + closable gives real traffic lights
-  /// (red active; minimize/zoom render disabled, matching Raycast Notes),
-  /// and `.fullSizeContentView` keeps the SwiftUI surface full-bleed under
-  /// the hidden title bar so the frame still equals the content size.
-  nonisolated static let mainPanelStyleMask: NSWindow.StyleMask = [
-    .titled, .closable, .fullSizeContentView
   ]
   /// `.screenSaver` keeps the HUD above the window layers used by
   /// fullscreen apps. Lower levels such as `.floating` and `.statusBar`
@@ -61,6 +58,7 @@ public final class SpotlightWindowController {
   private var fuzzyPreviewPanel: FuzzyPreviewPanel?
   private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
+  private let keyState = PanelKeyState()
   let preferences: ThemePreferences
   let session: ChatSession
   private let shortcuts: ShortcutStore
@@ -442,19 +440,15 @@ public final class SpotlightWindowController {
     let size = NSSize(width: EditorMetrics.panelWidth, height: initialHeight)
     let panel = SpotlightPanel(
       contentRect: NSRect(origin: .zero, size: size),
-      styleMask: Self.mainPanelStyleMask,
+      styleMask: Self.panelStyleMask,
       backing: .buffered,
       defer: false
     )
     Self.configurePanel(panel)
-    panel.titleVisibility = .hidden
-    panel.titlebarAppearsTransparent = true
-    // The red button must run the controller's close path (restore the
-    // previous app, notify onDidHideHUD) instead of AppKit's bare close.
-    panel.onCloseRequest = { [weak self] in self?.close() }
     panel.contentView = NSHostingView(
       rootView: SpotlightRootView(
         focusTrigger: focusTrigger,
+        keyState: keyState,
         preferences: preferences,
         session: session,
         shortcuts: shortcuts,
@@ -632,6 +626,7 @@ extension SpotlightWindowController {
       ) { [weak self, weak panel] _ in
         MainActor.assumeIsolated {
           guard let self else { return }
+          self.keyState.isKey = false
           if self.preferences.dimOnFocusLoss {
             panel?.animator().alphaValue = CGFloat(self.preferences.unfocusedOpacity)
           } else {
@@ -648,7 +643,10 @@ extension SpotlightWindowController {
       ) { [weak self, weak panel] _ in
         MainActor.assumeIsolated {
           panel?.animator().alphaValue = 1.0
-          if let self, let panel { self.correctDriftIfNeeded(panel) }
+          if let self, let panel {
+            self.keyState.isKey = true
+            self.correctDriftIfNeeded(panel)
+          }
         }
       }
     )

@@ -304,9 +304,9 @@ enum ThemeCatalog {
     mode: .dark,
     background: Color(red: 0x23 / 255, green: 0x26 / 255, blue: 0x33 / 255),
     border: Color(red: 1, green: 1, blue: 1).opacity(0.10),
-    text: Color(red: 0xEC / 255, green: 0xEF / 255, blue: 0xF6 / 255),
+    text: Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255),
     headingText: Color(red: 0x9C / 255, green: 0xC3 / 255, blue: 0xFF / 255),
-    placeholder: Color(red: 0x6E / 255, green: 0x73 / 255, blue: 0x80 / 255),
+    placeholder: Color(red: 0x57 / 255, green: 0x5B / 255, blue: 0x6E / 255),
     cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255)
   )
 

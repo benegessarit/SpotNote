@@ -190,7 +190,7 @@ struct ThemePreferencesTests {
 
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
     #expect(defaultCap == restingRows * 2 + 10)
-    #expect(prefs.maxVisibleLines == 32)
+    #expect(prefs.maxVisibleLines == 22)
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap + 1, maxLines: defaultCap)
         == EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)

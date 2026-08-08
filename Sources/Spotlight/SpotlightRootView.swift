@@ -11,8 +11,16 @@ final class FocusTrigger: ObservableObject {
   func pulse() { tick &+= 1 }
 }
 
+/// Published key-window state for the main panel, driving the Raycast
+/// chrome's resigned look (lights/pill/theme button hide, title dims).
+@MainActor
+final class PanelKeyState: ObservableObject {
+  @Published var isKey = false
+}
+
 struct SpotlightRootView: View {
   @ObservedObject var focusTrigger: FocusTrigger
+  @ObservedObject var keyState: PanelKeyState
   @ObservedObject var preferences: ThemePreferences
   @ObservedObject var session: ChatSession
   @ObservedObject var shortcuts: ShortcutStore
@@ -73,6 +81,8 @@ struct SpotlightRootView: View {
       RaycastTopBar(
         title: noteTitle,
         theme: theme,
+        isKey: keyState.isKey,
+        onClose: onEscape,
         onShowShortcuts: { shortcutsPopoverShown = true },
         onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
         onNewNote: {
@@ -99,6 +109,7 @@ struct SpotlightRootView: View {
       RaycastBottomBar(
         characterCount: session.currentText.count,
         theme: theme,
+        isKey: keyState.isKey,
         preferences: preferences,
         themePickerShown: $themePickerShown
       )
@@ -108,12 +119,9 @@ struct SpotlightRootView: View {
       SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
         .clipShape(surfaceShape)
         .overlay(surfaceShape.fill(theme.background.opacity(glassTintOpacity)))
+        .overlay(surfaceShape.fill(topWashGradient))
     }
     .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
-    // The titled main panel reports its (hidden) titlebar as a top safe-area
-    // inset; the surface must extend under it so the traffic lights sit on the
-    // panel like Raycast Notes instead of floating above it.
-    .ignoresSafeArea(.container, edges: .top)
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
@@ -158,6 +166,19 @@ struct SpotlightRootView: View {
   /// panel; the bars and editor all sit on this single sheet.
   private var surfaceShape: RoundedRectangle {
     RoundedRectangle(cornerRadius: EditorMetrics.surfaceCornerRadius, style: .continuous)
+  }
+
+  /// Raycast Notes' top-lit wash: the surface is ~5/255 lighter at the very
+  /// top, fading to the base color about a third of the way down.
+  private var topWashGradient: LinearGradient {
+    LinearGradient(
+      stops: [
+        .init(color: Color.white.opacity(0.022), location: 0),
+        .init(color: Color.white.opacity(0), location: 0.35)
+      ],
+      startPoint: .top,
+      endPoint: .bottom
+    )
   }
 
   private var editorCard: some View {

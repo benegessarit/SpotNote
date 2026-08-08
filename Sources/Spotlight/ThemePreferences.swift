@@ -6,11 +6,13 @@ import SwiftUI
 @MainActor
 public final class ThemePreferences: ObservableObject {
   public static let minVisibleLines = 1
-  public static let maxVisibleLinesCap = 40
+  /// 22 rows at the 41pt Raycast line pitch is the tallest editor that
+  /// still fits under the menu bar on the built-in display.
+  public static let maxVisibleLinesCap = 22
   /// Default growth cap before the editor scrolls. Short notes still open
-  /// at the 9-row resting floor, while longer notes can expand well beyond
+  /// at the resting floor, while longer notes can expand well beyond
   /// that before scrolling.
-  public static let defaultVisibleLines = 32
+  public static let defaultVisibleLines = 22
 
   private enum Key {
     static let selectedID = "theme.selected.id"

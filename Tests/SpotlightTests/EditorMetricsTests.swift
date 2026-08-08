@@ -79,23 +79,25 @@ struct EditorMetricsTests {
 
   @Test("editor metrics use the Raycast Notes body scale")
   func raycastNotesBodyScale() {
-    #expect(EditorMetrics.fontSize == 15)
-    #expect(EditorMetrics.lineHeight == 26)
+    #expect(EditorMetrics.fontSize == 20)
+    #expect(EditorMetrics.lineHeight == 41)
     #expect(EditorMetrics.panelWidth == 670)
     #expect(EditorMetrics.surfaceCornerRadius == 16)
+    #expect(EditorMetrics.topBarHeight == 60)
+    #expect(EditorMetrics.bottomBarHeight == 56)
   }
 
   @Test("short notes open at roughly the Raycast Notes window height")
   func shortNotesOpenRoomy() {
-    let oldFourLineHeight =
-      CGFloat(4) * EditorMetrics.lineHeight
-      + EditorMetrics.verticalInset * 2
-      + EditorMetrics.outerPadding * 2
-    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 12)
+    let openHeight = EditorMetrics.panelHeight(forLines: 1, maxLines: 12)
+    let totalRestingHeight =
+      openHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
-    #expect(EditorMetrics.roomyVisibleLinesFloor == 11)
-    #expect(openHeight == EditorMetrics.panelHeight(forLines: 11, maxLines: 12))
-    #expect(openHeight >= oldFourLineHeight * 1.95)
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 6)
+    #expect(openHeight == EditorMetrics.panelHeight(forLines: 6, maxLines: 12))
+    // The live Raycast Notes window David compared against is ~388pt tall.
+    #expect(totalRestingHeight >= 370)
+    #expect(totalRestingHeight <= 430)
   }
 
   @Test("task editor keeps restored breathing room before text")

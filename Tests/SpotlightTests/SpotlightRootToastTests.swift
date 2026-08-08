@@ -112,6 +112,7 @@ struct SpotlightRootToastTests {
     let preferences = ThemePreferences(defaults: defaults)
     return SpotlightRootView(
       focusTrigger: FocusTrigger(),
+      keyState: PanelKeyState(),
       preferences: preferences,
       session: ChatSession(store: try ChatStore(directory: tmpDir)),
       shortcuts: ShortcutStore(defaults: defaults),
