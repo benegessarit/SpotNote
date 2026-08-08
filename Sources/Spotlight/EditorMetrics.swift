@@ -4,11 +4,21 @@ import CoreGraphics
 enum EditorMetrics {
   /// Line height used by both the panel-sizing code and the editor's
   /// paragraph style, so rendered text and the panel cap agree exactly.
-  static let lineHeight: CGFloat = 36
+  static let lineHeight: CGFloat = 26
   /// Vertical padding between the content area and the rounded-card edge.
-  static let verticalInset: CGFloat = 16
-  /// Padding between the rounded card and the panel edge (shadow gutter).
-  static let outerPadding: CGFloat = 4
+  static let verticalInset: CGFloat = 12
+  /// The Raycast-style shell is full-bleed: the surface fills the panel,
+  /// so there is no shadow gutter between card and panel edge.
+  static let outerPadding: CGFloat = 0
+  /// Corner radius of the full-bleed panel surface (Raycast Notes look).
+  static let surfaceCornerRadius: CGFloat = 16
+  /// Fixed height of the Raycast-style title bar (traffic lights, centered
+  /// note title, trailing icon pill). Mirrored by the window controller's
+  /// `chromeAboveEditor`.
+  static let topBarHeight: CGFloat = 44
+  /// Fixed height of the Raycast-style bottom bar (character counter,
+  /// theme button). Mirrored by the window controller's `chromeBelowEditor`.
+  static let bottomBarHeight: CGFloat = 40
   /// Leading padding inside the rounded card. Keep this at zero so the
   /// ruler itself owns the nvim-style sign column from the card edge.
   static let leadingInset: CGFloat = 0
@@ -19,18 +29,19 @@ enum EditorMetrics {
   /// numbers are hidden. Keeps text comfortably off the card edge without
   /// reintroducing a checkbox gutter.
   static let textLeadingGap: CGFloat = 32
-  /// Font size used for the editor text.
-  static let fontSize: CGFloat = 22
+  /// Font size used for the editor text (Raycast Notes body scale).
+  static let fontSize: CGFloat = 15
   /// Vim-normal-mode block cursor width. This intentionally reads like a
   /// real block cursor instead of AppKit's default one-pixel insertion bar.
   static let normalModeCursorWidth: CGFloat = 13
-  /// Panel width.
-  static let panelWidth: CGFloat = 760
+  /// Panel width (Raycast Notes window width).
+  static let panelWidth: CGFloat = 670
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
-  /// Minimum default row count for the roomy HUD. Keeps short inbox-style
-  /// notes open at roughly twice the previous four-line panel height.
-  static let roomyVisibleLinesFloor = 9
+  /// Minimum default row count for the roomy HUD. Tuned so a short note
+  /// opens at roughly the Raycast Notes window height at the 26pt line
+  /// pitch.
+  static let roomyVisibleLinesFloor = 11
 
   /// Panel height for `lines` display rows, clamped to the user-selected
   /// visible-line cap while keeping short notes at the default roomy size.

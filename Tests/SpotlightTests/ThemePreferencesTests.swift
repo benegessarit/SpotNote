@@ -145,9 +145,9 @@ struct ThemePreferencesTests {
 
   @Test("catalog restores neutral and custom themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 15)
+    #expect(ThemeCatalog.darkThemes.count == 16)
     #expect(ThemeCatalog.lightThemes.count == 6)
-    #expect(ThemeCatalog.all.count == 21)
+    #expect(ThemeCatalog.all.count == 22)
   }
 
   @Test("showLineNumbers defaults to false on first launch")
@@ -190,7 +190,7 @@ struct ThemePreferencesTests {
 
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
     #expect(defaultCap == restingRows * 2 + 10)
-    #expect(prefs.maxVisibleLines == 28)
+    #expect(prefs.maxVisibleLines == 32)
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap + 1, maxLines: defaultCap)
         == EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)

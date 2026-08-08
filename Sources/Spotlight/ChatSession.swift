@@ -124,6 +124,14 @@ final class ChatSession: ObservableObject {
     ChecklistDocument.serializeMarkdown(text: currentText, checklistLines: currentChecklistLines)
   }
 
+  /// Title-bar `+` button: persist the current note, then open a fresh
+  /// blank app-local chat.
+  func newNote() async {
+    persistIfNeeded()
+    await flush()
+    _ = await createBlankChat()
+  }
+
   private func createBlankChat(initialText: String = "") async -> Bool {
     guard let chat = try? await store.create() else { return false }
     currentID = chat.id

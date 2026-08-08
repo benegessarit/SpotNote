@@ -295,9 +295,24 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
   )
 
+  /// Raycast Notes -- pixel-sampled from the live Raycast Beta Notes
+  /// window (slate-navy surface, near-white body, dim grey counter text,
+  /// Raycast-red caret). The default theme for the Raycast-style shell.
+  static let raycastDark = Theme(
+    id: "raycast-dark",
+    name: "Raycast Dark",
+    mode: .dark,
+    background: Color(red: 0x23 / 255, green: 0x26 / 255, blue: 0x33 / 255),
+    border: Color(red: 1, green: 1, blue: 1).opacity(0.10),
+    text: Color(red: 0xEC / 255, green: 0xEF / 255, blue: 0xF6 / 255),
+    headingText: Color(red: 0x9C / 255, green: 0xC3 / 255, blue: 0xFF / 255),
+    placeholder: Color(red: 0x6E / 255, green: 0x73 / 255, blue: 0x80 / 255),
+    cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255)
+  )
+
   static let darkThemes: [Theme] = [
-    fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula,
-    nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
+    raycastDark, fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage,
+    mirage, dracula, nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
   ]
   static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes

@@ -56,11 +56,11 @@ struct EditorMetricsTests {
 
   @Test("panelHeight grows with a larger maxLines")
   func panelHeightHonoursLargerMax() {
-    let capped = EditorMetrics.panelHeight(forLines: 10, maxLines: 3)
-    let expanded = EditorMetrics.panelHeight(forLines: 10, maxLines: 10)
-    let wayBigger = EditorMetrics.panelHeight(forLines: 10, maxLines: 30)
+    let capped = EditorMetrics.panelHeight(forLines: 12, maxLines: 3)
+    let expanded = EditorMetrics.panelHeight(forLines: 12, maxLines: 12)
+    let wayBigger = EditorMetrics.panelHeight(forLines: 12, maxLines: 30)
     #expect(expanded > capped)
-    #expect(wayBigger == expanded, "row-count hits the ceiling at 10 when maxLines >= 10")
+    #expect(wayBigger == expanded, "row-count hits the ceiling at 12 when maxLines >= 12")
   }
 
   @Test("panelHeight treats zero and negative line counts as one line")
@@ -77,23 +77,24 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
 
-  @Test("editor metrics use the slightly smaller nvim-style HUD scale")
-  func slightlySmallerNvimStyleScale() {
-    #expect(EditorMetrics.fontSize == 22)
-    #expect(EditorMetrics.lineHeight >= 34)
-    #expect(EditorMetrics.panelWidth >= 720)
+  @Test("editor metrics use the Raycast Notes body scale")
+  func raycastNotesBodyScale() {
+    #expect(EditorMetrics.fontSize == 15)
+    #expect(EditorMetrics.lineHeight == 26)
+    #expect(EditorMetrics.panelWidth == 670)
+    #expect(EditorMetrics.surfaceCornerRadius == 16)
   }
 
-  @Test("short notes open at roughly twice the old four-line HUD height")
-  func shortNotesOpenAtDoubleHeight() {
+  @Test("short notes open at roughly the Raycast Notes window height")
+  func shortNotesOpenRoomy() {
     let oldFourLineHeight =
       CGFloat(4) * EditorMetrics.lineHeight
       + EditorMetrics.verticalInset * 2
       + EditorMetrics.outerPadding * 2
-    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 10)
+    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 12)
 
-    #expect(EditorMetrics.roomyVisibleLinesFloor == 9)
-    #expect(openHeight == EditorMetrics.panelHeight(forLines: 9, maxLines: 10))
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 11)
+    #expect(openHeight == EditorMetrics.panelHeight(forLines: 11, maxLines: 12))
     #expect(openHeight >= oldFourLineHeight * 1.95)
   }
 

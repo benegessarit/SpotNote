@@ -16,12 +16,6 @@ struct FontLoaderTests {
     #expect(Bool(true))
   }
 
-  @Test("editor font requests MonoLisa by PostScript name, IBM Plex Mono as fallback")
-  func editorFontRequestsMonoLisa() {
-    #expect(SpotNoteFont.editorFontName == "MonoLisa-Regular")
-    #expect(SpotNoteFont.fallbackFontName == "IBMPlexMono")
-  }
-
   @Test("IBM Plex Mono regular is bundled as a Spotlight resource")
   func ibmPlexMonoRegularIsBundled() throws {
     let url = try #require(
@@ -33,17 +27,11 @@ struct FontLoaderTests {
     #expect(url.lastPathComponent == "IBMPlexMono-Regular.ttf")
   }
 
-  @Test("editor font resolves to MonoLisa, then IBM Plex Mono, then any fixed pitch")
-  func editorFontResolvesToMonoLisa() {
-    let font = SpotNoteFont.editor(size: 22)
-    if NSFont(name: SpotNoteFont.editorFontName, size: 22) != nil {
-      #expect(font.fontName == SpotNoteFont.editorFontName)
-      #expect(font.familyName == "MonoLisa")
-    } else if NSFont(name: SpotNoteFont.fallbackFontName, size: 22) != nil {
-      #expect(font.fontName == SpotNoteFont.fallbackFontName)
-      #expect(font.familyName == "IBM Plex Mono")
-    } else {
-      #expect(font.isFixedPitch)
-    }
+  @Test("editor font is the system sans at the Raycast body scale")
+  func editorFontIsSystemSans() {
+    let font = SpotNoteFont.editor()
+    #expect(font.pointSize == EditorMetrics.fontSize)
+    #expect(font.fontName == NSFont.systemFont(ofSize: EditorMetrics.fontSize).fontName)
+    #expect(!font.isFixedPitch)
   }
 }

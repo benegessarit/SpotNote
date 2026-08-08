@@ -7,8 +7,16 @@ import SwiftUI
 
 @MainActor
 public final class SpotlightWindowController {
+  /// Borderless mask for the auxiliary panels (toast, fuzzy preview).
   nonisolated static let panelStyleMask: NSWindow.StyleMask = [
     .borderless, .fullSizeContentView
+  ]
+  /// The MAIN panel only: titled + closable gives real traffic lights
+  /// (red active; minimize/zoom render disabled, matching Raycast Notes),
+  /// and `.fullSizeContentView` keeps the SwiftUI surface full-bleed under
+  /// the hidden title bar so the frame still equals the content size.
+  nonisolated static let mainPanelStyleMask: NSWindow.StyleMask = [
+    .titled, .closable, .fullSizeContentView
   ]
   /// `.screenSaver` keeps the HUD above the window layers used by
   /// fullscreen apps. Lower levels such as `.floating` and `.statusBar`
@@ -116,10 +124,12 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel (find bar when visible).
-  /// Used to map between `panel.top` and `editorTopY`.
+  /// Layout above the editor card inside the panel (Raycast title bar,
+  /// plus the find bar when visible). Must mirror the top portion of
+  /// `SpotlightRootView.extraChromeHeight`; used to map between
+  /// `panel.top` and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
-    var height: CGFloat = 0
+    var height: CGFloat = EditorMetrics.topBarHeight
     if findController.isVisible { height += EditorMetrics.findBarHeight }
     return height
   }
@@ -128,7 +138,7 @@ public final class SpotlightWindowController {
   /// nav overlay, mutually exclusive. Used by `focusOrShow` to predict
   /// SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
-    var height: CGFloat = 0
+    var height: CGFloat = EditorMetrics.bottomBarHeight
     if fuzzyController.isVisible {
       height += FuzzyPalette.reservedHeight
     }
@@ -432,11 +442,16 @@ public final class SpotlightWindowController {
     let size = NSSize(width: EditorMetrics.panelWidth, height: initialHeight)
     let panel = SpotlightPanel(
       contentRect: NSRect(origin: .zero, size: size),
-      styleMask: Self.panelStyleMask,
+      styleMask: Self.mainPanelStyleMask,
       backing: .buffered,
       defer: false
     )
     Self.configurePanel(panel)
+    panel.titleVisibility = .hidden
+    panel.titlebarAppearsTransparent = true
+    // The red button must run the controller's close path (restore the
+    // previous app, notify onDidHideHUD) instead of AppKit's bare close.
+    panel.onCloseRequest = { [weak self] in self?.close() }
     panel.contentView = NSHostingView(
       rootView: SpotlightRootView(
         focusTrigger: focusTrigger,

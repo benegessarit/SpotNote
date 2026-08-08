@@ -38,9 +38,11 @@ struct SpotlightRootToastTests {
       forLines: EditorMetrics.lineCount(in: fixture.session.currentText),
       maxLines: fixture.preferences.maxVisibleLines
     )
+    let expectedRootHeight =
+      expectedEditorHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
     #expect(fixture.preferences.showHints == true)
-    #expect(fixture.recorder.values.last == expectedEditorHeight)
+    #expect(fixture.recorder.values.last == expectedRootHeight)
 
     fixture.preferences.showHints = false
     await settleSwiftUI()

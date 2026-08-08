@@ -52,8 +52,12 @@ struct SpotlightRootView: View {
     )
   }
 
+  /// Chrome the SwiftUI tree adds around the editor. Must mirror the
+  /// window controller's `chromeAboveEditor + chromeBelowEditor`: the
+  /// Raycast bars are always present; find bar and fuzzy palette are
+  /// conditional.
   private var extraChromeHeight: CGFloat {
-    var total: CGFloat = 0
+    var total = EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
     if find.isVisible { total += EditorMetrics.findBarHeight }
     if fuzzy.isVisible {
       total += FuzzyPalette.reservedHeight
@@ -61,8 +65,24 @@ struct SpotlightRootView: View {
     return total
   }
 
+  @State private var shortcutsPopoverShown = false
+  @State private var themePickerShown = false
+
   var body: some View {
     VStack(spacing: 0) {
+      RaycastTopBar(
+        title: noteTitle,
+        theme: theme,
+        onShowShortcuts: { shortcutsPopoverShown = true },
+        onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
+        onNewNote: {
+          Task { @MainActor in
+            await session.newNote()
+            focusTrigger.pulse()
+          }
+        },
+        shortcutsShown: $shortcutsPopoverShown
+      )
       if find.isVisible {
         FindBar(controller: find, theme: theme, editorText: session.currentText)
           .transition(.opacity)
@@ -73,13 +93,23 @@ struct SpotlightRootView: View {
         FuzzyPalette(controller: fuzzy, theme: theme) { chat in
           session.jump(to: chat)
         }
-        .padding(.horizontal, EditorMetrics.outerPadding)
-        .padding(.bottom, EditorMetrics.outerPadding)
         .frame(height: FuzzyPalette.reservedHeight)
         .transition(.opacity)
       }
+      RaycastBottomBar(
+        characterCount: session.currentText.count,
+        theme: theme,
+        preferences: preferences,
+        themePickerShown: $themePickerShown
+      )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background {
+      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+        .clipShape(surfaceShape)
+        .overlay(surfaceShape.fill(theme.background.opacity(glassTintOpacity)))
+    }
+    .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
     .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
@@ -101,8 +131,14 @@ struct SpotlightRootView: View {
     }
   }
 
-  private var hasAttachedBottom: Bool {
-    fuzzy.isVisible
+  /// First line of the current note, shown as the centered window title.
+  private var noteTitle: String {
+    let firstLine =
+      session.currentText
+      .components(separatedBy: "\n")
+      .first?
+      .trimmingCharacters(in: .whitespaces) ?? ""
+    return firstLine.isEmpty ? "New Note" : firstLine
   }
 
   // Near-opaque tint: the panel should read as a solid surface with only a hint
@@ -114,15 +150,10 @@ struct SpotlightRootView: View {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
   }
 
-  private var editorCardShape: UnevenRoundedRectangle {
-    let flat = hasAttachedBottom
-    return UnevenRoundedRectangle(
-      topLeadingRadius: 10,
-      bottomLeadingRadius: flat ? 0 : 10,
-      bottomTrailingRadius: flat ? 0 : 10,
-      topTrailingRadius: 10,
-      style: .continuous
-    )
+  /// Full-bleed Raycast-style surface: one rounded rectangle for the whole
+  /// panel; the bars and editor all sit on this single sheet.
+  private var surfaceShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: EditorMetrics.surfaceCornerRadius, style: .continuous)
   }
 
   private var editorCard: some View {
@@ -151,15 +182,6 @@ struct SpotlightRootView: View {
     .padding(.leading, EditorMetrics.leadingInset)
     .padding(.trailing, EditorMetrics.trailingInset)
     .padding(.vertical, EditorMetrics.verticalInset)
-    .background {
-      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-        .clipShape(editorCardShape)
-        .overlay(editorCardShape.fill(theme.background.opacity(glassTintOpacity)))
-    }
-    .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
-    .padding(.top, EditorMetrics.outerPadding)
-    .padding(.horizontal, EditorMetrics.outerPadding)
-    .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
   }
 
   private var editorPlaceholder: String {
