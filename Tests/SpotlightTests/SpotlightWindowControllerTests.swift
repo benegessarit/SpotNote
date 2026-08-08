@@ -30,6 +30,21 @@ struct SpotlightWindowControllerTests {
     #expect(!mask.contains(.miniaturizable))
   }
 
+  /// **Contract guard** -- the Raycast Notes traffic-light set: closable-only
+  /// gives an active red close button with disabled grey minimize/zoom.
+  /// Adding .miniaturizable or .resizable would light those buttons up and
+  /// break the look; dropping .titled removes the buttons entirely.
+  @Test("main panel style mask is titled + closable only, still activating")
+  func mainPanelStyleMaskShape() {
+    let mask = SpotlightWindowController.mainPanelStyleMask
+    #expect(mask.contains(.titled))
+    #expect(mask.contains(.closable))
+    #expect(mask.contains(.fullSizeContentView))
+    #expect(!mask.contains(.miniaturizable))
+    #expect(!mask.contains(.resizable))
+    #expect(!mask.contains(.nonactivatingPanel))
+  }
+
   /// **Regression guard** -- `.fullScreenAuxiliary` is what allows the
   /// HUD to render in a Space owned by a fullscreen app. Without it,
   /// the panel is hidden behind the fullscreen layer and never shown.
