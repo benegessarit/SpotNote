@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// Top HUD chrome in the SlashNote capture-panel layout: small circular
-/// controls on the left (close, notes, pin), and a right cluster holding the
-/// segmented formatting pill plus the tag/find circle. Sizing and alpha values
-/// come from the SlashNote site demo CSS (24px circles, white 8% fills,
-/// white 50% glyphs) — controls use flat translucent fills, not nested glass;
-/// the panel itself is the glass surface.
+/// Top HUD chrome in the SlashNote capture-panel layout, built from native
+/// macOS 26 components: Liquid Glass button styles over the glass card, SF
+/// Symbols, and semantic label colors — no hand-rolled fills. Left cluster
+/// close/notes/pin; right cluster the segmented formatting pill plus the
+/// tag/find circle.
 struct GlassToolbar: View {
   let theme: Theme
   let isPinned: Bool
@@ -20,14 +19,6 @@ struct GlassToolbar: View {
 
   private static let controlDiameter: CGFloat = 24
   private static let segmentWidth: CGFloat = 30
-
-  private var controlFill: Color {
-    theme.mode == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
-  }
-
-  private var glyphColor: Color {
-    theme.text.opacity(0.60)
-  }
 
   var body: some View {
     HStack(spacing: 6) {
@@ -55,12 +46,12 @@ struct GlassToolbar: View {
         action: onToggleLineNumbers
       )
     }
-    .background(Capsule(style: .continuous).fill(controlFill))
+    .glassEffect()
   }
 
   private var pillDivider: some View {
     Rectangle()
-      .fill(theme.border)
+      .fill(.separator)
       .frame(width: 1, height: 12)
   }
 
@@ -72,12 +63,11 @@ struct GlassToolbar: View {
     Button(action: action) {
       Image(systemName: systemName)
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(glyphColor)
+        .foregroundStyle(.secondary)
         .frame(width: Self.controlDiameter, height: Self.controlDiameter)
-        .background(Circle().fill(controlFill))
-        .contentShape(Circle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(.glass)
+    .buttonBorderShape(.circle)
     .help(help)
   }
 
@@ -90,7 +80,7 @@ struct GlassToolbar: View {
     Button(action: action) {
       Image(systemName: systemName)
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(emphasized ? theme.text : glyphColor)
+        .foregroundStyle(emphasized ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
         .frame(width: Self.segmentWidth, height: Self.controlDiameter)
         .contentShape(Rectangle())
     }

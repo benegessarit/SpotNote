@@ -106,10 +106,12 @@ struct SpotlightRootView: View {
     fuzzy.isVisible
   }
 
-  // Near-opaque tint over the Liquid Glass surface: the panel should read as a
-  // solid card with only a hint of lensing at the edges, not a see-through pane.
-  static let darkGlassTintOpacity = 0.90
-  static let lightGlassTintOpacity = 0.90
+  // Translucent tint over the Liquid Glass surface: enough theme color to keep
+  // text readable, low enough that the native material shows through like the
+  // Messages sidebar (2026-08-08: David chose native translucency over the old
+  // read-as-solid contract).
+  static let darkGlassTintOpacity = 0.55
+  static let lightGlassTintOpacity = 0.55
 
   private var glassTintOpacity: Double {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity

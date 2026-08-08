@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Bottom capsule bar inside the card, in the SlashNote composer layout:
-/// checklist glyph, prompt field, mic and send circles. Submitting appends the
-/// draft to the note as a fresh `- ` bullet; mic is a visual placeholder until
-/// voice input exists and stays disabled.
+/// Bottom capsule bar inside the card, in the SlashNote composer layout but
+/// built from native macOS 26 components: a Liquid Glass capsule field with
+/// glass mic/send circles, like the Messages compose bar. Submitting appends
+/// the draft to the note as a fresh `- ` bullet; mic stays a disabled
+/// placeholder until voice input exists.
 struct ComposerBar: View {
   let theme: Theme
   let onSubmit: (String) -> Void
@@ -14,10 +15,6 @@ struct ComposerBar: View {
   /// Send-button accent sampled from the SlashNote app renders.
   private static let sendAccent = Color(red: 99 / 255, green: 170 / 255, blue: 233 / 255)
 
-  private var controlFill: Color {
-    theme.mode == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
-  }
-
   private var hasDraft: Bool {
     !draft.trimmingCharacters(in: .whitespaces).isEmpty
   }
@@ -26,7 +23,7 @@ struct ComposerBar: View {
     HStack(spacing: 8) {
       Image(systemName: "checklist")
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(theme.text.opacity(0.45))
+        .foregroundStyle(.secondary)
       TextField("What to write?", text: $draft)
         .textFieldStyle(.plain)
         .font(.system(size: 13))
@@ -35,27 +32,24 @@ struct ComposerBar: View {
         .onSubmit(submit)
       Image(systemName: "mic.fill")
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(theme.text.opacity(0.25))
+        .foregroundStyle(.tertiary)
         .frame(width: 24, height: 24)
-        .background(Circle().fill(controlFill))
         .help("Voice input is not wired up yet")
       Button(action: submit) {
         Image(systemName: "arrow.up")
           .font(.system(size: 11, weight: .bold))
-          .foregroundStyle(hasDraft ? Color.white : theme.text.opacity(0.30))
           .frame(width: 24, height: 24)
-          .background(Circle().fill(hasDraft ? Self.sendAccent : controlFill))
-          .contentShape(Circle())
       }
-      .buttonStyle(.plain)
+      .buttonStyle(.glassProminent)
+      .buttonBorderShape(.circle)
+      .tint(Self.sendAccent)
       .disabled(!hasDraft)
       .help("Append to note")
     }
     .padding(.leading, 12)
-    .padding(.trailing, 6)
+    .padding(.trailing, 4)
     .frame(height: 32)
-    .background(Capsule(style: .continuous).fill(controlFill))
-    .overlay(Capsule(style: .continuous).strokeBorder(theme.border, lineWidth: 1))
+    .glassEffect()
     .padding(.horizontal, 10)
     .frame(height: EditorMetrics.composerHeight, alignment: .top)
   }

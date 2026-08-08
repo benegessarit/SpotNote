@@ -4,10 +4,10 @@ import Testing
 
 @Suite("Spotlight root visual style")
 struct SpotlightRootViewVisualStyleTests {
-  @Test("editor card glass tint stays opaque enough to read over a busy desktop")
+  @Test("editor card glass tint keeps native translucency without losing text contrast")
   @MainActor
-  func editorCardGlassTintIsOpaqueEnoughToReadOverDesktop() {
-    #expect(SpotlightRootView.darkGlassTintOpacity == 0.90)
-    #expect(SpotlightRootView.lightGlassTintOpacity == 0.90)
+  func editorCardGlassTintBalancesTranslucencyAndContrast() {
+    #expect(SpotlightRootView.darkGlassTintOpacity == 0.55)
+    #expect(SpotlightRootView.lightGlassTintOpacity == 0.55)
   }
 }
