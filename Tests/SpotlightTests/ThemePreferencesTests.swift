@@ -150,22 +150,6 @@ struct ThemePreferencesTests {
     #expect(ThemeCatalog.all.count == 22)
   }
 
-  @Test("showLineNumbers defaults to false on first launch")
-  func lineNumbersDefaultOn() {
-    let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.showLineNumbers == false)
-  }
-
-  @Test("showLineNumbers persists to UserDefaults, including the off value")
-  func lineNumbersPersist() {
-    let defaults = makeDefaults()
-    let prefs = ThemePreferences(defaults: defaults)
-    prefs.showLineNumbers = false
-    #expect(defaults.bool(forKey: "editor.showLineNumbers") == false)
-    let rehydrated = ThemePreferences(defaults: defaults)
-    #expect(rehydrated.showLineNumbers == false)
-  }
-
   @Test("showMenuBarIcon defaults to true on first launch")
   func menuBarIconDefaultsOn() {
     let prefs = ThemePreferences(defaults: makeDefaults())

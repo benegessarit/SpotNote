@@ -19,7 +19,6 @@ struct MultilineEditor: NSViewRepresentable {
   var onChecklistLinesChange: ([Int: ChecklistLineState]) -> Void = { _ in }
   let theme: Theme
   let placeholder: String
-  let showLineNumbers: Bool
   let font: NSFont
   let focusRequest: Int
   /// Counter from `FocusTrigger.caretEndTick`; when it changes, the
@@ -81,7 +80,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onChecklistLinesChange = onChecklistLinesChange
     textView.placeholderString = placeholder
     refreshAttributes(on: textView)
-    configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
+    configureRuler(scroll: scroll, textView: textView)
     installSuggestionField(on: textView)
     textView.vimModeEnabled = vimModeEnabled
     textView.attachVimController(vimController)
@@ -157,7 +156,7 @@ struct MultilineEditor: NSViewRepresentable {
       textView.placeholderString = placeholder
       textView.needsDisplay = true
     }
-    configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
+    configureRuler(scroll: scroll, textView: textView)
 
     if context.coordinator.lastFocusRequest != focusRequest {
       context.coordinator.lastFocusRequest = focusRequest
@@ -451,7 +450,6 @@ struct MultilineEditor: NSViewRepresentable {
     textView.editorTextAttributes = textAttributes
     textView.editorHeadingTextColor = NSColor(theme.text)
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
-      ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
     }
   }
@@ -568,28 +566,14 @@ struct MultilineEditor: NSViewRepresentable {
     CodeStyler.apply(to: textView, theme: theme)
   }
 
-  private func configureRuler(scroll: NSScrollView, textView: NSTextView, visible: Bool) {
-    let ruler: LineNumberRuler
-    if let existing = scroll.verticalRulerView as? LineNumberRuler {
-      ruler = existing
-    } else {
-      ruler = LineNumberRuler(textView: textView, editorFont: font, showsLineNumbers: visible)
-      scroll.verticalRulerView = ruler
-    }
-    if ruler.showsLineNumbers != visible {
-      ruler.showsLineNumbers = visible
+  private func configureRuler(scroll: NSScrollView, textView: NSTextView) {
+    if !(scroll.verticalRulerView is LineNumberRuler) {
+      scroll.verticalRulerView = LineNumberRuler(textView: textView, editorFont: font)
     }
     scroll.hasVerticalRuler = true
     scroll.rulersVisible = true
-    // The gutter lives inside the Raycast 37pt leading gap: shrink the
-    // text container inset by the ruler width so turning numbers on never
-    // moves the text (Raycast Notes has no gutter).
-    let leading =
-      visible
-      ? max(7, EditorMetrics.textLeadingGap - ruler.ruleThickness)
-      : EditorMetrics.textLeadingGap
-    if abs(textView.textContainerInset.width - leading) > 0.5 {
-      textView.textContainerInset = NSSize(width: leading, height: 0)
+    if abs(textView.textContainerInset.width - EditorMetrics.textLeadingGap) > 0.5 {
+      textView.textContainerInset = NSSize(width: EditorMetrics.textLeadingGap, height: 0)
     }
   }
 

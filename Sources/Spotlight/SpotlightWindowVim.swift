@@ -64,9 +64,6 @@ extension SpotlightWindowController {
 
   private func runVimSetting(_ command: VimCommand) -> VimController.Message? {
     switch command {
-    case .setLineNumbers(let on):
-      preferences.showLineNumbers = on
-      return VimController.Message(text: on ? "line numbers on" : "line numbers off", kind: .info)
     case .setVimMode(let on):
       preferences.vimMode = on
       return on ? nil : VimController.Message(text: "vim mode off", kind: .info)

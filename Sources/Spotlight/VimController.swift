@@ -197,7 +197,6 @@ final class VimController: ObservableObject {
 enum VimCommand: Equatable {
   case quit
   case writeNoOp
-  case setLineNumbers(Bool)
   case setVimMode(Bool)
   case setTheme(String)
   case setMaxLines(Int)
@@ -263,8 +262,6 @@ enum VimCommandParser {
 
   /// Boolean `:set` flags. Every entry here is a no-argument toggle.
   private static let setToggleTable: [String: VimCommand] = [
-    "number": .setLineNumbers(true), "nu": .setLineNumbers(true),
-    "nonumber": .setLineNumbers(false), "nonu": .setLineNumbers(false),
     "vim": .setVimMode(true), "novim": .setVimMode(false)
   ]
 
@@ -364,11 +361,6 @@ enum VimCommandReference {
       id: "settings",
       title: "Settings (:set)",
       entries: [
-        Entry(
-          id: "number",
-          usage: ":set number\n:set nonumber  (nu / nonu)",
-          summary: "Show or hide line numbers."
-        ),
         Entry(
           id: "vim",
           usage: ":set vim\n:set novim",

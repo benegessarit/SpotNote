@@ -104,7 +104,12 @@ struct EditorMetricsTests {
   @MainActor
   func taskEditorKeepsRestoredLeadingTextGap() {
     #expect(EditorMetrics.leadingInset == 0)
-    #expect(LineNumberRuler.markerOnlyThickness(forLabelSize: LineNumberRuler.labelFontSize) == 0)
+    #expect(
+      LineNumberRuler.thickness(
+        showsLineFlashHints: false,
+        labelSize: LineNumberRuler.labelFontSize
+      ) == 0
+    )
     #expect(EditorMetrics.textLeadingGap >= 32)
   }
 

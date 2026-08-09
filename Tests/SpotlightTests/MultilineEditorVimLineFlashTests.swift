@@ -11,8 +11,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     let scrollView = makeScrollView(containing: textView)
     let ruler = LineNumberRuler(
       textView: textView,
-      editorFont: textView.font ?? SpotNoteFont.editor(),
-      showsLineNumbers: false
+      editorFont: textView.font ?? SpotNoteFont.editor()
     )
     scrollView.verticalRulerView = ruler
     scrollView.hasVerticalRuler = true

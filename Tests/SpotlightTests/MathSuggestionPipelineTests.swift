@@ -33,7 +33,6 @@ struct MathSuggestionPipelineTests {
       text: .constant(text),
       theme: ThemeCatalog.obsidian,
       placeholder: "",
-      showLineNumbers: false,
       font: .systemFont(ofSize: 14),
       focusRequest: 0,
       maxVisibleLines: 10,

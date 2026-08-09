@@ -358,7 +358,6 @@ struct CodeStylerVisualTests {
     text: .constant(text),
     theme: theme,
     placeholder: "",
-    showLineNumbers: false,
     font: font,
     focusRequest: 0,
     maxVisibleLines: 9,

@@ -7,10 +7,6 @@ extension LineNumberRuler {
     return ceil(max(digitWidth, flashLabelColumnWidth(forLabelSize: labelSize))) + 4
   }
 
-  static func markerOnlyThickness(forLabelSize _: CGFloat) -> CGFloat {
-    0
-  }
-
   private static func flashLabelColumnWidth(forLabelSize labelSize: CGFloat) -> CGFloat {
     let font = NSFont.boldSystemFont(ofSize: labelSize)
     let twoCharacterLabelWidth = ("aa" as NSString).size(withAttributes: [.font: font]).width

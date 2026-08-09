@@ -198,7 +198,6 @@ struct MultilineEditorOutlineTests {
       text: Binding.constant(text),
       theme: ThemeCatalog.obsidian,
       placeholder: "",
-      showLineNumbers: false,
       font: .systemFont(ofSize: EditorMetrics.fontSize),
       focusRequest: 0,
       maxVisibleLines: 4,

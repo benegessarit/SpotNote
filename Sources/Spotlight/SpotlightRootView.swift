@@ -210,7 +210,6 @@ struct SpotlightRootView: View {
       onChecklistLinesChange: { session.updateChecklistLines($0) },
       theme: theme,
       placeholder: editorPlaceholder,
-      showLineNumbers: preferences.showLineNumbers,
       font: editorFont,
       focusRequest: focusTrigger.tick,
       caretEndRequest: focusTrigger.caretEndTick,
