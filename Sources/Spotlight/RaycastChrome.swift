@@ -87,7 +87,8 @@ struct RaycastStackedCardsIcon: View {
 /// Loads a bundled Raycast icon rasterized from the exact @raycast/icons
 /// path data, tinted at render time via template mode.
 private func raycastIconImage(_ resource: String) -> NSImage {
-  guard let url = Bundle.module.url(forResource: resource, withExtension: "png"),
+  let bundle = Bundle.spotlightResources
+  guard let url = bundle.url(forResource: resource, withExtension: "png"),
     let image = NSImage(contentsOf: url)
   else {
     return NSImage()
