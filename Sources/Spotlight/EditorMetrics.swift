@@ -10,7 +10,7 @@ enum EditorMetrics {
   static let lineHeight: CGFloat = 41
   /// Padding above the first text line (below the top bar). Raycast Notes
   /// has this gap only at the top: the last line sits directly on the
-  /// bottom bar (measured resting window 381pt = 60 + 20 + 6x41 + 0 + 56).
+  /// bottom bar (measured empty window 177pt = 60 + 20 + 41 + 0 + 56).
   static let topInset: CGFloat = 20
   /// Padding below the last text line. Zero to match Raycast Notes.
   static let bottomInset: CGFloat = 0
@@ -52,13 +52,14 @@ enum EditorMetrics {
   static let sidebarWidth: CGFloat = 250
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
-  /// Minimum default row count for the roomy HUD. Tuned so a short note
-  /// opens at roughly the Raycast Notes window height at the 41pt line
-  /// pitch.
-  static let roomyVisibleLinesFloor = 6
+  /// Minimum default row count. Raycast Notes grows from a single line:
+  /// its empty window measures 670x177pt (60 top bar + 20 inset + one
+  /// 41pt line + 56 bottom bar), so short notes open compact and the
+  /// panel grows per line.
+  static let roomyVisibleLinesFloor = 1
 
   /// Panel height for `lines` display rows, clamped to the user-selected
-  /// visible-line cap while keeping short notes at the default roomy size.
+  /// visible-line cap.
   static func panelHeight(forLines lines: Int, maxLines: Int) -> CGFloat {
     let clampedMax = max(1, maxLines)
     let roomyFloor = min(clampedMax, max(1, roomyVisibleLinesFloor))

@@ -311,7 +311,7 @@ enum ThemeCatalog {
     border: Color(red: 1, green: 1, blue: 1).opacity(0.25),
     text: Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255),
     headingText: Color(red: 0x9C / 255, green: 0xC3 / 255, blue: 0xFF / 255),
-    placeholder: Color(red: 0x57 / 255, green: 0x5B / 255, blue: 0x6E / 255),
+    placeholder: Color(red: 0x66 / 255, green: 0x6A / 255, blue: 0x7E / 255),
     cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255),
     backgroundTop: Color(red: 0x2A / 255, green: 0x2C / 255, blue: 0x3B / 255)
   )

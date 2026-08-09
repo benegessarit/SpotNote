@@ -182,14 +182,12 @@ struct ThemePreferencesTests {
     #expect(rehydrated.showMenuBarIcon == false)
   }
 
-  @Test("maxVisibleLines defaults to ten rows beyond twice the resting HUD height before scrolling")
+  @Test("maxVisibleLines defaults to a 22-row scroll cap")
   func maxVisibleLinesDefault() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    let restingRows = EditorMetrics.roomyVisibleLinesFloor
     let defaultCap = ThemePreferences.defaultVisibleLines
 
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
-    #expect(defaultCap == restingRows * 2 + 10)
     #expect(prefs.maxVisibleLines == 22)
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap + 1, maxLines: defaultCap)
@@ -197,7 +195,7 @@ struct ThemePreferencesTests {
     )
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)
-        > EditorMetrics.panelHeight(forLines: restingRows, maxLines: defaultCap)
+        > EditorMetrics.panelHeight(forLines: 1, maxLines: defaultCap)
     )
   }
 

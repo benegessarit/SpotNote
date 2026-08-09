@@ -27,13 +27,13 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.lineCount(in: "a\n") == 2)
   }
 
-  @Test("panelHeight stays roomy for short notes before growing")
-  func panelHeightRoomyFloorThenGrows() {
+  @Test("panelHeight grows one line at a time, Raycast-style")
+  func panelHeightGrowsPerLine() {
     let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
     let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
-    #expect(one == three)
-    #expect(two == three)
+    #expect(two == one + EditorMetrics.lineHeight)
+    #expect(three == two + EditorMetrics.lineHeight)
   }
 
   @Test("panelHeight clamps at the supplied maxLines")
@@ -47,10 +47,8 @@ struct EditorMetricsTests {
 
   @Test("panelHeight honors a smaller user cap")
   func panelHeightHonorsSmallMax() {
-    let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
     let seven = EditorMetrics.panelHeight(forLines: 7, maxLines: 3)
-    #expect(one == three)
     #expect(three == seven)
   }
 
@@ -87,17 +85,19 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.bottomBarHeight == 56)
   }
 
-  @Test("short notes open at roughly the Raycast Notes window height")
-  func shortNotesOpenRoomy() {
+  @Test("empty notes open at the Raycast Notes empty-window height and grow per line")
+  func emptyNotesOpenCompact() {
     let openHeight = EditorMetrics.panelHeight(forLines: 1, maxLines: 12)
     let totalRestingHeight =
       openHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
-    #expect(EditorMetrics.roomyVisibleLinesFloor == 6)
-    #expect(openHeight == EditorMetrics.panelHeight(forLines: 6, maxLines: 12))
-    // The live Raycast Notes window David compared against is ~388pt tall.
-    #expect(totalRestingHeight >= 370)
-    #expect(totalRestingHeight <= 430)
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 1)
+    // The live Raycast Notes empty window measures 670x177pt.
+    #expect(totalRestingHeight == 177)
+    #expect(
+      EditorMetrics.panelHeight(forLines: 2, maxLines: 12)
+        == openHeight + EditorMetrics.lineHeight
+    )
   }
 
   @Test("task editor keeps restored breathing room before text")
