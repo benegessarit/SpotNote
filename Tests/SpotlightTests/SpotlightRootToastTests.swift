@@ -26,6 +26,25 @@ struct SpotlightRootToastTests {
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
 
+  @Test("notes modal overlay does not trigger panel height callbacks")
+  func notesModalDoesNotTriggerPanelHeightCallbacks() async throws {
+    let fixture = try makeFixture()
+    defer { fixture.cleanup() }
+
+    try await waitUntil { !fixture.recorder.values.isEmpty }
+    await settleSwiftUI()
+    let stableCallbackCount = fixture.recorder.values.count
+
+    fixture.fuzzy.toggle(corpus: fixture.session.chats)
+    await settleSwiftUI()
+    #expect(fixture.fuzzy.isVisible)
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+
+    fixture.fuzzy.close()
+    await settleSwiftUI()
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+  }
+
   @Test("legacy hint preference does not render or reserve statusline space")
   func hintPreferenceDoesNotAffectRootHeight() async throws {
     let fixture = try makeFixture()
@@ -59,6 +78,7 @@ struct SpotlightRootToastTests {
     let tempDirectory: URL
     let preferences: ThemePreferences
     let session: ChatSession
+    let fuzzy: FuzzyController
     let vimController: VimController
     let recorder: HeightRecorder
 
@@ -98,6 +118,7 @@ struct SpotlightRootToastTests {
       tempDirectory: tmpDir,
       preferences: root.preferences,
       session: root.session,
+      fuzzy: root.fuzzy,
       vimController: vimController,
       recorder: recorder
     )

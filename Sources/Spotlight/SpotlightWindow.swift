@@ -55,7 +55,6 @@ public final class SpotlightWindowController {
   }
 
   private var panel: SpotlightPanel?
-  private var fuzzyPreviewPanel: FuzzyPreviewPanel?
   private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
   private let keyState = PanelKeyState()
@@ -97,10 +96,6 @@ public final class SpotlightWindowController {
       }
     }
   }
-  private enum FuzzyPreviewSide {
-    case left
-    case right
-  }
   private var navAnchor: NavAnchorState = .none
   private struct MeasuredHeightCache {
     let text: String
@@ -132,15 +127,11 @@ public final class SpotlightWindowController {
     return height
   }
 
-  /// Layout below the editor card inside the panel -- fuzzy palette or
-  /// nav overlay, mutually exclusive. Used by `focusOrShow` to predict
-  /// SwiftUI's panel height before activating.
+  /// Layout below the editor card inside the panel. The Raycast modals
+  /// float in an overlay and never contribute height. Used by
+  /// `focusOrShow` to predict SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
-    var height: CGFloat = EditorMetrics.bottomBarHeight
-    if fuzzyController.isVisible {
-      height += FuzzyPalette.reservedHeight
-    }
-    return height
+    EditorMetrics.bottomBarHeight
   }
 
   /// Total panel height SwiftUI will render with the current state.
@@ -183,43 +174,9 @@ public final class SpotlightWindowController {
     self.onDidHideHUD = onDidHideHUD
     FontLoader.registerBundledFonts()
     observeActiveApp()
-    observeFuzzyPreview()
     observeToastMessages()
     installVimCommandRunner()
     Task { [session] in await session.bootstrap() }
-  }
-
-  private func observeFuzzyPreview() {
-    fuzzyController.$isVisible
-      .combineLatest(fuzzyController.$results, fuzzyController.$selectedIndex)
-      .sink { [weak self] _, _, _ in
-        MainActor.assumeIsolated { self?.syncFuzzyPreviewPanel() }
-      }
-      .store(in: &cancellables)
-  }
-
-  private func syncFuzzyPreviewPanel() {
-    guard
-      fuzzyController.isVisible,
-      fuzzyController.selectedResult() != nil,
-      let panel,
-      panel.isVisible,
-      let frame = fuzzyPreviewFrame(for: panel)
-    else {
-      fuzzyPreviewPanel?.orderOut(nil)
-      return
-    }
-    let preview = fuzzyPreviewPanel ?? makeFuzzyPreviewPanel(parent: panel)
-    fuzzyPreviewPanel = preview
-    if preview.parent !== panel {
-      panel.addChildWindow(preview, ordered: .above)
-    }
-    if !Self.rect(preview.frame, isApproximatelyEqualTo: frame) {
-      preview.setFrame(frame, display: true)
-    }
-    if !preview.isVisible {
-      preview.orderFrontRegardless()
-    }
   }
 
   private func observeToastMessages() {
@@ -286,48 +243,13 @@ public final class SpotlightWindowController {
     )
   }
 
-  private func fuzzyPreviewFrame(for panel: NSPanel) -> NSRect? {
-    let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
-    guard let screenFrame else { return nil }
-    let panelFrame = panel.frame
-    let gap = FuzzyPreviewCard.gap
-    let rightSpace = screenFrame.maxX - panelFrame.maxX - gap
-    let leftSpace = panelFrame.minX - screenFrame.minX - gap
-    let preferred = FuzzyPreviewCard.preferredWidth
-    let minimum = FuzzyPreviewCard.minimumWidth
-    let side: FuzzyPreviewSide
-    let width: CGFloat
-    if rightSpace >= preferred {
-      side = .right
-      width = preferred
-    } else if leftSpace >= preferred {
-      side = .left
-      width = preferred
-    } else if rightSpace >= leftSpace, rightSpace >= minimum {
-      side = .right
-      width = rightSpace
-    } else if leftSpace >= minimum {
-      side = .left
-      width = leftSpace
-    } else {
-      return nil
-    }
-    let height = min(panelFrame.height, screenFrame.height)
-    let y = min(panelFrame.maxY, screenFrame.maxY) - height
-    let x: CGFloat
-    switch side {
-    case .right: x = panelFrame.maxX + gap
-    case .left: x = panelFrame.minX - gap - width
-    }
-    return NSRect(x: x.rounded(), y: y.rounded(), width: width.rounded(), height: height.rounded())
-  }
-
   public func handleHotkey() {
     handleVaultHotkey(.tasks)
   }
 
   private func handleVaultHotkey(_ state: VaultNoteState) {
-    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive, session.currentVaultState == state {
+    let hudIsFrontmost = panel?.isVisible == true && panel?.isKeyWindow == true && NSApp.isActive
+    if hudIsFrontmost, session.currentVaultState == state {
       close()
     } else {
       openVaultState(state)
@@ -362,7 +284,6 @@ public final class SpotlightWindowController {
   }
 
   public func close() {
-    fuzzyPreviewPanel?.orderOut(nil)
     toastPanel?.orderOut(nil)
     panel?.orderOut(nil)
     // If a bona-fide SpotNote window (Settings) is visible, leave the
@@ -407,7 +328,6 @@ public final class SpotlightWindowController {
     panel.orderFrontRegardless()
     panel.makeKeyAndOrderFront(nil)
     panel.orderFrontRegardless()
-    syncFuzzyPreviewPanel()
     syncToastPanel()
   }
 
@@ -494,31 +414,6 @@ public final class SpotlightWindowController {
     panel.collectionBehavior = panelCollectionBehavior
   }
 
-  private func makeFuzzyPreviewPanel(parent: NSPanel) -> FuzzyPreviewPanel {
-    let preview = FuzzyPreviewPanel(
-      contentRect: NSRect(
-        x: 0,
-        y: 0,
-        width: FuzzyPreviewCard.preferredWidth,
-        height: max(parent.frame.height, FuzzyPalette.reservedHeight)
-      ),
-      styleMask: Self.panelStyleMask,
-      backing: .buffered,
-      defer: false
-    )
-    Self.configurePanel(preview)
-    preview.hasShadow = false
-    preview.ignoresMouseEvents = false
-    preview.contentView = NSHostingView(
-      rootView: FuzzyPreviewCard(
-        controller: fuzzyController,
-        preferences: preferences
-      )
-    )
-    parent.addChildWindow(preview, ordered: .above)
-    return preview
-  }
-
   private static let driftCorrectionThreshold: CGFloat = 4
 
   private func pinnedOrigin(for panel: NSPanel) -> NSPoint? {
@@ -594,7 +489,6 @@ public final class SpotlightWindowController {
     guard let panel else { return }
     programmaticFrameToIgnore = frame
     panel.setFrame(frame, display: display, animate: animate)
-    syncFuzzyPreviewPanel()
     syncToastPanel()
   }
 
@@ -662,7 +556,6 @@ extension SpotlightWindowController {
           let newBottom = panel.frame.origin.y
           self.pinnedBottomY = newBottom
           self.navAnchor = .bottomPinned(newBottom)
-          self.syncFuzzyPreviewPanel()
           self.syncToastPanel()
         }
       }

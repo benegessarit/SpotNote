@@ -62,18 +62,15 @@ struct SpotlightRootView: View {
 
   /// Chrome the SwiftUI tree adds around the editor. Must mirror the
   /// window controller's `chromeAboveEditor + chromeBelowEditor`: the
-  /// Raycast bars are always present; find bar and fuzzy palette are
-  /// conditional.
+  /// Raycast bars are always present; the find bar is conditional. The
+  /// notes/actions modals float in an overlay and never change height.
   private var extraChromeHeight: CGFloat {
     var total = EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
     if find.isVisible { total += EditorMetrics.findBarHeight }
-    if fuzzy.isVisible {
-      total += FuzzyPalette.reservedHeight
-    }
     return total
   }
 
-  @State private var shortcutsPopoverShown = false
+  @State private var actionsModalShown = false
   @State private var themePickerShown = false
 
   var body: some View {
@@ -83,15 +80,9 @@ struct SpotlightRootView: View {
         theme: theme,
         isKey: keyState.isKey,
         onClose: onEscape,
-        onShowShortcuts: { shortcutsPopoverShown = true },
+        onShowActions: { actionsModalShown = true },
         onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
-        onNewNote: {
-          Task { @MainActor in
-            await session.newNote()
-            focusTrigger.pulse()
-          }
-        },
-        shortcutsShown: $shortcutsPopoverShown
+        onNewNote: { newNote() }
       )
       if find.isVisible {
         FindBar(controller: find, theme: theme, editorText: session.currentText)
@@ -99,13 +90,6 @@ struct SpotlightRootView: View {
       }
       editorCard
         .transaction { $0.animation = nil }
-      if fuzzy.isVisible {
-        FuzzyPalette(controller: fuzzy, theme: theme) { chat in
-          session.jump(to: chat)
-        }
-        .frame(height: FuzzyPalette.reservedHeight)
-        .transition(.opacity)
-      }
       RaycastBottomBar(
         characterCount: session.currentText.count,
         theme: theme,
@@ -118,13 +102,12 @@ struct SpotlightRootView: View {
     .background {
       SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
         .clipShape(surfaceShape)
-        .overlay(surfaceShape.fill(theme.background.opacity(glassTintOpacity)))
-        .overlay(surfaceShape.fill(topWashGradient))
+        .overlay(surfaceShape.fill(surfaceFill))
     }
+    .overlay(modalLayer)
     .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
-    .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
     .onChange(of: session.chats) { _, updatedChats in
       fuzzy.updateCorpus(updatedChats)
     }
@@ -134,6 +117,9 @@ struct SpotlightRootView: View {
     .onChange(of: fuzzy.isVisible) { _, isVisible in
       if !isVisible { focusTrigger.pulse() }
     }
+    .onChange(of: actionsModalShown) { _, isShown in
+      if !isShown { focusTrigger.pulse() }
+    }
     .onAppear {
       let editorHeight = EditorMetrics.panelHeight(
         forLines: EditorMetrics.lineCount(in: session.currentText),
@@ -141,6 +127,101 @@ struct SpotlightRootView: View {
       )
       onHeightChange(editorHeight + extraChromeHeight)
     }
+  }
+
+  /// Floating Raycast-style modals over a dimmed note. Lives in an
+  /// `.overlay` so showing a modal never touches the measured height tree.
+  @ViewBuilder
+  private var modalLayer: some View {
+    if fuzzy.isVisible || actionsModalShown {
+      ZStack(alignment: .top) {
+        surfaceShape
+          .fill(RaycastModalPalette.backdrop)
+          .onTapGesture { dismissModals() }
+        if fuzzy.isVisible {
+          RaycastNotesModal(
+            controller: fuzzy,
+            currentChatID: session.currentID
+          ) { chat in
+            session.jump(to: chat)
+          }
+          .padding(.top, RaycastModalPalette.topOffset)
+        } else {
+          RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
+            .padding(.top, RaycastModalPalette.topOffset)
+        }
+      }
+      .transition(.opacity)
+    }
+  }
+
+  private var modalActions: [RaycastAction] {
+    [
+      RaycastAction(
+        id: "new-note",
+        title: "New Note",
+        systemImage: "plus",
+        keys: [],
+        section: 0,
+        perform: { newNote() }
+      ),
+      RaycastAction(
+        id: "browse-notes",
+        title: "Browse Notes",
+        systemImage: "square.on.square",
+        keys: [],
+        section: 0,
+        perform: { fuzzy.toggle(corpus: session.chats) }
+      ),
+      RaycastAction(
+        id: "find-in-note",
+        title: "Find in Note",
+        systemImage: "magnifyingglass",
+        keys: keycaps(for: .findInNote),
+        section: 1,
+        perform: { find.toggle(text: session.currentText) }
+      ),
+      RaycastAction(
+        id: "copy-note",
+        title: "Copy Note",
+        systemImage: "doc.on.clipboard",
+        keys: keycaps(for: .copyContent),
+        section: 1,
+        perform: {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(session.currentText, forType: .string)
+        }
+      ),
+      RaycastAction(
+        id: "change-theme",
+        title: "Change Theme",
+        systemImage: "paintpalette",
+        keys: [],
+        section: 2,
+        perform: { themePickerShown = true }
+      )
+    ]
+  }
+
+  /// Keycap strings for the action's live (user-remappable) binding, e.g.
+  /// ["⌘", "F"].
+  private func keycaps(for action: ShortcutAction) -> [String] {
+    let binding = shortcuts.binding(for: action)
+    var caps = binding.modifiers.displayString.map(String.init)
+    caps.append(Shortcut.displayKey(binding.key))
+    return caps
+  }
+
+  private func newNote() {
+    Task { @MainActor in
+      await session.newNote()
+      focusTrigger.pulse()
+    }
+  }
+
+  private func dismissModals() {
+    if fuzzy.isVisible { fuzzy.close() }
+    actionsModalShown = false
   }
 
   /// First line of the current note, shown as the centered window title.
@@ -168,17 +249,19 @@ struct SpotlightRootView: View {
     RoundedRectangle(cornerRadius: EditorMetrics.surfaceCornerRadius, style: .continuous)
   }
 
-  /// Raycast Notes' top-lit wash: the surface is ~5/255 lighter at the very
-  /// top, fading to the base color about a third of the way down.
-  private var topWashGradient: LinearGradient {
-    LinearGradient(
-      stops: [
-        .init(color: Color.white.opacity(0.022), location: 0),
-        .init(color: Color.white.opacity(0), location: 0.35)
-      ],
-      startPoint: .top,
-      endPoint: .bottom
-    )
+  /// Themes with a `backgroundTop` render Raycast Notes' vertical top-lit
+  /// gradient at full opacity; flat themes keep the near-opaque glass tint.
+  private var surfaceFill: AnyShapeStyle {
+    if let top = theme.backgroundTop {
+      return AnyShapeStyle(
+        LinearGradient(
+          colors: [top, theme.background],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      )
+    }
+    return AnyShapeStyle(theme.background.opacity(glassTintOpacity))
   }
 
   private var editorCard: some View {

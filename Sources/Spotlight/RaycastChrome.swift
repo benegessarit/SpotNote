@@ -54,29 +54,29 @@ struct RaycastTrafficLights: View {
 struct RaycastStackedCardsIcon: View {
   var body: some View {
     ZStack {
-      backCard
+      card
         .stroke(style: strokeStyle)
-        .frame(width: 9.5, height: 11.5)
-        .rotationEffect(.degrees(-4))
-        .offset(x: -2.2, y: 1.6)
-      backCard
+        .frame(width: 10, height: 12)
+        .rotationEffect(.degrees(-8))
+        .offset(x: -1.8, y: 1.3)
+      card
         .fill(Color.black)
-        .frame(width: 9.5, height: 11.5)
-        .rotationEffect(.degrees(10))
-        .offset(x: 1.8, y: -1.2)
+        .frame(width: 10, height: 12)
+        .rotationEffect(.degrees(12))
+        .offset(x: 1.9, y: -1.3)
         .blendMode(.destinationOut)
-      backCard
+      card
         .stroke(style: strokeStyle)
-        .frame(width: 9.5, height: 11.5)
-        .rotationEffect(.degrees(10))
-        .offset(x: 1.8, y: -1.2)
+        .frame(width: 10, height: 12)
+        .rotationEffect(.degrees(12))
+        .offset(x: 1.9, y: -1.3)
     }
     .compositingGroup()
     .frame(width: 16, height: 16)
   }
 
-  private var backCard: RoundedRectangle {
-    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+  private var card: RoundedRectangle {
+    RoundedRectangle(cornerRadius: 3, style: .continuous)
   }
 
   private var strokeStyle: StrokeStyle {
@@ -107,10 +107,9 @@ struct RaycastTopBar: View {
   let theme: Theme
   let isKey: Bool
   let onClose: () -> Void
-  let onShowShortcuts: () -> Void
+  let onShowActions: () -> Void
   let onToggleNotes: () -> Void
   let onNewNote: () -> Void
-  @Binding var shortcutsShown: Bool
 
   /// Width reserved at the leading edge for the traffic lights.
   static let trafficLightGutter: CGFloat = 90
@@ -143,16 +142,13 @@ struct RaycastTopBar: View {
 
   private var iconPill: some View {
     HStack(spacing: 17) {
-      pillButton(help: "Keyboard shortcuts", action: onShowShortcuts) {
+      pillButton(help: "Actions", action: onShowActions) {
         Image(nsImage: Self.commandIcon)
           .renderingMode(.template)
           .resizable()
           .frame(width: 16, height: 16)
       }
-      .popover(isPresented: $shortcutsShown, arrowEdge: .bottom) {
-        RaycastShortcutsPopover(theme: theme)
-      }
-      pillButton(help: "Switch note", action: onToggleNotes) {
+      pillButton(help: "Browse notes", action: onToggleNotes) {
         RaycastStackedCardsIcon()
       }
       pillButton(help: "New note", action: onNewNote) {
@@ -167,8 +163,8 @@ struct RaycastTopBar: View {
     .frame(height: 30)
     .background(
       Capsule(style: .continuous)
-        .fill(Color.white.opacity(0.03))
-        .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .fill(Color.white.opacity(0.05))
+        .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
     )
   }
 
@@ -265,37 +261,5 @@ struct RaycastThemePopover: View {
       .padding(8)
     }
     .frame(width: 220, height: 280)
-  }
-}
-
-/// Static shortcut reference shown from the title bar's command button,
-/// backed by the same catalog as the Settings vim pane.
-struct RaycastShortcutsPopover: View {
-  let theme: Theme
-
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 10) {
-        ForEach(VimCommandReference.sections) { section in
-          VStack(alignment: .leading, spacing: 4) {
-            Text(section.title)
-              .font(.system(size: 11, weight: .semibold))
-              .foregroundStyle(.secondary)
-            ForEach(section.entries) { entry in
-              HStack(alignment: .top) {
-                Text(entry.usage)
-                  .font(.system(size: 11, design: .monospaced))
-                  .frame(width: 130, alignment: .leading)
-                Text(entry.summary)
-                  .font(.system(size: 11))
-                  .foregroundStyle(.secondary)
-              }
-            }
-          }
-        }
-      }
-      .padding(12)
-    }
-    .frame(width: 380, height: 320)
   }
 }

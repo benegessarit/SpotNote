@@ -16,6 +16,9 @@ public struct Theme: Equatable, Identifiable, Sendable {
   /// theme's cursor tracks its own palette instead of one global color; set it
   /// explicitly to honor a theme's official cursor (e.g. Fahrenheit's #bbbbbb).
   let cursor: Color?
+  /// Optional lighter top color for a vertical surface gradient (Raycast
+  /// Notes' top-lit sheet). `nil` renders the flat `background`.
+  let backgroundTop: Color?
 
   // #lizard forgives -- a plain field-assignment initializer; wide only because
   // Theme has many color roles. The `cursor` default keeps every existing theme
@@ -29,7 +32,8 @@ public struct Theme: Equatable, Identifiable, Sendable {
     text: Color,
     headingText: Color,
     placeholder: Color,
-    cursor: Color? = nil
+    cursor: Color? = nil,
+    backgroundTop: Color? = nil
   ) {
     self.id = id
     self.name = name
@@ -40,6 +44,7 @@ public struct Theme: Equatable, Identifiable, Sendable {
     self.headingText = headingText
     self.placeholder = placeholder
     self.cursor = cursor
+    self.backgroundTop = backgroundTop
   }
 
   /// Resolved cursor color: the explicit `cursor` when set, else the heading accent.
@@ -302,12 +307,13 @@ enum ThemeCatalog {
     id: "raycast-dark",
     name: "Raycast Dark",
     mode: .dark,
-    background: Color(red: 0x23 / 255, green: 0x26 / 255, blue: 0x33 / 255),
+    background: Color(red: 0x25 / 255, green: 0x26 / 255, blue: 0x34 / 255),
     border: Color(red: 1, green: 1, blue: 1).opacity(0.10),
     text: Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255),
     headingText: Color(red: 0x9C / 255, green: 0xC3 / 255, blue: 0xFF / 255),
     placeholder: Color(red: 0x57 / 255, green: 0x5B / 255, blue: 0x6E / 255),
-    cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255)
+    cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255),
+    backgroundTop: Color(red: 0x2A / 255, green: 0x2C / 255, blue: 0x3B / 255)
   )
 
   static let darkThemes: [Theme] = [

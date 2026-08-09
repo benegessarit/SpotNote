@@ -95,11 +95,6 @@ final class FuzzyController: ObservableObject {
     return results[selectedIndex].chat
   }
 
-  func selectedResult() -> FuzzyResult? {
-    guard results.indices.contains(selectedIndex) else { return nil }
-    return results[selectedIndex]
-  }
-
   func moveSelection(by delta: Int) {
     guard !results.isEmpty else { return }
     let next = (selectedIndex + delta + results.count) % results.count
