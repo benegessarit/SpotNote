@@ -60,12 +60,13 @@ struct ModeGlyphShape: Shape {
   }
 }
 
-/// nvim-style mode badge in the bottom bar's leading corner: a rounded
-/// square whose letter MORPHS between N / I / V as the mode changes --
-/// N's left stem swings up into I's top serif, the diagonal straightens
-/// into the stem, the right stem swings down into the bottom serif.
-/// Overlaid on the bottom bar, so it never contributes measured height;
-/// dims when the panel resigns key, like the rest of the chrome.
+/// nvim-style mode badge in the Raycast T-button slot (trailing corner of
+/// the bottom bar, 38pt ring probed from the live app): a circled letter
+/// that MORPHS between N / I / V as the mode changes -- N's left stem
+/// swings up into I's top serif, the diagonal straightens into the stem,
+/// the right stem swings down into the bottom serif. Letterforms use the
+/// icon set's stroke weight. Overlaid on the bottom bar, so it never
+/// contributes measured height; dims when the panel resigns key.
 struct VimModePill: View {
   @ObservedObject var controller: VimController
   let isKey: Bool
@@ -91,17 +92,14 @@ struct VimModePill: View {
 
   var body: some View {
     ZStack {
-      RoundedRectangle(cornerRadius: 6, style: .continuous)
-        .fill(tint.opacity(0.16))
-        .overlay(
-          RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(tint.opacity(0.45), lineWidth: 1)
-        )
+      Circle()
+        .fill(tint.opacity(0.12))
+        .overlay(Circle().strokeBorder(tint.opacity(0.5), lineWidth: 1))
       ModeGlyphShape(vector: AnimatableVector12(values: glyph))
-        .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        .frame(width: 11, height: 11)
+        .stroke(tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+        .frame(width: 15, height: 15)
     }
-    .frame(width: 22, height: 22)
+    .frame(width: 38, height: 38)
     .opacity(isKey ? 1 : 0.45)
     .animation(.spring(response: 0.4, dampingFraction: 0.72), value: controller.mode)
     .animation(.easeOut(duration: 0.12), value: isKey)

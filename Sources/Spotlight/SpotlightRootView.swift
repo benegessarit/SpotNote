@@ -147,10 +147,10 @@ struct SpotlightRootView: View {
       editorCard
         .transaction { $0.animation = nil }
       RaycastBottomBar(characterCount: session.currentText.count)
-        .overlay(alignment: .leading) {
+        .overlay(alignment: .trailing) {
           if preferences.vimMode {
             VimModePill(controller: vimController, isKey: keyState.isKey)
-              .padding(.leading, 23)
+              .padding(.trailing, 10)
           }
         }
     }

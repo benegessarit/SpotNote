@@ -67,31 +67,31 @@ struct RaycastStackedCardsIcon: View {
     ZStack {
       card
         .stroke(style: strokeStyle)
-        .frame(width: 10, height: 12)
+        .frame(width: 16, height: 19)
         .rotationEffect(.degrees(-8))
-        .offset(x: -1.8, y: 1.3)
+        .offset(x: -2.9, y: 2.1)
       card
         .fill(Color.black)
-        .frame(width: 10, height: 12)
+        .frame(width: 16, height: 19)
         .rotationEffect(.degrees(12))
-        .offset(x: 1.9, y: -1.3)
+        .offset(x: 3.0, y: -2.1)
         .blendMode(.destinationOut)
       card
         .stroke(style: strokeStyle)
-        .frame(width: 10, height: 12)
+        .frame(width: 16, height: 19)
         .rotationEffect(.degrees(12))
-        .offset(x: 1.9, y: -1.3)
+        .offset(x: 3.0, y: -2.1)
     }
     .compositingGroup()
-    .frame(width: 16, height: 16)
+    .frame(width: 26, height: 26)
   }
 
   private var card: RoundedRectangle {
-    RoundedRectangle(cornerRadius: 3, style: .continuous)
+    RoundedRectangle(cornerRadius: 4.5, style: .continuous)
   }
 
   private var strokeStyle: StrokeStyle {
-    StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+    StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
   }
 }
 
@@ -153,26 +153,33 @@ struct RaycastTopBar: View {
     .frame(height: EditorMetrics.topBarHeight)
   }
 
+  /// Icon frames are sized so each VISIBLE glyph matches the live app's
+  /// uniform ~17.5pt: the raster assets carry different internal padding
+  /// (command glyph fills 89% of its box, plus only 62%), so equal frames
+  /// render visibly unequal icons. Explicit gaps keep the visible
+  /// glyph-to-glyph spacing at the probed 15.5pt.
   private var iconPill: some View {
-    HStack(spacing: 17) {
+    HStack(spacing: 0) {
       pillButton(help: "Actions", action: onShowActions) {
         Image(nsImage: Self.commandIcon)
           .renderingMode(.template)
           .resizable()
-          .frame(width: 16, height: 16)
+          .frame(width: 20, height: 20)
       }
+      Spacer().frame(width: 12)
       pillButton(help: "Browse notes", action: onToggleNotes) {
         RaycastStackedCardsIcon()
       }
+      Spacer().frame(width: 8)
       pillButton(help: "New note", action: onNewNote) {
         Image(nsImage: Self.plusIcon)
           .renderingMode(.template)
           .resizable()
-          .frame(width: 16, height: 16)
+          .frame(width: 28, height: 28)
       }
     }
     .foregroundStyle(isKey ? theme.text : RaycastChromePalette.controlResigned)
-    .padding(.horizontal, 15)
+    .padding(.horizontal, 10)
     .frame(height: 44)
     .background(
       Capsule(style: .continuous)
