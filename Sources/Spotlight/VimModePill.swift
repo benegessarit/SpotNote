@@ -92,11 +92,15 @@ struct VimModePill: View {
 
   var body: some View {
     ZStack {
+      // Ring-only like the Raycast T button: the bar's own surface shows
+      // through (a wash would read muddy over the gradient), a whisper of
+      // white lift separates it from the surface, and the mode color
+      // lives in the ring + letter.
       Circle()
-        .fill(tint.opacity(0.12))
-        .overlay(Circle().strokeBorder(tint.opacity(0.5), lineWidth: 1))
+        .fill(Color.white.opacity(0.04))
+        .overlay(Circle().strokeBorder(tint.opacity(0.55), lineWidth: 1))
       ModeGlyphShape(vector: AnimatableVector12(values: glyph))
-        .stroke(tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+        .stroke(tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
         .frame(width: 18, height: 18)
     }
     .frame(width: 38, height: 38)
@@ -123,13 +127,14 @@ struct VimModePill: View {
     }
   }
 
-  /// Insert is the caret red; normal the Raycast "Current" blue; visual
-  /// modes purple.
+  /// Insert is the probed Raycast caret red; normal the probed "Current"
+  /// dot blue; visual a violet in the same saturation family as the blue
+  /// (Raycast's own palette has no probed purple).
   private var tint: Color {
     switch controller.mode {
     case .insert: return Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255)
     case .normal: return Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
-    case .visual, .visualLine: return Color(red: 0xBD / 255, green: 0x93 / 255, blue: 0xF9 / 255)
+    case .visual, .visualLine: return Color(red: 0x9B / 255, green: 0x7C / 255, blue: 0xF2 / 255)
     }
   }
 }
