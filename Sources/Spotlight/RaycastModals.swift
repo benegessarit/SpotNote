@@ -9,12 +9,19 @@ enum RaycastModalPalette {
   static let selectedRow = Color(red: 0x26 / 255, green: 0x28 / 255, blue: 0x33 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
-  static let border = Color.white.opacity(0.08)
+  /// Raycast's sheet stroke is a bright hairline: probes read the border
+  /// pixel at ~#767677 over the #1D1E29 sheet, i.e. white at ~0.35.
+  static let border = Color.white.opacity(0.35)
+  static let borderWidth: CGFloat = 0.5
+  /// Blue "Current" dot in the notes rows (#64A1F1, probed).
+  static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
   static let backdrop = Color.black.opacity(0.35)
 
-  static let width: CGFloat = 480
+  /// Sheet outer width: 766px at 2x in David's live captures.
+  static let width: CGFloat = 383
   static let cornerRadius: CGFloat = 12
-  static let topOffset: CGFloat = 88
+  /// Sheet top sits 100pt below the window top (probed in both modals).
+  static let topOffset: CGFloat = 100
 }
 
 /// Shared floating-sheet chrome: rounded dark sheet with border and shadow,
@@ -35,7 +42,10 @@ private struct RaycastModalSheet<Content: View>: View {
       )
       .overlay(
         RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
-          .strokeBorder(RaycastModalPalette.border, lineWidth: 1)
+          .strokeBorder(
+            RaycastModalPalette.border,
+            lineWidth: RaycastModalPalette.borderWidth
+          )
       )
       .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
   }
@@ -75,23 +85,20 @@ private struct RaycastModalSearchField: View {
         return .handled
       }
       .padding(.horizontal, 16)
-      .frame(height: 48)
+      .frame(height: 44)
       .onAppear { focused = true }
   }
 }
 
-private var modalDivider: some View {
-  Rectangle()
-    .fill(Color.white.opacity(0.06))
-    .frame(height: 1)
-}
-
 /// The Raycast Notes "Browse Notes" modal: search field, "Notes" section
 /// header, and rows of title + metadata with the current note marked.
+/// Raycast separates the regions with spacing only -- no divider lines
+/// anywhere in the sheet (pixel-probed).
 struct RaycastNotesModal: View {
   @ObservedObject var controller: FuzzyController
   let currentChatID: UUID?
   let onPick: (Chat) -> Void
+  let onDelete: (Chat) -> Void
 
   var body: some View {
     RaycastModalSheet {
@@ -106,7 +113,6 @@ struct RaycastNotesModal: View {
           onEscape: { controller.close() },
           onMove: { controller.moveSelection(by: $0) }
         )
-        modalDivider
         list
       }
       .padding(.bottom, 8)
@@ -149,31 +155,19 @@ struct RaycastNotesModal: View {
 
   private func row(_ result: FuzzyResult, index: Int) -> some View {
     let isSelected = index == controller.selectedIndex
-    let isCurrent = result.chat.id == currentChatID
-    let title = result.snippet.isEmpty ? "(empty note)" : result.snippet
     return Button {
       controller.selectedIndex = index
       commit()
     } label: {
-      VStack(alignment: .leading, spacing: 3) {
-        HStack(spacing: 6) {
-          if result.chat.isPinned {
-            Image(systemName: "pin.fill")
-              .font(.system(size: 10))
-              .foregroundStyle(RaycastModalPalette.secondaryText)
-          }
-          Text(title)
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(RaycastModalPalette.primaryText)
-            .lineLimit(1)
+      HStack(spacing: 10) {
+        rowText(result)
+        Spacer(minLength: 8)
+        if isSelected, result.chat.id != currentChatID {
+          deleteButton(result)
         }
-        Text(metadata(result, isCurrent: isCurrent))
-          .font(.system(size: 12))
-          .foregroundStyle(RaycastModalPalette.secondaryText)
-          .lineLimit(1)
       }
-      .padding(.horizontal, 8)
-      .padding(.vertical, 7)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 14)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -182,6 +176,51 @@ struct RaycastNotesModal: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+  }
+
+  private func rowText(_ result: FuzzyResult) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(spacing: 6) {
+        if result.chat.isPinned {
+          Image(systemName: "pin.fill")
+            .font(.system(size: 10))
+            .foregroundStyle(RaycastModalPalette.secondaryText)
+        }
+        Text(result.snippet.isEmpty ? "(empty note)" : result.snippet)
+          .font(.system(size: 15, weight: .medium))
+          .foregroundStyle(RaycastModalPalette.primaryText)
+          .lineLimit(1)
+      }
+      metadataLine(result, isCurrent: result.chat.id == currentChatID)
+    }
+  }
+
+  private func deleteButton(_ result: FuzzyResult) -> some View {
+    Button {
+      onDelete(result.chat)
+    } label: {
+      Image(systemName: "trash")
+        .font(.system(size: 13))
+        .foregroundStyle(RaycastModalPalette.secondaryText)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help("Delete note")
+  }
+
+  /// Raycast marks the open note with a small blue dot before "Current".
+  private func metadataLine(_ result: FuzzyResult, isCurrent: Bool) -> some View {
+    HStack(spacing: 6) {
+      if isCurrent {
+        Circle()
+          .fill(RaycastModalPalette.currentDot)
+          .frame(width: 6, height: 6)
+      }
+      Text(metadata(result, isCurrent: isCurrent))
+        .font(.system(size: 12))
+        .foregroundStyle(RaycastModalPalette.secondaryText)
+        .lineLimit(1)
+    }
   }
 
   private func metadata(_ result: FuzzyResult, isCurrent: Bool) -> String {
@@ -314,7 +353,6 @@ struct RaycastActionsModal: View {
           onEscape: onClose,
           onMove: { move($0) }
         )
-        modalDivider
         list
       }
       .padding(.bottom, 8)
@@ -334,12 +372,11 @@ struct RaycastActionsModal: View {
             .padding(.vertical, 20)
         } else {
           ForEach(Array(rows.enumerated()), id: \.element.id) { index, action in
-            if index > 0, action.section != rows[index - 1].section {
-              modalDivider
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-            }
             row(action, index: index)
+              .padding(
+                .top,
+                index > 0 && action.section != rows[index - 1].section ? 20 : 0
+              )
           }
         }
       }
@@ -367,7 +404,7 @@ struct RaycastActionsModal: View {
         keycaps(action.keys)
       }
       .padding(.horizontal, 8)
-      .frame(height: 40)
+      .frame(height: 42)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -386,11 +423,15 @@ struct RaycastActionsModal: View {
           Text(key)
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(RaycastModalPalette.secondaryText)
-            .frame(minWidth: 22)
-            .frame(height: 22)
+            .frame(minWidth: 20)
+            .frame(height: 20)
             .background(
               RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color.white.opacity(0.07))
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                  RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                )
             )
         }
       }

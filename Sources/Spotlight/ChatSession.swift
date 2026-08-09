@@ -124,6 +124,20 @@ final class ChatSession: ObservableObject {
     ChecklistDocument.serializeMarkdown(text: currentText, checklistLines: currentChecklistLines)
   }
 
+  /// Trash button on a notes-modal row. Vault-backed notes (Tasks) are
+  /// permanent and refuse deletion.
+  func delete(_ chat: Chat) async {
+    guard vaultDocument(for: chat.id) == nil else { return }
+    try? await store.delete(id: chat.id)
+    chats = await availableChats()
+    guard currentID == chat.id else { return }
+    if let next = chats.first {
+      loadCurrentChat(next)
+    } else {
+      _ = await createBlankChat()
+    }
+  }
+
   /// Title-bar `+` button: persist the current note, then open a fresh
   /// blank app-local chat.
   func newNote() async {

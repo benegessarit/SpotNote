@@ -263,10 +263,17 @@ extension SpotlightRootView {
     if fuzzy.isVisible {
       RaycastNotesModal(
         controller: fuzzy,
-        currentChatID: session.currentID
-      ) { chat in
-        session.jump(to: chat)
-      }
+        currentChatID: session.currentID,
+        onPick: { chat in
+          session.jump(to: chat)
+        },
+        onDelete: { chat in
+          Task { @MainActor in
+            await session.delete(chat)
+            fuzzy.updateCorpus(session.chats)
+          }
+        }
+      )
     } else if actionsModalShown {
       RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
     } else {
