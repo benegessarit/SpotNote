@@ -80,7 +80,7 @@ struct SpotlightRootView: View {
           preferences: preferences,
           session: session,
           theme: theme,
-          isKey: keyState.isKey,
+          isKey: keyState.isKey || anyModalShown,
           onClose: onEscape,
           onPick: { chat in
             session.jump(to: chat)
@@ -99,6 +99,12 @@ struct SpotlightRootView: View {
         .overlay(surfaceShape.fill(surfaceFill))
     }
     .overlay(modalLayer)
+    .background(
+      RaycastModalOverhang(
+        content: anyModalShown ? AnyView(activeModal) : nil,
+        onDismissTap: { dismissModals() }
+      )
+    )
     .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
     .colorScheme(theme.mode == .dark ? .dark : .light)
     .animation(.easeOut(duration: 0.10), value: find.isVisible)
@@ -133,7 +139,9 @@ struct SpotlightRootView: View {
       RaycastTopBar(
         title: noteTitle,
         theme: theme,
-        isKey: keyState.isKey,
+        // The chrome stays lit while a modal child window holds key --
+        // the live app keeps the close light red under its menus.
+        isKey: keyState.isKey || anyModalShown,
         showsTrafficLights: !preferences.sidebarShown,
         onClose: onEscape,
         onShowActions: { actionsModalShown = true },
@@ -149,7 +157,7 @@ struct SpotlightRootView: View {
       RaycastBottomBar(characterCount: session.currentText.count)
         .overlay(alignment: .trailing) {
           if preferences.vimMode {
-            VimModePill(controller: vimController, isKey: keyState.isKey)
+            VimModePill(controller: vimController, isKey: keyState.isKey || anyModalShown)
               .padding(.trailing, 10)
           }
         }
@@ -247,19 +255,17 @@ extension SpotlightRootView {
     fuzzy.isVisible || actionsModalShown || themePickerShown
   }
 
-  /// Floating Raycast-style modals over a dimmed note. Lives in an
-  /// `.overlay` so showing a modal never touches the measured height tree.
+  /// Dim backdrop over the note while a modal shows. The modal sheet
+  /// itself lives in an overhanging CHILD WINDOW (`RaycastModalOverhang`)
+  /// so it can extend past the panel's bottom edge like the live app;
+  /// neither layer ever touches the measured height tree.
   @ViewBuilder
   private var modalLayer: some View {
     if anyModalShown {
-      ZStack(alignment: .top) {
-        surfaceShape
-          .fill(RaycastModalPalette.backdrop)
-          .onTapGesture { dismissModals() }
-        activeModal
-          .padding(.top, RaycastModalPalette.topOffset)
-      }
-      .transition(.opacity)
+      surfaceShape
+        .fill(RaycastModalPalette.backdrop)
+        .onTapGesture { dismissModals() }
+        .transition(.opacity)
     }
   }
 
@@ -292,7 +298,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "new-note",
         title: "New Note",
-        systemImage: "plus",
+        icon: .raster(resource: "RaycastPlus", frame: 19),
         keys: [],
         section: 0,
         perform: { newNote() }
@@ -300,7 +306,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "browse-notes",
         title: "Browse Notes",
-        systemImage: "square.on.square",
+        icon: .stackedCards,
         keys: [],
         section: 0,
         perform: { fuzzy.toggle(corpus: session.chats) }
@@ -308,7 +314,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "toggle-sidebar",
         title: preferences.sidebarShown ? "Hide Sidebar" : "Show Sidebar",
-        systemImage: "sidebar.left",
+        icon: .raster(resource: "RaycastSidebarLeft", frame: 14),
         keys: keycaps(for: .toggleSidebar),
         section: 0,
         perform: { preferences.sidebarShown.toggle() }
@@ -316,7 +322,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "find-in-note",
         title: "Find in Note",
-        systemImage: "magnifyingglass",
+        icon: .raster(resource: "RaycastMagnifyingGlass", frame: 14),
         keys: keycaps(for: .findInNote),
         section: 1,
         perform: { find.toggle(text: session.currentText) }
@@ -324,7 +330,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "copy-note",
         title: "Copy Note",
-        systemImage: "doc.on.clipboard",
+        icon: .raster(resource: "RaycastCopyClipboard", frame: 14),
         keys: keycaps(for: .copyContent),
         section: 1,
         perform: {
@@ -335,7 +341,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "change-theme",
         title: "Change Theme",
-        systemImage: "paintpalette",
+        icon: .raster(resource: "RaycastSwatch", frame: 14),
         keys: [],
         section: 2,
         perform: { themePickerShown = true }

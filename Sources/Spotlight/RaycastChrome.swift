@@ -61,43 +61,46 @@ struct RaycastTrafficLights: View {
 
 /// The Raycast Notes note-switcher glyph: two fanned cards, the front card
 /// knocking out the back card's stroke where they overlap. Not in the
-/// public @raycast/icons set, so it is drawn directly.
+/// public @raycast/icons set, so it is drawn directly. `scale` shrinks the
+/// whole drawing uniformly (1 = the pill's 19.5pt visible size).
 struct RaycastStackedCardsIcon: View {
+  var scale: CGFloat = 1
+
   var body: some View {
     ZStack {
       card
         .stroke(style: strokeStyle)
-        .frame(width: 12.2, height: 14.5)
+        .frame(width: 12.2 * scale, height: 14.5 * scale)
         .rotationEffect(.degrees(-8))
-        .offset(x: -2.2, y: 1.6)
+        .offset(x: -2.2 * scale, y: 1.6 * scale)
       card
         .fill(Color.black)
-        .frame(width: 12.2, height: 14.5)
+        .frame(width: 12.2 * scale, height: 14.5 * scale)
         .rotationEffect(.degrees(12))
-        .offset(x: 2.3, y: -1.6)
+        .offset(x: 2.3 * scale, y: -1.6 * scale)
         .blendMode(.destinationOut)
       card
         .stroke(style: strokeStyle)
-        .frame(width: 12.2, height: 14.5)
+        .frame(width: 12.2 * scale, height: 14.5 * scale)
         .rotationEffect(.degrees(12))
-        .offset(x: 2.3, y: -1.6)
+        .offset(x: 2.3 * scale, y: -1.6 * scale)
     }
     .compositingGroup()
-    .frame(width: 20, height: 20)
+    .frame(width: 20 * scale, height: 20 * scale)
   }
 
   private var card: RoundedRectangle {
-    RoundedRectangle(cornerRadius: 3.4, style: .continuous)
+    RoundedRectangle(cornerRadius: 3.4 * scale, style: .continuous)
   }
 
   private var strokeStyle: StrokeStyle {
-    StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+    StrokeStyle(lineWidth: 1.8 * scale, lineCap: .round, lineJoin: .round)
   }
 }
 
 /// Loads a bundled Raycast icon rasterized from the exact @raycast/icons
 /// path data, tinted at render time via template mode.
-private func raycastIconImage(_ resource: String) -> NSImage {
+func raycastIconImage(_ resource: String) -> NSImage {
   let bundle = Bundle.spotlightResources
   guard let url = bundle.url(forResource: resource, withExtension: "png"),
     let image = NSImage(contentsOf: url)

@@ -556,11 +556,19 @@ extension SpotlightWindowController {
       ) { [weak self, weak panel] _ in
         MainActor.assumeIsolated {
           guard let self else { return }
-          self.keyState.isKey = false
-          if self.preferences.dimOnFocusLoss {
-            panel?.animator().alphaValue = CGFloat(self.preferences.unfocusedOpacity)
-          } else {
-            self.close()
+          // Key moves to the new window AFTER this fires: defer one tick
+          // so a modal child window taking key (Browse Notes / Actions /
+          // Themes) never dims or closes the HUD under its own menu.
+          DispatchQueue.main.async {
+            if let key = NSApp.keyWindow, key === RaycastModalOverhang.activeChildWindow {
+              return
+            }
+            self.keyState.isKey = false
+            if self.preferences.dimOnFocusLoss {
+              panel?.animator().alphaValue = CGFloat(self.preferences.unfocusedOpacity)
+            } else {
+              self.close()
+            }
           }
         }
       }

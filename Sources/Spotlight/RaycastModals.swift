@@ -5,25 +5,37 @@ import SwiftUI
 /// Pixel-sampled from the live Raycast Beta Notes modals: the sheet is
 /// DARKER than the note surface, with a soft hover row and muted metadata.
 enum RaycastModalPalette {
-  static let sheet = Color(red: 0x1D / 255, green: 0x1E / 255, blue: 0x29 / 255)
-  static let selectedRow = Color(red: 0x26 / 255, green: 0x28 / 255, blue: 0x33 / 255)
+  /// The sheet is subtly top-lit like the note surface: #1D1D27 at the
+  /// top fading to #1A1922 by mid-sheet (pixel-probed 2026-08-09 in the
+  /// live actions menu).
+  static let sheetTop = Color(red: 0x1D / 255, green: 0x1D / 255, blue: 0x27 / 255)
+  static let sheet = Color(red: 0x1A / 255, green: 0x19 / 255, blue: 0x22 / 255)
+  /// Selected row (35,34,45) probed.
+  static let selectedRow = Color(red: 0x23 / 255, green: 0x22 / 255, blue: 0x2D / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
   /// Search placeholder is dimmer than section headers (#64687A probed).
   static let searchPlaceholder = Color(red: 0x64 / 255, green: 0x68 / 255, blue: 0x7A / 255)
-  /// Raycast's sheet stroke is a bright hairline: probes read the border
-  /// pixel at ~#767677 over the #1D1E29 sheet, i.e. white at ~0.35.
-  static let border = Color.white.opacity(0.35)
+  /// The sheet stroke is a bluish-purple hairline, not neutral white:
+  /// border pixels probe ~(69,65,90) over the sheet.
+  static let border = Color(red: 0x4A / 255, green: 0x46 / 255, blue: 0x60 / 255)
   static let borderWidth: CGFloat = 0.5
   /// Blue "Current" dot in the notes rows (#64A1F1, probed).
   static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
   static let backdrop = Color.black.opacity(0.35)
+  /// Hairline between action groups (probed ~(46,45,57) over the sheet).
+  static let sectionRule = Color.white.opacity(0.09)
 
-  /// Sheet outer width: 766px at 2x in David's live captures.
+  /// Sheet outer width: 767px at 2x in David's live captures.
   static let width: CGFloat = 383
-  static let cornerRadius: CGFloat = 12
+  static let cornerRadius: CGFloat = 10
   /// Sheet top sits 100pt below the window top (probed in both modals).
   static let topOffset: CGFloat = 100
+  /// Row rects inset 6pt from the sheet edge; 38pt tall on 42pt pitch.
+  static let rowInset: CGFloat = 6
+  static let rowHeight: CGFloat = 38
+  static let rowSpacing: CGFloat = 4
+  static let rowCornerRadius: CGFloat = 6
 }
 
 /// Shared floating-sheet chrome: rounded dark sheet with border and shadow,
@@ -40,7 +52,13 @@ struct RaycastModalSheet<Content: View>: View {
       .frame(width: RaycastModalPalette.width)
       .background(
         RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
-          .fill(RaycastModalPalette.sheet)
+          .fill(
+            LinearGradient(
+              colors: [RaycastModalPalette.sheetTop, RaycastModalPalette.sheet],
+              startPoint: .top,
+              endPoint: .center
+            )
+          )
       )
       .overlay(
         RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
@@ -70,12 +88,13 @@ private struct RaycastModalSearchField: View {
         Text(placeholder)
           .font(.system(size: 16))
           .foregroundStyle(RaycastModalPalette.searchPlaceholder)
-          .padding(.leading, 12)
+          .padding(.leading, 3)
           .allowsHitTesting(false)
       }
       field
     }
-    .padding(.horizontal, 16)
+    // Caret rests 20pt from the sheet edge (probed x=473 at 2x).
+    .padding(.horizontal, 20)
     .frame(height: 44)
     .onAppear { focused = true }
   }
@@ -160,7 +179,7 @@ struct RaycastNotesModal: View {
             }
           }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, RaycastModalPalette.rowInset)
       }
       .frame(maxHeight: 320)
       .onChange(of: controller.selectedIndex) { _, newIndex in
@@ -188,7 +207,7 @@ struct RaycastNotesModal: View {
       .padding(.vertical, 12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: RaycastModalPalette.rowCornerRadius, style: .continuous)
           .fill(isSelected ? RaycastModalPalette.selectedRow : Color.clear)
       )
       .contentShape(Rectangle())
@@ -268,11 +287,19 @@ extension Array {
   }
 }
 
+/// Row glyph in the actions modal: an exact @raycast/icons raster (frame
+/// tuned per asset so visible glyphs match the probed ~12.5pt), or the
+/// custom fanned-cards note-switcher.
+enum RaycastActionIcon {
+  case raster(resource: String, frame: CGFloat)
+  case stackedCards
+}
+
 /// One entry in the Raycast-style actions modal.
 struct RaycastAction: Identifiable {
   let id: String
   let title: String
-  let systemImage: String
+  let icon: RaycastActionIcon
   /// Display keycaps, e.g. ["⌘", "N"]. Empty = no shortcut shown.
   let keys: [String]
   /// Divider group; a thin rule renders between groups.
@@ -313,7 +340,7 @@ struct RaycastActionsModal: View {
 
   private var list: some View {
     ScrollView {
-      LazyVStack(alignment: .leading, spacing: 0) {
+      LazyVStack(alignment: .leading, spacing: RaycastModalPalette.rowSpacing) {
         let rows = filtered
         if rows.isEmpty {
           Text("No matching actions")
@@ -323,18 +350,27 @@ struct RaycastActionsModal: View {
             .padding(.vertical, 20)
         } else {
           ForEach(Array(rows.enumerated()), id: \.element.id) { index, action in
+            if index > 0, action.section != rows[index - 1].section {
+              sectionRule
+            }
             row(action, index: index)
-              .padding(
-                .top,
-                index > 0 && action.section != rows[index - 1].section ? 20 : 0
-              )
           }
         }
       }
-      .padding(.horizontal, 8)
-      .padding(.top, 8)
+      .padding(.horizontal, RaycastModalPalette.rowInset)
+      .padding(.top, 6)
+      .padding(.bottom, 8)
     }
-    .frame(maxHeight: 340)
+    .frame(maxHeight: 400)
+  }
+
+  /// Hairline between action groups, centered in a 32pt gap (probed).
+  private var sectionRule: some View {
+    Rectangle()
+      .fill(RaycastModalPalette.sectionRule)
+      .frame(height: 1)
+      .padding(.horizontal, 6)
+      .padding(.vertical, 12)
   }
 
   private func row(_ action: RaycastAction, index: Int) -> some View {
@@ -343,22 +379,23 @@ struct RaycastActionsModal: View {
       selectedIndex = index
       commit()
     } label: {
-      HStack(spacing: 10) {
-        Image(systemName: action.systemImage)
-          .font(.system(size: 14))
+      HStack(spacing: 0) {
+        iconView(action.icon)
           .foregroundStyle(RaycastModalPalette.secondaryText)
-          .frame(width: 20)
+          .frame(width: 20, height: 20)
+        Spacer().frame(width: 11)
         Text(action.title)
           .font(.system(size: 16))
           .foregroundStyle(RaycastModalPalette.primaryText)
         Spacer(minLength: 12)
         keycaps(action.keys)
       }
-      .padding(.horizontal, 8)
-      .frame(height: 42)
+      .padding(.leading, 13)
+      .padding(.trailing, 12)
+      .frame(height: RaycastModalPalette.rowHeight)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: RaycastModalPalette.rowCornerRadius, style: .continuous)
           .fill(isSelected ? RaycastModalPalette.selectedRow : Color.clear)
       )
       .contentShape(Rectangle())
@@ -366,23 +403,40 @@ struct RaycastActionsModal: View {
     .buttonStyle(.plain)
   }
 
+  /// Rasters preloaded once; actions rebuild on every body evaluation.
+  private static let rasters: [String: NSImage] = Dictionary(
+    uniqueKeysWithValues: [
+      "RaycastPlus", "RaycastMagnifyingGlass", "RaycastCopyClipboard",
+      "RaycastSidebarLeft", "RaycastSwatch"
+    ].map { ($0, raycastIconImage($0)) }
+  )
+
+  @ViewBuilder
+  private func iconView(_ icon: RaycastActionIcon) -> some View {
+    switch icon {
+    case .raster(let resource, let frame):
+      Image(nsImage: Self.rasters[resource] ?? raycastIconImage(resource))
+        .renderingMode(.template)
+        .resizable()
+        .frame(width: frame, height: frame)
+    case .stackedCards:
+      RaycastStackedCardsIcon(scale: 0.77)
+    }
+  }
+
   @ViewBuilder
   private func keycaps(_ keys: [String]) -> some View {
     if !keys.isEmpty {
-      HStack(spacing: 4) {
+      HStack(spacing: 3) {
         ForEach(keys, id: \.self) { key in
           Text(key)
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 13, weight: .medium))
             .foregroundStyle(RaycastModalPalette.secondaryText)
-            .frame(minWidth: 20)
-            .frame(height: 20)
+            .frame(minWidth: 22)
+            .frame(height: 22)
             .background(
-              RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                )
+              RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
             )
         }
       }
