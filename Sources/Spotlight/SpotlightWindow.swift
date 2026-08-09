@@ -393,7 +393,7 @@ public final class SpotlightWindowController {
       defer: false
     )
     Self.configurePanel(panel)
-    panel.contentView = NSHostingView(
+    let hosting = NSHostingView(
       rootView: SpotlightRootView(
         focusTrigger: focusTrigger,
         keyState: keyState,
@@ -423,6 +423,14 @@ public final class SpotlightWindowController {
         }
       )
     )
+    // The panel frame is fully programmatic (sidebar toggle + height
+    // solver). Left to its default sizing options, the hosting view
+    // imposes the SwiftUI content's minimum size on the window, which
+    // clamps the sidebar-close shrink for the one runloop turn where the
+    // sidebar is still in the tree -- leaving a 920pt-wide window with a
+    // 250pt blank gutter.
+    hosting.sizingOptions = []
+    panel.contentView = hosting
     panel.keyEquivalentHandler = { [weak self] event in
       self?.handleKeyEquivalent(event) ?? false
     }
