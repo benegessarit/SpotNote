@@ -448,24 +448,6 @@ struct MultilineEditorVimLogicalLineMotionTests {
     #expect((temporaryForegroundColor(at: firstTargetLocation + 1, in: textView)?.alphaComponent ?? 1) > 0.01)
   }
 
-  @Test("regular Flash labels replace the next target word characters in place")
-  func flashLabelsHideReplacementCharactersInPlace() {
-    let textView = makeVimMotionTextView(text: "x not now notion")
-    let controller = VimController()
-    textView.attachVimController(controller)
-    textView.vimModeEnabled = true
-    textView.setSelectedRange(NSRange(location: 0, length: 0))
-
-    textView.keyDown(with: keyEvent(characters: "f", ignoring: "f", keyCode: 3))
-    textView.keyDown(with: keyEvent(characters: "n", ignoring: "n", keyCode: 45))
-    textView.keyDown(with: keyEvent(characters: "o", ignoring: "o", keyCode: 31))
-
-    let firstTargetLocation = ("x " as NSString).length
-    let replacementLocation = firstTargetLocation + ("no" as NSString).length
-    #expect(textView.flashHints.first?.label == "a")
-    #expect(temporaryForegroundColor(at: replacementLocation, in: textView)?.alphaComponent == 0)
-  }
-
   @Test("f query plus visible label keyDown jumps and clears Flash")
   func flashKeyDownQueryAndLabelJumps() {
     let textView = makeVimMotionTextView(text: "zero alpha beta alpha")

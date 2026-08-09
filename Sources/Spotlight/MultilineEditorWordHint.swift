@@ -153,17 +153,11 @@ extension PlaceholderTextView {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
     // hop `dim_unmatched` (default true): the whole surface dims while
-    // hints show; label cells clear so the colored label replaces the
-    // glyph underneath (`hl_mode = "replace"`).
+    // hints show. Labels draw as opaque chips over the word starts
+    // (`drawHintChip`); hop's `hl_mode = "replace"` is not ported
+    // because glyph replacement only aligns on a monospace grid.
     let fullRange = NSRange(location: 0, length: nsString.length)
     addWordHintForeground(wordHintDimmedTextColor, range: fullRange, layoutManager: layoutManager)
-    for entry in visibleWordHintLabels() {
-      let length = min((entry.display as NSString).length, nsString.length - entry.target.location)
-      let labelRange = NSRange(location: entry.target.location, length: length)
-      if labelRange.length > 0 {
-        addWordHintForeground(.clear, range: labelRange, layoutManager: layoutManager)
-      }
-    }
   }
 
   private func addWordHintForeground(
@@ -207,37 +201,13 @@ extension PlaceholderTextView {
     alternate: Bool,
     dirtyRect: NSRect
   ) {
-    guard let layoutManager, let textContainer else { return }
-    let nsString = string as NSString
-    guard location < nsString.length, layoutManager.numberOfGlyphs > 0 else { return }
-    let glyphIndex = min(
-      layoutManager.glyphIndexForCharacter(at: location),
-      max(0, layoutManager.numberOfGlyphs - 1)
+    guard let anchor = hintAnchorRects(forCharacterAt: location) else { return }
+    drawHintChip(
+      label,
+      glyph: anchor.glyph,
+      line: anchor.line,
+      fill: alternate ? Self.wordHintAlternateColor : Self.wordHintPrimaryColor,
+      dirtyRect: dirtyRect
     )
-    let line = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-    let glyph = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
-    guard !line.isEmpty, !glyph.isEmpty else { return }
-    let attrs = wordHintTextAttributes(alternate: alternate)
-    let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let rect = NSRect(
-      x: textContainerOrigin.x + glyph.minX,
-      y: textContainerOrigin.y + line.minY,
-      width: max(labelWidth + 2, glyph.width),
-      height: EditorMetrics.lineHeight
-    )
-    guard rect.intersects(dirtyRect) else { return }
-    let effectiveFont =
-      attrs[.font] as? NSFont
-      ?? .monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular)
-    let baseline = LineNumberRuler.synthesizedBaseline(fragmentHeight: rect.height, font: effectiveFont)
-    let point = NSPoint(x: rect.minX, y: rect.minY + baseline - effectiveFont.ascender)
-    (label as NSString).draw(at: point, withAttributes: attrs)
-  }
-
-  private func wordHintTextAttributes(alternate: Bool) -> [NSAttributedString.Key: Any] {
-    [
-      .font: font ?? NSFont.monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .regular),
-      .foregroundColor: alternate ? Self.wordHintAlternateColor : Self.wordHintPrimaryColor
-    ]
   }
 }
