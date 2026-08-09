@@ -105,7 +105,7 @@ struct VimModePill: View {
     }
     .frame(width: 38, height: 38)
     .opacity(isKey ? 1 : 0.45)
-    .animation(.spring(response: 0.2, dampingFraction: 0.72), value: controller.mode)
+    .animation(.spring(response: 0.17, dampingFraction: 0.72), value: controller.mode)
     .animation(.easeOut(duration: 0.12), value: isKey)
     .accessibilityLabel("Vim mode: \(modeName)")
   }
