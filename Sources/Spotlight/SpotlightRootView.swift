@@ -222,7 +222,8 @@ struct SpotlightRootView: View {
     )
     .padding(.leading, EditorMetrics.leadingInset)
     .padding(.trailing, EditorMetrics.trailingInset)
-    .padding(.vertical, EditorMetrics.verticalInset)
+    .padding(.top, EditorMetrics.topInset)
+    .padding(.bottom, EditorMetrics.bottomInset)
   }
 
   private var editorPlaceholder: String {

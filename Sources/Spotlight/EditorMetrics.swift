@@ -8,8 +8,12 @@ enum EditorMetrics {
   /// plus per-paragraph spacing); SpotNote applies it uniformly because
   /// the editor draws every logical line as one fixed-height fragment.
   static let lineHeight: CGFloat = 41
-  /// Vertical padding between the content area and the rounded-card edge.
-  static let verticalInset: CGFloat = 20
+  /// Padding above the first text line (below the top bar). Raycast Notes
+  /// has this gap only at the top: the last line sits directly on the
+  /// bottom bar (measured resting window 381pt = 60 + 20 + 6x41 + 0 + 56).
+  static let topInset: CGFloat = 20
+  /// Padding below the last text line. Zero to match Raycast Notes.
+  static let bottomInset: CGFloat = 0
   /// The Raycast-style shell is full-bleed: the surface fills the panel,
   /// so there is no shadow gutter between card and panel edge.
   static let outerPadding: CGFloat = 0
@@ -57,7 +61,7 @@ enum EditorMetrics {
     let clampedMax = max(1, maxLines)
     let roomyFloor = min(clampedMax, max(1, roomyVisibleLinesFloor))
     let clamped = min(max(roomyFloor, lines), clampedMax)
-    return CGFloat(clamped) * lineHeight + verticalInset * 2 + outerPadding * 2
+    return CGFloat(clamped) * lineHeight + topInset + bottomInset + outerPadding * 2
   }
 
   static func lineCount(in text: String) -> Int {
