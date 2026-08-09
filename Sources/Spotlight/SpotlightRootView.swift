@@ -264,6 +264,7 @@ extension SpotlightRootView {
       RaycastNotesModal(
         controller: fuzzy,
         currentChatID: session.currentID,
+        isDeletable: { session.isDeletable($0) },
         onPick: { chat in
           session.jump(to: chat)
         },

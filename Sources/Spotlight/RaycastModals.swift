@@ -26,7 +26,7 @@ enum RaycastModalPalette {
 
 /// Shared floating-sheet chrome: rounded dark sheet with border and shadow,
 /// positioned near the top of the note like Raycast's modals.
-private struct RaycastModalSheet<Content: View>: View {
+struct RaycastModalSheet<Content: View>: View {
   let content: Content
 
   init(@ViewBuilder content: () -> Content) {
@@ -63,7 +63,7 @@ private struct RaycastModalSearchField: View {
   var body: some View {
     TextField(placeholder, text: $text)
       .textFieldStyle(.plain)
-      .font(.system(size: 15))
+      .font(.system(size: 16))
       .foregroundStyle(RaycastModalPalette.primaryText)
       .focused($focused)
       .onSubmit(onSubmit)
@@ -97,6 +97,7 @@ private struct RaycastModalSearchField: View {
 struct RaycastNotesModal: View {
   @ObservedObject var controller: FuzzyController
   let currentChatID: UUID?
+  let isDeletable: (Chat) -> Bool
   let onPick: (Chat) -> Void
   let onDelete: (Chat) -> Void
 
@@ -124,11 +125,11 @@ struct RaycastNotesModal: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
           Text("Notes")
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(RaycastModalPalette.secondaryText)
             .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 6)
+            .padding(.top, 20)
+            .padding(.bottom, 8)
           if controller.results.isEmpty {
             Text(controller.query.isEmpty ? "No notes" : "No matches")
               .font(.system(size: 13))
@@ -162,12 +163,12 @@ struct RaycastNotesModal: View {
       HStack(spacing: 10) {
         rowText(result)
         Spacer(minLength: 8)
-        if isSelected, result.chat.id != currentChatID {
+        if isSelected, isDeletable(result.chat) {
           deleteButton(result)
         }
       }
-      .padding(.horizontal, 10)
-      .padding(.vertical, 14)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -187,7 +188,7 @@ struct RaycastNotesModal: View {
             .foregroundStyle(RaycastModalPalette.secondaryText)
         }
         Text(result.snippet.isEmpty ? "(empty note)" : result.snippet)
-          .font(.system(size: 15, weight: .medium))
+          .font(.system(size: 17, weight: .medium))
           .foregroundStyle(RaycastModalPalette.primaryText)
           .lineLimit(1)
       }
@@ -214,10 +215,10 @@ struct RaycastNotesModal: View {
       if isCurrent {
         Circle()
           .fill(RaycastModalPalette.currentDot)
-          .frame(width: 6, height: 6)
+          .frame(width: 7, height: 7)
       }
       Text(metadata(result, isCurrent: isCurrent))
-        .font(.system(size: 12))
+        .font(.system(size: 15))
         .foregroundStyle(RaycastModalPalette.secondaryText)
         .lineLimit(1)
     }
@@ -247,73 +248,6 @@ struct RaycastNotesModal: View {
 extension Array {
   subscript(safe index: Int) -> Element? {
     indices.contains(index) ? self[index] : nil
-  }
-}
-
-/// Theme picker as a Raycast-style floating modal (replaces the old
-/// bottom-bar "T" popover). Rows preview each theme's surface color.
-struct RaycastThemesModal: View {
-  @ObservedObject var preferences: ThemePreferences
-  let onClose: () -> Void
-
-  var body: some View {
-    RaycastModalSheet {
-      VStack(alignment: .leading, spacing: 0) {
-        Text("Theme")
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(RaycastModalPalette.secondaryText)
-          .padding(.horizontal, 16)
-          .padding(.top, 14)
-          .padding(.bottom, 6)
-        list
-      }
-      .padding(.bottom, 8)
-    }
-  }
-
-  private var list: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 0) {
-        ForEach(ThemeCatalog.all) { theme in
-          row(theme)
-        }
-      }
-      .padding(.horizontal, 8)
-    }
-    .frame(maxHeight: 340)
-  }
-
-  private func row(_ theme: Theme) -> some View {
-    let isSelected = preferences.selectedThemeID == theme.id
-    return Button {
-      preferences.selectedThemeID = theme.id
-      onClose()
-    } label: {
-      HStack(spacing: 10) {
-        Circle()
-          .fill(theme.background)
-          .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
-          .frame(width: 14, height: 14)
-        Text(theme.name)
-          .font(.system(size: 14))
-          .foregroundStyle(RaycastModalPalette.primaryText)
-        Spacer(minLength: 12)
-        if isSelected {
-          Image(systemName: "checkmark")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(RaycastModalPalette.secondaryText)
-        }
-      }
-      .padding(.horizontal, 8)
-      .frame(height: 38)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(isSelected ? RaycastModalPalette.selectedRow : Color.clear)
-      )
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
   }
 }
 
@@ -394,11 +328,11 @@ struct RaycastActionsModal: View {
     } label: {
       HStack(spacing: 10) {
         Image(systemName: action.systemImage)
-          .font(.system(size: 13))
-          .foregroundStyle(RaycastModalPalette.secondaryText)
-          .frame(width: 18)
-        Text(action.title)
           .font(.system(size: 14))
+          .foregroundStyle(RaycastModalPalette.secondaryText)
+          .frame(width: 20)
+        Text(action.title)
+          .font(.system(size: 16))
           .foregroundStyle(RaycastModalPalette.primaryText)
         Spacer(minLength: 12)
         keycaps(action.keys)

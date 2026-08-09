@@ -5,12 +5,18 @@ import SwiftUI
 /// of the shell identity (pixel-sampled from the live Raycast Beta Notes
 /// window) and intentionally do not follow the editor theme.
 enum RaycastChromePalette {
-  static let closeRed = Color(red: 0xEC / 255, green: 0x67 / 255, blue: 0x65 / 255)
+  /// Raycast authors its saturated colors in Display P3: the live close
+  /// button reads (236,103,101) raw on the display, which an sRGB
+  /// #EC6765 undershoots (renders ~(220,111,105)).
+  static let closeRed = Color(.displayP3, red: 0xEC / 255, green: 0x67 / 255, blue: 0x65 / 255)
   static let inactiveDot = Color(red: 0x46 / 255, green: 0x48 / 255, blue: 0x56 / 255)
   static let titleKey = Color(red: 0x8C / 255, green: 0x90 / 255, blue: 0xA6 / 255)
   static let titleResigned = Color(red: 0x46 / 255, green: 0x4A / 255, blue: 0x5B / 255)
   static let counter = Color(red: 0x48 / 255, green: 0x4C / 255, blue: 0x5B / 255)
   static let control = Color(red: 0x76 / 255, green: 0x7D / 255, blue: 0x91 / 255)
+  /// The icon pill's fill is a solid near-surface tone (#25262E probed),
+  /// not a white wash -- it reads slightly warmer than the gradient.
+  static let pillFill = Color(red: 0x25 / 255, green: 0x26 / 255, blue: 0x2E / 255)
 }
 
 /// Raycast Notes draws its own traffic lights: 14pt dots at 23pt centers,
@@ -134,7 +140,7 @@ struct RaycastTopBar: View {
       HStack {
         if showsTrafficLights {
           RaycastTrafficLights(onClose: onClose)
-            .padding(.leading, 22)
+            .padding(.leading, 23)
         }
         Spacer()
         iconPill
@@ -165,11 +171,11 @@ struct RaycastTopBar: View {
     }
     .foregroundStyle(theme.text)
     .padding(.horizontal, 15)
-    .frame(height: 30)
+    .frame(height: 44)
     .background(
       Capsule(style: .continuous)
-        .fill(Color.white.opacity(0.05))
-        .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
+        .fill(RaycastChromePalette.pillFill)
+        .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
     )
   }
 

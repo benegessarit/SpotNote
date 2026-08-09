@@ -124,6 +124,12 @@ final class ChatSession: ObservableObject {
     ChecklistDocument.serializeMarkdown(text: currentText, checklistLines: currentChecklistLines)
   }
 
+  /// Vault-backed notes (Tasks) are permanent; only app-local notes show
+  /// the notes-modal trash button.
+  func isDeletable(_ chat: Chat) -> Bool {
+    vaultDocument(for: chat.id) == nil
+  }
+
   /// Trash button on a notes-modal row. Vault-backed notes (Tasks) are
   /// permanent and refuse deletion.
   func delete(_ chat: Chat) async {
