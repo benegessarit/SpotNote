@@ -11,9 +11,11 @@ enum RaycastChromePalette {
   static let closeRed = Color(.displayP3, red: 0xEC / 255, green: 0x67 / 255, blue: 0x65 / 255)
   static let inactiveDot = Color(red: 0x46 / 255, green: 0x48 / 255, blue: 0x56 / 255)
   static let titleKey = Color(red: 0x8C / 255, green: 0x90 / 255, blue: 0xA6 / 255)
-  static let titleResigned = Color(red: 0x46 / 255, green: 0x4A / 255, blue: 0x5B / 255)
   static let counter = Color(red: 0x48 / 255, green: 0x4C / 255, blue: 0x5B / 255)
   static let control = Color(red: 0x76 / 255, green: 0x7D / 255, blue: 0x91 / 255)
+  /// Pill icon tint while the panel is resigned (probed (76,78,89) in the
+  /// live resigned window -- the pill stays visible, only dimmed).
+  static let controlResigned = Color(red: 0x4C / 255, green: 0x4E / 255, blue: 0x59 / 255)
   /// The icon pill's fill is a solid near-surface tone (#25262E probed),
   /// not a white wash -- it reads slightly warmer than the gradient.
   static let pillFill = Color(red: 0x25 / 255, green: 0x26 / 255, blue: 0x2E / 255)
@@ -21,8 +23,11 @@ enum RaycastChromePalette {
 
 /// Raycast Notes draws its own traffic lights: 14pt dots at 23pt centers,
 /// close active red (with an x on hover), minimize/zoom rendered as
-/// disabled grey dots. Only close is interactive.
+/// disabled grey dots. Only close is interactive. When the panel resigns
+/// key, close joins the other two in grey -- the lights stay visible
+/// (pixel-probed in the live resigned window).
 struct RaycastTrafficLights: View {
+  let isKey: Bool
   let onClose: () -> Void
   @State private var hovering = false
 
@@ -31,7 +36,7 @@ struct RaycastTrafficLights: View {
       Button(action: onClose) {
         ZStack {
           Circle()
-            .fill(RaycastChromePalette.closeRed)
+            .fill(isKey ? RaycastChromePalette.closeRed : RaycastChromePalette.inactiveDot)
           if hovering {
             Image(systemName: "xmark")
               .font(.system(size: 8, weight: .heavy))
@@ -130,23 +135,20 @@ struct RaycastTopBar: View {
     ZStack {
       Text(title)
         .font(.system(size: 16, weight: .medium))
-        .foregroundStyle(
-          isKey ? RaycastChromePalette.titleKey : RaycastChromePalette.titleResigned
-        )
+        .foregroundStyle(RaycastChromePalette.titleKey)
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.trafficLightGutter + 30)
       HStack {
         if showsTrafficLights {
-          RaycastTrafficLights(onClose: onClose)
+          RaycastTrafficLights(isKey: isKey, onClose: onClose)
             .padding(.leading, 23)
         }
         Spacer()
         iconPill
           .padding(.trailing, 9)
       }
-      .opacity(isKey ? 1 : 0)
     }
     .frame(height: EditorMetrics.topBarHeight)
   }
@@ -169,7 +171,7 @@ struct RaycastTopBar: View {
           .frame(width: 16, height: 16)
       }
     }
-    .foregroundStyle(theme.text)
+    .foregroundStyle(isKey ? theme.text : RaycastChromePalette.controlResigned)
     .padding(.horizontal, 15)
     .frame(height: 44)
     .background(

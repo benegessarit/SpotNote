@@ -36,7 +36,7 @@ struct SpotNoteSidebar: View {
   /// sit at the window's top-left corner, which the sidebar now owns.
   private var header: some View {
     HStack {
-      RaycastTrafficLights(onClose: onClose)
+      RaycastTrafficLights(isKey: isKey, onClose: onClose)
         .padding(.leading, 22)
       Spacer()
       Button {
@@ -44,14 +44,15 @@ struct SpotNoteSidebar: View {
       } label: {
         Image(systemName: "sidebar.left")
           .font(.system(size: 14, weight: .medium))
-          .foregroundStyle(RaycastChromePalette.control)
+          .foregroundStyle(
+            isKey ? RaycastChromePalette.control : RaycastChromePalette.controlResigned
+          )
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .help("Hide sidebar")
       .padding(.trailing, 14)
     }
-    .opacity(isKey ? 1 : 0)
     .frame(height: EditorMetrics.topBarHeight)
   }
 

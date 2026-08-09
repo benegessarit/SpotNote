@@ -581,6 +581,16 @@ struct MultilineEditor: NSViewRepresentable {
     }
     scroll.hasVerticalRuler = true
     scroll.rulersVisible = true
+    // The gutter lives inside the Raycast 37pt leading gap: shrink the
+    // text container inset by the ruler width so turning numbers on never
+    // moves the text (Raycast Notes has no gutter).
+    let leading =
+      visible
+      ? max(7, EditorMetrics.textLeadingGap - ruler.ruleThickness)
+      : EditorMetrics.textLeadingGap
+    if abs(textView.textContainerInset.width - leading) > 0.5 {
+      textView.textContainerInset = NSSize(width: leading, height: 0)
+    }
   }
 
 }

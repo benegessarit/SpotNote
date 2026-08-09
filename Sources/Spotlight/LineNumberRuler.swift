@@ -14,6 +14,9 @@ final class LineNumberRuler: NSRulerView {
   }
 
   static let labelFontSize: CGFloat = EditorMetrics.fontSize
+  /// Line numbers render small and dim (nvim-style) so the whole gutter
+  /// fits inside the Raycast 37pt leading gap without moving the text.
+  static let numberFontSize: CGFloat = 13
 
   /// The gutter is non-interactive -- let drags here move the panel
   /// window like the rest of the HUD chrome instead of being swallowed
@@ -73,15 +76,17 @@ final class LineNumberRuler: NSRulerView {
     // the digit count.
     let effective = max(1, lineCount)
     let digits = String(effective).count
-    let font = Self.labelFont(ofSize: labelSize)
+    let font = Self.labelFont(ofSize: numberFontSize)
     let sample = String(repeating: "8", count: digits) as NSString
     let digitWidth = sample.size(withAttributes: [.font: font]).width
     // Continuation rows render `wrapMarker` in place of a number. Ensure
     // the gutter is wide enough for either glyph.
     let wrapWidth = Self.wrapMarker.size(withAttributes: [.font: font]).width
-    // Nvim-style signcolumn: one narrow sign cell on the left, one
-    // right-aligned number column on the right.
-    return Self.signColumnWidth(forLabelSize: labelSize) + ceil(max(digitWidth, wrapWidth)) + 6
+    // One shared column: 13pt numbers right-aligned, wide enough for the
+    // bold flash-hint labels that draw in the same space. Sized so the
+    // editor can absorb it into the 37pt leading gap (numbers never move
+    // the text), and stable when flash hints toggle.
+    return max(Self.signColumnWidth(forLabelSize: labelSize), ceil(max(digitWidth, wrapWidth)) + 8)
   }
 
   /// Total laid-out display rows (line fragments + trailing blank
@@ -152,7 +157,7 @@ final class LineNumberRuler: NSRulerView {
       let layoutManager = textView.layoutManager
     else { return }
 
-    let labelFont = Self.labelFont(ofSize: Self.labelFontSize)
+    let labelFont = Self.labelFont(ofSize: Self.numberFontSize)
     let context = DrawContext(
       textView: textView,
       layoutManager: layoutManager,
