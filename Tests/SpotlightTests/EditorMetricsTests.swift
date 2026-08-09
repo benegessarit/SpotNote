@@ -82,7 +82,7 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.fontSize == 20)
     #expect(EditorMetrics.lineHeight == 41)
     #expect(EditorMetrics.panelWidth == 670)
-    #expect(EditorMetrics.surfaceCornerRadius == 16)
+    #expect(EditorMetrics.surfaceCornerRadius == 26)
     #expect(EditorMetrics.topBarHeight == 60)
     #expect(EditorMetrics.bottomBarHeight == 56)
   }

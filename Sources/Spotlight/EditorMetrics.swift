@@ -17,8 +17,10 @@ enum EditorMetrics {
   /// The Raycast-style shell is full-bleed: the surface fills the panel,
   /// so there is no shadow gutter between card and panel edge.
   static let outerPadding: CGFloat = 0
-  /// Corner radius of the full-bleed panel surface (Raycast Notes look).
-  static let surfaceCornerRadius: CGFloat = 16
+  /// Corner radius of the full-bleed panel surface. Circle-fit on the live
+  /// Raycast Notes window border arc (two probe points, third verified)
+  /// gives r = 52px at 2x = 26pt.
+  static let surfaceCornerRadius: CGFloat = 26
   /// Fixed height of the Raycast-style title bar (traffic lights, centered
   /// note title, trailing icon pill). Mirrored by the window controller's
   /// `chromeAboveEditor`.

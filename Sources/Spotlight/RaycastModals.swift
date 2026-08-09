@@ -9,6 +9,8 @@ enum RaycastModalPalette {
   static let selectedRow = Color(red: 0x26 / 255, green: 0x28 / 255, blue: 0x33 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
+  /// Search placeholder is dimmer than section headers (#64687A probed).
+  static let searchPlaceholder = Color(red: 0x64 / 255, green: 0x68 / 255, blue: 0x7A / 255)
   /// Raycast's sheet stroke is a bright hairline: probes read the border
   /// pixel at ~#767677 over the #1D1E29 sheet, i.e. white at ~0.35.
   static let border = Color.white.opacity(0.35)
@@ -61,7 +63,25 @@ private struct RaycastModalSearchField: View {
   @FocusState private var focused: Bool
 
   var body: some View {
-    TextField(placeholder, text: $text)
+    ZStack(alignment: .leading) {
+      // Raycast draws the placeholder to the right of the resting caret
+      // rather than under it, in a dimmer tone than section headers.
+      if text.isEmpty {
+        Text(placeholder)
+          .font(.system(size: 16))
+          .foregroundStyle(RaycastModalPalette.searchPlaceholder)
+          .padding(.leading, 12)
+          .allowsHitTesting(false)
+      }
+      field
+    }
+    .padding(.horizontal, 16)
+    .frame(height: 44)
+    .onAppear { focused = true }
+  }
+
+  private var field: some View {
+    TextField("", text: $text)
       .textFieldStyle(.plain)
       .font(.system(size: 16))
       .foregroundStyle(RaycastModalPalette.primaryText)
@@ -84,9 +104,6 @@ private struct RaycastModalSearchField: View {
         text = SearchTextEditing.deleteWordBackward(text)
         return .handled
       }
-      .padding(.horizontal, 16)
-      .frame(height: 44)
-      .onAppear { focused = true }
   }
 }
 
@@ -127,8 +144,8 @@ struct RaycastNotesModal: View {
           Text("Notes")
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(RaycastModalPalette.secondaryText)
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
+            .padding(.horizontal, 12)
+            .padding(.top, 18)
             .padding(.bottom, 8)
           if controller.results.isEmpty {
             Text(controller.query.isEmpty ? "No notes" : "No matches")
@@ -167,7 +184,7 @@ struct RaycastNotesModal: View {
           deleteButton(result)
         }
       }
-      .padding(.horizontal, 14)
+      .padding(.horizontal, 12)
       .padding(.vertical, 12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
@@ -180,7 +197,7 @@ struct RaycastNotesModal: View {
   }
 
   private func rowText(_ result: FuzzyResult) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 2) {
       HStack(spacing: 6) {
         if result.chat.isPinned {
           Image(systemName: "pin.fill")
