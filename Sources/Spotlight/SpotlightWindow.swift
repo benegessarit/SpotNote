@@ -175,8 +175,36 @@ public final class SpotlightWindowController {
     FontLoader.registerBundledFonts()
     observeActiveApp()
     observeToastMessages()
+    observeSidebar()
     installVimCommandRunner()
     Task { [session] in await session.bootstrap() }
+  }
+
+  /// The window grows leftward by `EditorMetrics.sidebarWidth` when the
+  /// sidebar opens, keeping the right edge (and the editor column) pinned.
+  private var expectedPanelWidth: CGFloat {
+    EditorMetrics.panelWidth + (preferences.sidebarShown ? EditorMetrics.sidebarWidth : 0)
+  }
+
+  private func observeSidebar() {
+    preferences.$sidebarShown
+      .removeDuplicates()
+      .dropFirst()
+      .sink { [weak self] shown in
+        MainActor.assumeIsolated { self?.applySidebarWidth(shown: shown) }
+      }
+      .store(in: &cancellables)
+  }
+
+  private func applySidebarWidth(shown: Bool) {
+    guard let panel else { return }
+    let width = EditorMetrics.panelWidth + (shown ? EditorMetrics.sidebarWidth : 0)
+    let frame = panel.frame
+    guard frame.width != width else { return }
+    setPanelFrame(
+      NSRect(x: frame.maxX - width, y: frame.origin.y, width: width, height: frame.height),
+      display: true
+    )
   }
 
   private func observeToastMessages() {
@@ -357,7 +385,7 @@ public final class SpotlightWindowController {
       forLines: 1,
       maxLines: preferences.maxVisibleLines
     )
-    let size = NSSize(width: EditorMetrics.panelWidth, height: initialHeight)
+    let size = NSSize(width: expectedPanelWidth, height: initialHeight)
     let panel = SpotlightPanel(
       contentRect: NSRect(origin: .zero, size: size),
       styleMask: Self.panelStyleMask,
@@ -623,6 +651,7 @@ extension SpotlightWindowController {
     case .copyContent:
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
+    case .toggleSidebar: preferences.sidebarShown.toggle()
     case .toggleHotkey, .appendToLastNote: break
     }
   }

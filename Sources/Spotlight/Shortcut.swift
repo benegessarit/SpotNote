@@ -77,6 +77,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case findInNote
   case copyContent
   case openSettings
+  case toggleSidebar
 
   public var id: String { rawValue }
 
@@ -90,6 +91,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return "Find in note"
     case .copyContent: return "Copy note"
     case .openSettings: return "Open settings"
+    case .toggleSidebar: return "Toggle notes sidebar"
     }
   }
 
@@ -105,6 +107,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return "Search for text inside the current note."
     case .copyContent: return "Copy the whole note. With a selection, copies just the selection."
     case .openSettings: return "Open this settings window."
+    case .toggleSidebar: return "Show or hide the notes sidebar on the left edge of the HUD."
     }
   }
 
@@ -118,6 +121,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return Shortcut(key: "f", modifiers: [.command])
     case .copyContent: return Shortcut(key: "c", modifiers: [.command])
     case .openSettings: return Shortcut(key: ",", modifiers: [.command])
+    case .toggleSidebar: return Shortcut(key: "\\", modifiers: [.command])
     }
   }
 

@@ -106,6 +106,9 @@ struct RaycastTopBar: View {
   let title: String
   let theme: Theme
   let isKey: Bool
+  /// False while the sidebar is open -- the lights move into the sidebar
+  /// header (a Mac window's lights track the window's top-left corner).
+  let showsTrafficLights: Bool
   let onClose: () -> Void
   let onShowActions: () -> Void
   let onToggleNotes: () -> Void
@@ -129,8 +132,10 @@ struct RaycastTopBar: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.trafficLightGutter + 30)
       HStack {
-        RaycastTrafficLights(onClose: onClose)
-          .padding(.leading, 22)
+        if showsTrafficLights {
+          RaycastTrafficLights(onClose: onClose)
+            .padding(.leading, 22)
+        }
         Spacer()
         iconPill
           .padding(.trailing, 9)
@@ -182,84 +187,20 @@ struct RaycastTopBar: View {
   }
 }
 
-/// Raycast Notes-style bottom bar: centered live character counter and a
-/// trailing circled "T" theme picker (hidden when the panel is not key).
+/// Raycast Notes-style bottom bar: just the centered live character
+/// counter. Theme switching lives in the actions modal, not here.
 struct RaycastBottomBar: View {
   let characterCount: Int
-  let theme: Theme
-  let isKey: Bool
-  @ObservedObject var preferences: ThemePreferences
-  @Binding var themePickerShown: Bool
 
   var body: some View {
-    ZStack {
-      Text(counterText)
-        .font(.system(size: 16))
-        .foregroundStyle(RaycastChromePalette.counter)
-      HStack {
-        Spacer()
-        themeButton
-      }
-      .padding(.trailing, 14)
-      .opacity(isKey ? 1 : 0)
-    }
-    .frame(height: EditorMetrics.bottomBarHeight)
+    Text(counterText)
+      .font(.system(size: 16))
+      .foregroundStyle(RaycastChromePalette.counter)
+      .frame(height: EditorMetrics.bottomBarHeight)
+      .frame(maxWidth: .infinity)
   }
 
   private var counterText: String {
     characterCount == 1 ? "1 character" : "\(characterCount) characters"
-  }
-
-  private var themeButton: some View {
-    Button {
-      themePickerShown.toggle()
-    } label: {
-      Text("T")
-        .font(.system(size: 14, weight: .medium, design: .serif))
-        .foregroundStyle(RaycastChromePalette.control)
-        .frame(width: 28, height: 28)
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
-        .contentShape(Circle())
-    }
-    .buttonStyle(.plain)
-    .help("Theme")
-    .popover(isPresented: $themePickerShown, arrowEdge: .top) {
-      RaycastThemePopover(preferences: preferences)
-    }
-  }
-}
-
-/// Compact theme list shown from the bottom bar's "T" button.
-struct RaycastThemePopover: View {
-  @ObservedObject var preferences: ThemePreferences
-
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 2) {
-        ForEach(ThemeCatalog.all) { theme in
-          Button {
-            preferences.selectedThemeID = theme.id
-          } label: {
-            HStack {
-              Circle()
-                .fill(theme.background)
-                .overlay(Circle().strokeBorder(Color.primary.opacity(0.2), lineWidth: 1))
-                .frame(width: 12, height: 12)
-              Text(theme.name)
-              Spacer()
-              if preferences.selectedThemeID == theme.id {
-                Image(systemName: "checkmark")
-              }
-            }
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .padding(.vertical, 3)
-          .padding(.horizontal, 6)
-        }
-      }
-      .padding(8)
-    }
-    .frame(width: 220, height: 280)
   }
 }

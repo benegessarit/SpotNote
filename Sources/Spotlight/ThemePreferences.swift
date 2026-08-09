@@ -25,6 +25,7 @@ public final class ThemePreferences: ObservableObject {
     static let unfocusedOpacity = "hud.unfocusedOpacity"
     static let dockIconStyle = "dock.iconStyle"
     static let showDockIcon = "dock.showIcon"
+    static let sidebarShown = "hud.sidebarShown"
   }
 
   @Published public var selectedThemeID: String {
@@ -49,6 +50,12 @@ public final class ThemePreferences: ObservableObject {
 
   @Published public var showDockIcon: Bool {
     didSet { defaults.set(showDockIcon, forKey: Key.showDockIcon) }
+  }
+
+  /// Whether the notes sidebar is popped open. Persisted like a real Mac
+  /// app's sidebar state so the HUD reopens the way it was left.
+  @Published public var sidebarShown: Bool {
+    didSet { defaults.set(sidebarShown, forKey: Key.sidebarShown) }
   }
 
   /// Backed by `SMAppService.mainApp`, not `UserDefaults`: the system
@@ -110,6 +117,7 @@ public final class ThemePreferences: ObservableObject {
     self.showHints = Self.boolOrDefault(defaults, Key.showHints, default: true)
     self.vimMode = Self.boolOrDefault(defaults, Key.vimMode, default: false)
     self.showDockIcon = Self.boolOrDefault(defaults, Key.showDockIcon, default: false)
+    self.sidebarShown = Self.boolOrDefault(defaults, Key.sidebarShown, default: false)
     self.launchAtLogin = LaunchAtLogin.isEnabled
     let storedStyle = defaults.string(forKey: Key.dockIconStyle) ?? DockIconStyle.dark.rawValue
     self.dockIconStyle = DockIconStyle(rawValue: storedStyle) ?? .dark

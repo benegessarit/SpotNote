@@ -74,29 +74,23 @@ struct SpotlightRootView: View {
   @State private var themePickerShown = false
 
   var body: some View {
-    VStack(spacing: 0) {
-      RaycastTopBar(
-        title: noteTitle,
-        theme: theme,
-        isKey: keyState.isKey,
-        onClose: onEscape,
-        onShowActions: { actionsModalShown = true },
-        onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
-        onNewNote: { newNote() }
-      )
-      if find.isVisible {
-        FindBar(controller: find, theme: theme, editorText: session.currentText)
-          .transition(.opacity)
+    HStack(spacing: 0) {
+      if preferences.sidebarShown {
+        SpotNoteSidebar(
+          preferences: preferences,
+          session: session,
+          theme: theme,
+          isKey: keyState.isKey,
+          onClose: onEscape,
+          onPick: { chat in
+            session.jump(to: chat)
+            focusTrigger.pulse()
+          }
+        )
+        .transition(.move(edge: .leading))
       }
-      editorCard
-        .transaction { $0.animation = nil }
-      RaycastBottomBar(
-        characterCount: session.currentText.count,
-        theme: theme,
-        isKey: keyState.isKey,
-        preferences: preferences,
-        themePickerShown: $themePickerShown
-      )
+      mainColumn
+        .frame(width: EditorMetrics.panelWidth)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background {
@@ -120,6 +114,9 @@ struct SpotlightRootView: View {
     .onChange(of: actionsModalShown) { _, isShown in
       if !isShown { focusTrigger.pulse() }
     }
+    .onChange(of: themePickerShown) { _, isShown in
+      if !isShown { focusTrigger.pulse() }
+    }
     .onAppear {
       let editorHeight = EditorMetrics.panelHeight(
         forLines: EditorMetrics.lineCount(in: session.currentText),
@@ -129,87 +126,28 @@ struct SpotlightRootView: View {
     }
   }
 
-  /// Floating Raycast-style modals over a dimmed note. Lives in an
-  /// `.overlay` so showing a modal never touches the measured height tree.
-  @ViewBuilder
-  private var modalLayer: some View {
-    if fuzzy.isVisible || actionsModalShown {
-      ZStack(alignment: .top) {
-        surfaceShape
-          .fill(RaycastModalPalette.backdrop)
-          .onTapGesture { dismissModals() }
-        if fuzzy.isVisible {
-          RaycastNotesModal(
-            controller: fuzzy,
-            currentChatID: session.currentID
-          ) { chat in
-            session.jump(to: chat)
-          }
-          .padding(.top, RaycastModalPalette.topOffset)
-        } else {
-          RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
-            .padding(.top, RaycastModalPalette.topOffset)
-        }
-      }
-      .transition(.opacity)
-    }
-  }
-
-  private var modalActions: [RaycastAction] {
-    [
-      RaycastAction(
-        id: "new-note",
-        title: "New Note",
-        systemImage: "plus",
-        keys: [],
-        section: 0,
-        perform: { newNote() }
-      ),
-      RaycastAction(
-        id: "browse-notes",
-        title: "Browse Notes",
-        systemImage: "square.on.square",
-        keys: [],
-        section: 0,
-        perform: { fuzzy.toggle(corpus: session.chats) }
-      ),
-      RaycastAction(
-        id: "find-in-note",
-        title: "Find in Note",
-        systemImage: "magnifyingglass",
-        keys: keycaps(for: .findInNote),
-        section: 1,
-        perform: { find.toggle(text: session.currentText) }
-      ),
-      RaycastAction(
-        id: "copy-note",
-        title: "Copy Note",
-        systemImage: "doc.on.clipboard",
-        keys: keycaps(for: .copyContent),
-        section: 1,
-        perform: {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(session.currentText, forType: .string)
-        }
-      ),
-      RaycastAction(
-        id: "change-theme",
-        title: "Change Theme",
-        systemImage: "paintpalette",
-        keys: [],
-        section: 2,
-        perform: { themePickerShown = true }
+  /// The Raycast Notes column: bars and editor, always `panelWidth` wide
+  /// so the text never rewraps when the sidebar slides open.
+  private var mainColumn: some View {
+    VStack(spacing: 0) {
+      RaycastTopBar(
+        title: noteTitle,
+        theme: theme,
+        isKey: keyState.isKey,
+        showsTrafficLights: !preferences.sidebarShown,
+        onClose: onEscape,
+        onShowActions: { actionsModalShown = true },
+        onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
+        onNewNote: { newNote() }
       )
-    ]
-  }
-
-  /// Keycap strings for the action's live (user-remappable) binding, e.g.
-  /// ["⌘", "F"].
-  private func keycaps(for action: ShortcutAction) -> [String] {
-    let binding = shortcuts.binding(for: action)
-    var caps = binding.modifiers.displayString.map(String.init)
-    caps.append(Shortcut.displayKey(binding.key))
-    return caps
+      if find.isVisible {
+        FindBar(controller: find, theme: theme, editorText: session.currentText)
+          .transition(.opacity)
+      }
+      editorCard
+        .transaction { $0.animation = nil }
+      RaycastBottomBar(characterCount: session.currentText.count)
+    }
   }
 
   private func newNote() {
@@ -217,11 +155,6 @@ struct SpotlightRootView: View {
       await session.newNote()
       focusTrigger.pulse()
     }
-  }
-
-  private func dismissModals() {
-    if fuzzy.isVisible { fuzzy.close() }
-    actionsModalShown = false
   }
 
   /// First line of the current note, shown as the centered window title.
@@ -280,7 +213,7 @@ struct SpotlightRootView: View {
       findHighlight: find.currentMatch,
       vimModeEnabled: preferences.vimMode,
       vimController: vimController,
-      onEscape: onEscape,
+      onEscape: { handleEscape() },
       onSendLinearTask: onSendLinearTask,
       onAppendDailyNote: onAppendDailyNote,
       onAppendTrayNote: onAppendTrayNote,
@@ -299,4 +232,126 @@ struct SpotlightRootView: View {
     }
   }
 
+}
+
+// MARK: - Floating modal layer
+
+extension SpotlightRootView {
+  private var anyModalShown: Bool {
+    fuzzy.isVisible || actionsModalShown || themePickerShown
+  }
+
+  /// Floating Raycast-style modals over a dimmed note. Lives in an
+  /// `.overlay` so showing a modal never touches the measured height tree.
+  @ViewBuilder
+  private var modalLayer: some View {
+    if anyModalShown {
+      ZStack(alignment: .top) {
+        surfaceShape
+          .fill(RaycastModalPalette.backdrop)
+          .onTapGesture { dismissModals() }
+        activeModal
+          .padding(.top, RaycastModalPalette.topOffset)
+      }
+      .transition(.opacity)
+    }
+  }
+
+  @ViewBuilder
+  private var activeModal: some View {
+    if fuzzy.isVisible {
+      RaycastNotesModal(
+        controller: fuzzy,
+        currentChatID: session.currentID
+      ) { chat in
+        session.jump(to: chat)
+      }
+    } else if actionsModalShown {
+      RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
+    } else {
+      RaycastThemesModal(preferences: preferences, onClose: { themePickerShown = false })
+    }
+  }
+
+  private var modalActions: [RaycastAction] {
+    [
+      RaycastAction(
+        id: "new-note",
+        title: "New Note",
+        systemImage: "plus",
+        keys: [],
+        section: 0,
+        perform: { newNote() }
+      ),
+      RaycastAction(
+        id: "browse-notes",
+        title: "Browse Notes",
+        systemImage: "square.on.square",
+        keys: [],
+        section: 0,
+        perform: { fuzzy.toggle(corpus: session.chats) }
+      ),
+      RaycastAction(
+        id: "toggle-sidebar",
+        title: preferences.sidebarShown ? "Hide Sidebar" : "Show Sidebar",
+        systemImage: "sidebar.left",
+        keys: keycaps(for: .toggleSidebar),
+        section: 0,
+        perform: { preferences.sidebarShown.toggle() }
+      ),
+      RaycastAction(
+        id: "find-in-note",
+        title: "Find in Note",
+        systemImage: "magnifyingglass",
+        keys: keycaps(for: .findInNote),
+        section: 1,
+        perform: { find.toggle(text: session.currentText) }
+      ),
+      RaycastAction(
+        id: "copy-note",
+        title: "Copy Note",
+        systemImage: "doc.on.clipboard",
+        keys: keycaps(for: .copyContent),
+        section: 1,
+        perform: {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(session.currentText, forType: .string)
+        }
+      ),
+      RaycastAction(
+        id: "change-theme",
+        title: "Change Theme",
+        systemImage: "paintpalette",
+        keys: [],
+        section: 2,
+        perform: { themePickerShown = true }
+      )
+    ]
+  }
+
+  /// Keycap strings for the action's live (user-remappable) binding, e.g.
+  /// ["⌘", "F"].
+  private func keycaps(for action: ShortcutAction) -> [String] {
+    let binding = shortcuts.binding(for: action)
+    var caps = binding.modifiers.displayString.map(String.init)
+    caps.append(Shortcut.displayKey(binding.key))
+    return caps
+  }
+
+  private func dismissModals() {
+    if fuzzy.isVisible { fuzzy.close() }
+    actionsModalShown = false
+    themePickerShown = false
+  }
+
+  /// Esc closes an open modal before it can close the HUD, so a stray
+  /// escape in the themes modal (which has no focused field of its own)
+  /// never dismisses the whole panel.
+  private func handleEscape() {
+    if anyModalShown {
+      dismissModals()
+    } else {
+      onEscape()
+    }
+  }
 }

@@ -45,6 +45,26 @@ struct SpotlightRootToastTests {
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
 
+  @Test("sidebar toggle does not trigger panel height callbacks")
+  func sidebarToggleDoesNotTriggerPanelHeightCallbacks() async throws {
+    let fixture = try makeFixture()
+    defer { fixture.cleanup() }
+
+    try await waitUntil { !fixture.recorder.values.isEmpty }
+    await settleSwiftUI()
+    let stableCallbackCount = fixture.recorder.values.count
+
+    fixture.hostingView.frame.size.width = EditorMetrics.panelWidth + EditorMetrics.sidebarWidth
+    fixture.preferences.sidebarShown = true
+    await settleSwiftUI()
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+
+    fixture.preferences.sidebarShown = false
+    fixture.hostingView.frame.size.width = EditorMetrics.panelWidth
+    await settleSwiftUI()
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+  }
+
   @Test("legacy hint preference does not render or reserve statusline space")
   func hintPreferenceDoesNotAffectRootHeight() async throws {
     let fixture = try makeFixture()

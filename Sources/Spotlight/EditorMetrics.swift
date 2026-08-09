@@ -40,6 +40,10 @@ enum EditorMetrics {
   static let normalModeCursorWidth: CGFloat = 13
   /// Panel width (Raycast Notes window width).
   static let panelWidth: CGFloat = 670
+  /// Width of the slide-out notes sidebar. The window grows leftward by
+  /// this amount when the sidebar opens; the editor column keeps
+  /// `panelWidth` so text never rewraps.
+  static let sidebarWidth: CGFloat = 250
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
   /// Minimum default row count for the roomy HUD. Tuned so a short note
