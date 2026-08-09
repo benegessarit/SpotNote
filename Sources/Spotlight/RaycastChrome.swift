@@ -67,31 +67,31 @@ struct RaycastStackedCardsIcon: View {
     ZStack {
       card
         .stroke(style: strokeStyle)
-        .frame(width: 16, height: 19)
+        .frame(width: 12.2, height: 14.5)
         .rotationEffect(.degrees(-8))
-        .offset(x: -2.9, y: 2.1)
+        .offset(x: -2.2, y: 1.6)
       card
         .fill(Color.black)
-        .frame(width: 16, height: 19)
+        .frame(width: 12.2, height: 14.5)
         .rotationEffect(.degrees(12))
-        .offset(x: 3.0, y: -2.1)
+        .offset(x: 2.3, y: -1.6)
         .blendMode(.destinationOut)
       card
         .stroke(style: strokeStyle)
-        .frame(width: 16, height: 19)
+        .frame(width: 12.2, height: 14.5)
         .rotationEffect(.degrees(12))
-        .offset(x: 3.0, y: -2.1)
+        .offset(x: 2.3, y: -1.6)
     }
     .compositingGroup()
-    .frame(width: 26, height: 26)
+    .frame(width: 20, height: 20)
   }
 
   private var card: RoundedRectangle {
-    RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+    RoundedRectangle(cornerRadius: 3.4, style: .continuous)
   }
 
   private var strokeStyle: StrokeStyle {
-    StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+    StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
   }
 }
 
@@ -166,20 +166,21 @@ struct RaycastTopBar: View {
           .resizable()
           .frame(width: 20, height: 20)
       }
-      Spacer().frame(width: 12)
+      Spacer().frame(width: 14)
       pillButton(help: "Browse notes", action: onToggleNotes) {
         RaycastStackedCardsIcon()
       }
-      Spacer().frame(width: 8)
+      Spacer().frame(width: 10)
       pillButton(help: "New note", action: onNewNote) {
         Image(nsImage: Self.plusIcon)
           .renderingMode(.template)
           .resizable()
-          .frame(width: 28, height: 28)
+          .frame(width: 29, height: 29)
       }
     }
     .foregroundStyle(isKey ? theme.text : RaycastChromePalette.controlResigned)
-    .padding(.horizontal, 10)
+    .padding(.leading, 12)
+    .padding(.trailing, 7)
     .frame(height: 44)
     .background(
       Capsule(style: .continuous)

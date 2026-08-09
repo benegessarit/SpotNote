@@ -97,7 +97,7 @@ struct VimModePill: View {
         .overlay(Circle().strokeBorder(tint.opacity(0.5), lineWidth: 1))
       ModeGlyphShape(vector: AnimatableVector12(values: glyph))
         .stroke(tint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-        .frame(width: 15, height: 15)
+        .frame(width: 18, height: 18)
     }
     .frame(width: 38, height: 38)
     .opacity(isKey ? 1 : 0.45)
