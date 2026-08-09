@@ -106,12 +106,19 @@ struct RaycastModalOverhang: NSViewRepresentable {
     private func position(_ panel: NSPanel, over anchor: NSWindow) {
       let width = RaycastModalPalette.width + RaycastModalOverhang.margin * 2
       let sheetTopY = anchor.frame.maxY - RaycastModalPalette.topOffset
-      let frame = NSRect(
+      var frame = NSRect(
         x: anchor.frame.midX - width / 2,
         y: sheetTopY + RaycastModalOverhang.margin - RaycastModalOverhang.height,
         width: width,
         height: RaycastModalOverhang.height
       )
+      // The HUD is bottom-pinned and an empty note is only 177pt tall, so
+      // anchoring the sheet 100pt below its top would push most of the
+      // menu past the display edge. Slide the sheet up until its content
+      // fits; covering the note body is fine -- Raycast's own menu does.
+      if let screen = anchor.screen {
+        frame.origin.y = max(frame.origin.y, screen.visibleFrame.minY - RaycastModalOverhang.margin)
+      }
       panel.setFrame(frame, display: true)
     }
 
