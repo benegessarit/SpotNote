@@ -8,9 +8,27 @@ import Testing
 // The covered glyphs hide via a `.clear` TEMPORARY foreground -- layout
 // keeps every advance -- while the note STRING itself is never edited
 // (character replacement garbled the proportional-font note, David
-// 2026-08-09; the opaque pink pill chips were retired 2026-08-10).
+// 2026-08-09; the opaque pink pill chips were retired 2026-08-10). The
+// hidden span is advance-MEASURED (`hintHiddenRange`): the editor font
+// is proportional, so a fixed label-length hide let wide labels collide
+// with the next glyph (David 2026-08-10, "flash hints all messed up").
 @MainActor
 extension MultilineEditorVimLogicalLineMotionTests {
+  @Test("the hidden span is advance-measured: wide labels cover extra narrow glyphs, never past a newline")
+  func hintHiddenRangeMeasuresLabelInk() {
+    let textView = makeVimMotionTextView(text: "i\nii William")
+
+    let clipped = textView.hintHiddenRange(at: 0, label: "W", bold: false)
+    #expect(clipped == NSRange(location: 0, length: 1), "the span never crosses a line break")
+
+    let wide = textView.hintHiddenRange(at: 2, label: "W", bold: false)
+    #expect(wide.location == 2)
+    #expect(wide.length > 1, "a wide label over narrow glyphs must cover more than one character")
+
+    let narrow = textView.hintHiddenRange(at: 5, label: "i", bold: false)
+    #expect(narrow == NSRange(location: 5, length: 1), "a narrow label hides only its anchor")
+  }
+
   @Test("word-hint anchors hide under their labels; the rest only dims and the text never mutates")
   func wordHintLabelsHideAnchorsWithoutMutatingText() {
     let textView = makeVimMotionTextView(text: "alpha beta gamma")

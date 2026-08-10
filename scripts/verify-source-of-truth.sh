@@ -122,8 +122,12 @@ require_grep "showsLights: windowHovered || anyModalShown" "Sources/Spotlight/Sp
 require_grep "Circle()" "Sources/Spotlight/RaycastChrome.swift"
 # Editor hint labels are bare colored letters (nvim hl_mode "replace"
 # look) -- the opaque pink pills were retired 2026-08-10; hop_red is the
-# love-toward-red blend, never bare love.
+# love-toward-red blend, never bare love. The hidden span under a label
+# is advance-MEASURED (proportional editor; a fixed label-length hide
+# collided with the next glyph, David 2026-08-10).
 require_grep "drawHintLabel" "Sources/Spotlight/MultilineEditorWordHint.swift"
+require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorWordHint.swift"
+require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"

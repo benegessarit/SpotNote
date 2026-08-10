@@ -156,17 +156,17 @@ extension PlaceholderTextView {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
     // hop `dim_unmatched` (default true): the whole surface dims while
-    // hints show. Labels then take over their character cells (hop's
-    // `hl_mode = "replace"`): the covered glyphs go clear and the label
+    // hints show. Labels then take over the characters their ink covers
+    // (hop's `hl_mode = "replace"`): those glyphs go clear and the label
     // letters draw in their place (`drawWordHints`), so the labels read
-    // as bare red letters — no pill — exactly like David's nvim.
+    // as bare red letters — no pill — exactly like David's nvim. The
+    // covered span is advance-measured (`hintHiddenRange`): this editor
+    // is proportional, so a one-char hide let wide labels collide with
+    // the next glyph.
     let fullRange = NSRange(location: 0, length: nsString.length)
     addWordHintForeground(wordHintDimmedTextColor, range: fullRange, layoutManager: layoutManager)
     for entry in visibleWordHintLabels() {
-      let covered = NSRange(
-        location: entry.target.location,
-        length: min((entry.display as NSString).length, nsString.length - entry.target.location)
-      )
+      let covered = hintHiddenRange(at: entry.target.location, label: entry.display, bold: false)
       if covered.length > 0 {
         addWordHintForeground(.clear, range: covered, layoutManager: layoutManager)
       }

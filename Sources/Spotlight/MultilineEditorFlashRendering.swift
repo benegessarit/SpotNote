@@ -30,13 +30,47 @@ extension PlaceholderTextView {
       if queryRange.length > 0 {
         addFlashTemporaryForeground(flashQueryTextColor, range: queryRange, layoutManager: layoutManager)
       }
-      // Labels replace the character cell they anchor on (hop/flash
-      // `hl_mode = "replace"`): the underlying glyphs go clear and the
-      // label letters draw in their place (`drawFlashHints`).
+      // Labels replace the characters they anchor on (hop/flash
+      // `hl_mode = "replace"`): the glyphs the label's ink will COVER go
+      // clear and the label letters draw in their place
+      // (`drawFlashHints`). The covered span is advance-measured, not
+      // one-char -- see `hintHiddenRange`.
       if labelsVisible, let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer) {
-        addFlashTemporaryForeground(.clear, range: labelRange, layoutManager: layoutManager)
+        let covered = hintHiddenRange(at: labelRange.location, label: hint.label, bold: true)
+        addFlashTemporaryForeground(.clear, range: covered, layoutManager: layoutManager)
       }
     }
+  }
+
+  /// The characters a hint label visually covers in this PROPORTIONAL
+  /// editor. nvim's replace only works on a monospace grid; here a label
+  /// wider than its anchor glyph would collide with the next glyph (and
+  /// the anchor's advance survives hiding, so a narrower label just
+  /// leaves a small gap -- the acceptable direction). Walk forward from
+  /// the anchor accumulating glyph advances until the label's ink fits,
+  /// minimum one character, never across a line break.
+  func hintHiddenRange(at location: Int, label: String, bold: Bool) -> NSRange {
+    let nsString = string as NSString
+    guard location >= 0, location < nsString.length else {
+      return NSRange(location: max(0, location), length: 0)
+    }
+    let baseFont = font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize)
+    let labelFont =
+      bold
+      ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
+      : baseFont
+    let labelWidth = (label as NSString).size(withAttributes: [.font: labelFont]).width
+    var covered = 0.0
+    var length = 0
+    while location + length < nsString.length {
+      let charRange = nsString.rangeOfComposedCharacterSequence(at: location + length)
+      let char = nsString.substring(with: charRange)
+      if char == "\n" { break }
+      covered += (char as NSString).size(withAttributes: [.font: baseFont]).width
+      length = charRange.location + charRange.length - location
+      if covered >= labelWidth { break }
+    }
+    return NSRange(location: location, length: max(1, length))
   }
 
   func clearFlashTextAppearance() {
