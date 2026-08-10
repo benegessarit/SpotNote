@@ -27,7 +27,7 @@ struct ShortcutsPane: View {
       )
       ShortcutGroup(
         title: "Navigation",
-        actions: [.findInNote, .openSettings],
+        actions: [.newNote, .browseNotes, .findInNote, .openSettings],
         store: shortcuts
       )
 

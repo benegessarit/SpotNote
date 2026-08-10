@@ -79,9 +79,17 @@ struct ShortcutStoreTests {
     #expect(store.match(key: "k", modifiers: [.command]) == nil)
     #expect(store.match(key: "k", modifiers: [.command, .option]) == nil)
     #expect(store.match(key: "s", modifiers: [.command]) == nil)
-    #expect(store.match(key: "n", modifiers: [.command]) == nil)
     #expect(store.match(key: "d", modifiers: [.command]) == nil)
-    #expect(store.match(key: "p", modifiers: [.command]) == nil)
+  }
+
+  @Test("multi-note Raycast-parity shortcuts: Cmd N new note, Cmd P browse")
+  func multiNoteShortcutsMatch() {
+    let store = ShortcutStore(defaults: makeDefaults())
+
+    // ⌘N/⌘P were retired in the one-note era; the multi-note browse and
+    // actions menus revived them (2026-08-10) to match Raycast Notes.
+    #expect(store.match(key: "n", modifiers: [.command]) == .newNote)
+    #expect(store.match(key: "p", modifiers: [.command]) == .browseNotes)
   }
 
   @Test("send to Linear defaults to Cmd Option L")

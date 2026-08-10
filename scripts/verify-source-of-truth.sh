@@ -109,6 +109,12 @@ require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behind
 # are pure whitespace (no hairline) and the pill + is drawn at 2pt, not
 # the heavier-stroke raster.
 reject_grep "sectionRule" "Sources/Spotlight/RaycastActionsModal.swift"
+# The actions sheet hugs its content (computed listHeight) and draws the
+# probed hairline under its search field; the lights are hover-gated but
+# the pill is not (David 2026-08-10).
+require_grep "frame(height: min(400, listHeight))" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "searchDivider" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "showsLights: windowHovered || anyModalShown" "Sources/Spotlight/SpotlightRootView.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
 require_grep "RaycastPlusShape" "Sources/Spotlight/RaycastChrome.swift"
 # The sidebar is a SHELF child panel with its own height; the window

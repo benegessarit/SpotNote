@@ -130,6 +130,15 @@ final class ChatSession: ObservableObject {
     vaultDocument(for: chat.id) == nil
   }
 
+  /// Pin button on a notes-modal row: pinned notes sort first in the
+  /// browse list. Vault-backed notes (Tasks) live outside the store and
+  /// cannot pin.
+  func togglePin(_ chat: Chat) async {
+    guard vaultDocument(for: chat.id) == nil else { return }
+    await store.setPinned(id: chat.id, !chat.isPinned)
+    chats = await availableChats()
+  }
+
   /// Trash button on a notes-modal row. Vault-backed notes (Tasks) are
   /// permanent and refuse deletion.
   func delete(_ chat: Chat) async {

@@ -24,8 +24,8 @@ enum RaycastChromePalette {
 /// Raycast Notes draws its own traffic lights: 14pt dots at 23pt centers,
 /// close active red (with an x on hover), minimize/zoom rendered as
 /// disabled grey dots. Only close is interactive. When the panel resigns
-/// key, close joins the other two in grey -- the lights stay visible
-/// (pixel-probed in the live resigned window).
+/// key, close joins the other two in grey. The top bar reveals the whole
+/// cluster only while the pointer is over the window (`showsLights`).
 struct RaycastTrafficLights: View {
   let isKey: Bool
   let onClose: () -> Void
@@ -138,6 +138,9 @@ struct RaycastTopBar: View {
   let title: String
   let theme: Theme
   let isKey: Bool
+  /// The traffic lights reveal only while the pointer is over the window
+  /// (David 2026-08-10, matching the live app); the pill stays visible.
+  let showsLights: Bool
   let onClose: () -> Void
   let onShowActions: () -> Void
   let onToggleNotes: () -> Void
@@ -160,6 +163,9 @@ struct RaycastTopBar: View {
       HStack {
         RaycastTrafficLights(isKey: isKey, onClose: onClose)
           .padding(.leading, 23)
+          .opacity(showsLights ? 1 : 0)
+          .allowsHitTesting(showsLights)
+          .animation(.easeOut(duration: 0.15), value: showsLights)
         Spacer()
         iconPill
           .padding(.trailing, 9)

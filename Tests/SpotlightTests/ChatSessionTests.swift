@@ -24,6 +24,36 @@ struct ChatSessionTests {
     #expect(chats.first?.text == "typed before bootstrap")
   }
 
+  @Test("togglePin persists the pin, resorts pinned-first, and survives reload")
+  func togglePinPersistsAndResortsPinnedFirst() async throws {
+    let dir = try makeTempDirectory()
+    let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let older = try await store.create()
+    await store.update(id: older.id, text: "older note")
+    try await Task.sleep(for: .milliseconds(5))
+    let newer = try await store.create()
+    await store.update(id: newer.id, text: "newer note")
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+
+    let target = try #require(session.chats.first { $0.id == older.id })
+    await session.togglePin(target)
+
+    #expect(session.chats.first?.id == older.id)
+    #expect(session.chats.first?.isPinned == true)
+    await store.flush()
+    let reloaded = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    await reloaded.loadFromDisk()
+    let reloadedList = await reloaded.list()
+    #expect(reloadedList.first?.id == older.id)
+    #expect(reloadedList.first?.isPinned == true)
+
+    let pinned = try #require(session.chats.first { $0.id == older.id })
+    await session.togglePin(pinned)
+    #expect(session.chats.first?.id == newer.id)
+    #expect(session.chats.allSatisfy { !$0.isPinned })
+  }
+
   @Test("bootstrap displays checklist Markdown as icon-only plain text")
   func bootstrapStripsChecklistMarkdownFromEditableText() async throws {
     let dir = try makeTempDirectory()

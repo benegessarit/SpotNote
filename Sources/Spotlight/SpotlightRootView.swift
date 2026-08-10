@@ -72,6 +72,10 @@ struct SpotlightRootView: View {
 
   @State private var actionsModalShown = false
   @State private var themePickerShown = false
+  /// Pointer-over-window state driving the hover-revealed traffic
+  /// lights. A modal child window intercepts tracking events, so the
+  /// lights also stay lit while any modal is up (like the live app).
+  @State private var windowHovered = false
 
   var body: some View {
     // The notes sidebar is NOT in this tree: it rides its own shelf child
@@ -93,6 +97,7 @@ struct SpotlightRootView: View {
         )
       )
       .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
+      .onHover { windowHovered = $0 }
       .colorScheme(theme.mode == .dark ? .dark : .light)
       .animation(.easeOut(duration: 0.10), value: find.isVisible)
       .onChange(of: session.chats) { _, updatedChats in
@@ -129,6 +134,7 @@ struct SpotlightRootView: View {
         // The chrome stays lit while a modal child window holds key --
         // the live app keeps the close light red under its menus.
         isKey: keyState.isKey || anyModalShown,
+        showsLights: windowHovered || anyModalShown,
         onClose: onEscape,
         onShowActions: { actionsModalShown = true },
         onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
@@ -268,6 +274,11 @@ extension SpotlightRootView {
         onPick: { chat in
           session.jump(to: chat)
         },
+        onTogglePin: { chat in
+          Task { @MainActor in
+            await session.togglePin(chat)
+          }
+        },
         onDelete: { chat in
           Task { @MainActor in
             await session.delete(chat)
@@ -288,7 +299,7 @@ extension SpotlightRootView {
         id: "new-note",
         title: "New Note",
         icon: .raster(resource: "RaycastPlus", frame: 19),
-        keys: [],
+        keys: keycaps(for: .newNote),
         section: 0,
         perform: { newNote() }
       ),
@@ -296,7 +307,7 @@ extension SpotlightRootView {
         id: "browse-notes",
         title: "Browse Notes",
         icon: .stackedCards,
-        keys: [],
+        keys: keycaps(for: .browseNotes),
         section: 0,
         perform: { fuzzy.toggle(corpus: session.chats) }
       ),

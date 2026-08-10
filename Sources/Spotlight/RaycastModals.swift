@@ -149,6 +149,7 @@ struct RaycastNotesModal: View {
   let currentChatID: UUID?
   let isDeletable: (Chat) -> Bool
   let onPick: (Chat) -> Void
+  let onTogglePin: (Chat) -> Void
   let onDelete: (Chat) -> Void
 
   var body: some View {
@@ -213,7 +214,10 @@ struct RaycastNotesModal: View {
       HStack(spacing: 10) {
         rowText(result)
         Spacer(minLength: 8)
+        // Raycast shows pin + trash on the SELECTED row only (pin first,
+        // trash trailing). Vault-backed notes can do neither.
         if isSelected, isDeletable(result.chat) {
+          pinButton(result)
           deleteButton(result)
         }
       }
@@ -244,6 +248,19 @@ struct RaycastNotesModal: View {
       }
       metadataLine(result, isCurrent: result.chat.id == currentChatID)
     }
+  }
+
+  private func pinButton(_ result: FuzzyResult) -> some View {
+    Button {
+      onTogglePin(result.chat)
+    } label: {
+      Image(systemName: result.chat.isPinned ? "pin.slash" : "pin")
+        .font(.system(size: 13))
+        .foregroundStyle(RaycastModalPalette.secondaryText)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help(result.chat.isPinned ? "Unpin note" : "Pin note")
   }
 
   private func deleteButton(_ result: FuzzyResult) -> some View {

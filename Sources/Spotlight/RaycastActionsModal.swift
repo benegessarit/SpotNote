@@ -48,6 +48,7 @@ struct RaycastActionsModal: View {
           onEscape: onClose,
           onMove: { move($0) }
         )
+        searchDivider
         list
       }
       .padding(.bottom, 8)
@@ -80,14 +81,39 @@ struct RaycastActionsModal: View {
       .padding(.top, 6)
       .padding(.bottom, 8)
     }
-    .frame(maxHeight: 400)
+    // The sheet HUGS its content like the live menu: a bare
+    // `.frame(maxHeight:)` lets the greedy ScrollView take the full cap
+    // even when rows need less (David's 2026-08-10 capture showed a
+    // ~116pt empty tail). Rows are fixed-height, so the natural height
+    // is exact; only overflow scrolls.
+    .frame(height: min(400, listHeight))
+  }
+
+  /// Full-width hairline under the actions search field -- probed
+  /// (49,50,62) over the (31,32,42) sheet on the live menu (2026-08-10).
+  /// The browse modal has NO such rule (its "Notes" header separates).
+  private var searchDivider: some View {
+    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+  }
+
+  private static let sectionGapHeight: CGFloat = 25
+
+  private var listHeight: CGFloat {
+    let rows = filtered
+    guard !rows.isEmpty else { return 70 }
+    let gaps = zip(rows, rows.dropFirst()).filter { $0.section != $1.section }.count
+    let content =
+      CGFloat(rows.count) * RaycastModalPalette.rowHeight
+      + CGFloat(gaps) * Self.sectionGapHeight
+      + CGFloat(rows.count + gaps - 1) * RaycastModalPalette.rowSpacing
+    return content + 6 + 8
   }
 
   /// Pure whitespace between action groups -- the live menu draws NO
   /// hairline (threshold scans across the gap found nothing, 2026-08-09;
   /// the earlier "rule probed" came from dim-polluted captures).
   private var sectionGap: some View {
-    Color.clear.frame(height: 25)
+    Color.clear.frame(height: Self.sectionGapHeight)
   }
 
   private func row(_ action: RaycastAction, index: Int) -> some View {

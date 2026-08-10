@@ -97,6 +97,15 @@ public actor ChatStore {
     scheduleWrite(id: id)
   }
 
+  /// Flips a chat's pin without touching `updatedAt` -- pinning is not an
+  /// edit, so the note keeps its place within its sort group.
+  public func setPinned(id: UUID, _ pinned: Bool) {
+    guard var chat = chats[id], chat.isPinned != pinned else { return }
+    chat.isPinned = pinned
+    chats[id] = chat
+    scheduleWrite(id: id)
+  }
+
   /// Re-inserts a chat that was previously removed via `delete`. Used by
   /// the session-level undo path, so the original `id`, `createdAt`, and
   /// last-edited text are preserved on restore.

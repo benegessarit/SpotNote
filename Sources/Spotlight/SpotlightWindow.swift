@@ -877,6 +877,11 @@ extension SpotlightWindowController {
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
     case .toggleSidebar: preferences.sidebarShown.toggle()
+    case .newNote:
+      if fuzzyController.isVisible { fuzzyController.close() }
+      Task { @MainActor [weak self] in await self?.session.newNote() }
+    case .browseNotes:
+      fuzzyController.toggle(corpus: session.chats)
     case .toggleHotkey, .appendToLastNote: break
     }
   }
