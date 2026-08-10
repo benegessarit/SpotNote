@@ -304,6 +304,9 @@ extension SpotlightRootView {
         icon: .raster(resource: "RaycastPlus", frame: 19),
         keys: keycaps(for: .newNote),
         section: 0,
+        // Raycast dims New Note while the current note is empty -- the
+        // new note would be an identical blank.
+        isEnabled: !session.currentText.isEmpty,
         perform: { newNote() }
       ),
       RaycastAction(
@@ -358,7 +361,10 @@ extension SpotlightRootView {
       RaycastAction(
         id: "find-in-note",
         title: "Find in Note",
-        icon: .raster(resource: "RaycastMagnifyingGlass", frame: 14),
+        // Raycast's Find glyph is text lines + magnifier; not in the
+        // public @raycast/icons set, so the SVG (in Resources, beside
+        // its raster) is composed from David's capture geometry.
+        icon: .raster(resource: "RaycastTextSearch", frame: 15),
         keys: keycaps(for: .findInNote),
         section: 1,
         // Inapplicable on an empty note: dims like the live menu's

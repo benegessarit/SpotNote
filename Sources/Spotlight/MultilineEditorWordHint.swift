@@ -4,12 +4,15 @@ import AppKit
 /// (search-then-label), word hints label every visible word start the moment
 /// the prompt opens; typed keys only narrow labels, never build a query.
 extension PlaceholderTextView {
-  /// Hint label colors probed live from David's nvim (rose-pine):
-  /// `HopNextKey` and `HopNextKeyAlt` (dark themes: plain, no bold).
+  /// Hint label colors from David's nvim (rose-pine): `HopNextKey` uses
+  /// the `hop_red` role — love pulled 0.6 toward true red (#F75057),
+  /// because bare love is PINK (the pink labels were a diagnosed
+  /// regression, fixed 2026-08-10) — and `HopNextKeyAlt` is foam.
+  /// Dark themes render both plain, no bold.
   static let wordHintPrimaryColor = NSColor(
-    red: 0xEB / 255,
-    green: 0x6F / 255,
-    blue: 0x92 / 255,
+    red: 0xF7 / 255,
+    green: 0x50 / 255,
+    blue: 0x57 / 255,
     alpha: 1
   )
   static let wordHintAlternateColor = NSColor(
@@ -153,11 +156,21 @@ extension PlaceholderTextView {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
     // hop `dim_unmatched` (default true): the whole surface dims while
-    // hints show. Labels draw as opaque chips over the word starts
-    // (`drawHintChip`); hop's `hl_mode = "replace"` is not ported
-    // because glyph replacement only aligns on a monospace grid.
+    // hints show. Labels then take over their character cells (hop's
+    // `hl_mode = "replace"`): the covered glyphs go clear and the label
+    // letters draw in their place (`drawWordHints`), so the labels read
+    // as bare red letters — no pill — exactly like David's nvim.
     let fullRange = NSRange(location: 0, length: nsString.length)
     addWordHintForeground(wordHintDimmedTextColor, range: fullRange, layoutManager: layoutManager)
+    for entry in visibleWordHintLabels() {
+      let covered = NSRange(
+        location: entry.target.location,
+        length: min((entry.display as NSString).length, nsString.length - entry.target.location)
+      )
+      if covered.length > 0 {
+        addWordHintForeground(.clear, range: covered, layoutManager: layoutManager)
+      }
+    }
   }
 
   private func addWordHintForeground(
@@ -202,11 +215,11 @@ extension PlaceholderTextView {
     dirtyRect: NSRect
   ) {
     guard let anchor = hintAnchorRects(forCharacterAt: location) else { return }
-    drawHintChip(
+    drawHintLabel(
       label,
-      glyph: anchor.glyph,
-      line: anchor.line,
-      fill: alternate ? Self.wordHintAlternateColor : Self.wordHintPrimaryColor,
+      anchor: anchor,
+      ink: alternate ? Self.wordHintAlternateColor : Self.wordHintPrimaryColor,
+      bold: false,
       dirtyRect: dirtyRect
     )
   }

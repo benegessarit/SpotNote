@@ -210,8 +210,10 @@ struct RaycastTopBar: View {
   }
 }
 
-/// Pill icon button with the live app's hover reaction: a soft rounded
-/// highlight fills the button's cell while the pointer is over it.
+/// Pill icon button with the live app's hover reaction: a soft CIRCLE
+/// fills the button's cell while the pointer is over it (probed ~31-33pt
+/// diameter, interior a bare +8 RGB over the pill fill — a rounded-rect
+/// at 0.08 read as a different shape entirely in David's captures).
 private struct PillIconButton<Label: View>: View {
   let help: String
   let action: () -> Void
@@ -223,8 +225,8 @@ private struct PillIconButton<Label: View>: View {
       label()
         .frame(width: 30, height: 30)
         .background(
-          RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(Color.white.opacity(hovering ? 0.08 : 0))
+          Circle()
+            .fill(Color.white.opacity(hovering ? 0.04 : 0))
         )
         .contentShape(Rectangle())
     }

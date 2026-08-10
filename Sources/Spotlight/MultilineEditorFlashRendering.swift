@@ -20,6 +20,7 @@ extension PlaceholderTextView {
     addFlashTemporaryForeground(flashDimmedTextColor, range: fullRange, layoutManager: layoutManager)
     let queryLength = (prompt.buffer as NSString).length
     guard queryLength > 0 else { return }
+    let labelsVisible = regularFlashLabelsAreVisible(query: prompt.buffer)
     let visibleHints = visibleRegularFlashTargets()
     for hint in visibleHints {
       let queryRange = NSRange(
@@ -28,6 +29,12 @@ extension PlaceholderTextView {
       )
       if queryRange.length > 0 {
         addFlashTemporaryForeground(flashQueryTextColor, range: queryRange, layoutManager: layoutManager)
+      }
+      // Labels replace the character cell they anchor on (hop/flash
+      // `hl_mode = "replace"`): the underlying glyphs go clear and the
+      // label letters draw in their place (`drawFlashHints`).
+      if labelsVisible, let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer) {
+        addFlashTemporaryForeground(.clear, range: labelRange, layoutManager: layoutManager)
       }
     }
   }
@@ -118,11 +125,11 @@ extension PlaceholderTextView {
       let anchor = hintAnchorRects(forCharacterAt: labelRange.location)
     else { return }
     let active = !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
-    drawHintChip(
+    drawHintLabel(
       hint.label,
-      glyph: anchor.glyph,
-      line: anchor.line,
-      fill: active ? flashActiveLabelTextColor : flashLabelTextColor,
+      anchor: anchor,
+      ink: active ? flashActiveLabelTextColor : flashLabelTextColor,
+      bold: true,
       dirtyRect: dirtyRect
     )
   }
@@ -143,38 +150,40 @@ extension PlaceholderTextView {
     return (glyph, line)
   }
 
-  /// Ink for hint-label chips: rose-pine base, the dark ground the
-  /// hop/flash palette was designed against in David's nvim.
-  static let hintChipInk = NSColor(red: 0x19 / 255, green: 0x17 / 255, blue: 0x24 / 255, alpha: 1)
-
-  /// Draws a hint label as an opaque rounded chip over `glyph`,
-  /// baseline-aligned with its text row. hop's `hl_mode = "replace"`
-  /// (swap the character cell for the label) only aligns on a monospace
-  /// grid; in this proportional editor a label's advance never matches
-  /// the hidden glyph's, so the chip covers the glyph and the
-  /// surrounding text keeps its layout.
-  func drawHintChip(_ label: String, glyph: NSRect, line: NSRect, fill: NSColor, dirtyRect: NSRect) {
-    let chipFont = font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize)
+  /// Draws a hint label as bare colored letters in the anchor's character
+  /// cell, baseline-aligned with its text row — nvim's `hl_mode =
+  /// "replace"` look (David's hop/flash render foreground-only letters,
+  /// no pill). The glyphs underneath are hidden via a clear temporary
+  /// foreground at refresh time, so layout never shifts; the label just
+  /// draws where they were.
+  func drawHintLabel(
+    _ label: String,
+    anchor: (glyph: NSRect, line: NSRect),
+    ink: NSColor,
+    bold: Bool,
+    dirtyRect: NSRect
+  ) {
+    let baseFont = font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize)
+    let labelFont =
+      bold
+      ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
+      : baseFont
     let attrs: [NSAttributedString.Key: Any] = [
-      .font: chipFont,
-      .foregroundColor: Self.hintChipInk
+      .font: labelFont,
+      .foregroundColor: ink
     ]
     let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let fontHeight = ceil(chipFont.ascender - chipFont.descender)
-    let baselineY = line.minY + LineNumberRuler.synthesizedBaseline(fragmentHeight: line.height, font: chipFont)
+    let fontHeight = ceil(labelFont.ascender - labelFont.descender)
+    let baselineY =
+      anchor.line.minY
+      + LineNumberRuler.synthesizedBaseline(fragmentHeight: anchor.line.height, font: labelFont)
     let rect = NSRect(
-      x: textContainerOrigin.x + glyph.minX - 1,
-      y: textContainerOrigin.y + baselineY - chipFont.ascender - 1,
-      width: max(labelWidth + 6, glyph.width + 2),
-      height: fontHeight + 2
+      x: textContainerOrigin.x + anchor.glyph.minX,
+      y: textContainerOrigin.y + baselineY - labelFont.ascender,
+      width: labelWidth,
+      height: fontHeight
     )
     guard rect.intersects(dirtyRect) else { return }
-    fill.setFill()
-    NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
-    let point = NSPoint(
-      x: rect.minX + (rect.width - labelWidth) / 2,
-      y: textContainerOrigin.y + baselineY - chipFont.ascender
-    )
-    (label as NSString).draw(at: point, withAttributes: attrs)
+    (label as NSString).draw(at: rect.origin, withAttributes: attrs)
   }
 }

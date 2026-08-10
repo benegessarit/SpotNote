@@ -85,8 +85,11 @@ struct RaycastActionsModal: View {
     // `.frame(maxHeight:)` lets the greedy ScrollView take the full cap
     // even when rows need less (David's 2026-08-10 capture showed a
     // ~116pt empty tail). Rows are fixed-height, so the natural height
-    // is exact; only overflow scrolls.
-    .frame(height: min(400, listHeight))
+    // is exact. No cap: the unfiltered list IS the tallest case, and the
+    // live menu shows its whole ~500pt list (a 400pt cap hid Show
+    // Sidebar + Change Theme below the fold in David's capture); the
+    // overhang panel already clamps to the screen.
+    .frame(height: listHeight)
   }
 
   /// Full-width hairline under the actions search field -- probed
@@ -96,7 +99,11 @@ struct RaycastActionsModal: View {
     Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
   }
 
-  private static let sectionGapHeight: CGFloat = 25
+  /// Group-gap EXTRA over normal row pitch probes 21pt on the live menu
+  /// (128px group pitch vs 86px row pitch at 2x); with the 4pt row
+  /// spacing that means a 17pt spacer (25 read visibly too airy in
+  /// David's side-by-side).
+  private static let sectionGapHeight: CGFloat = 17
 
   private var listHeight: CGFloat {
     let rows = filtered
@@ -153,7 +160,7 @@ struct RaycastActionsModal: View {
   /// Rasters preloaded once; actions rebuild on every body evaluation.
   private static let rasters: [String: NSImage] = Dictionary(
     uniqueKeysWithValues: [
-      "RaycastPlus", "RaycastMagnifyingGlass", "RaycastCopyClipboard",
+      "RaycastPlus", "RaycastTextSearch", "RaycastCopyClipboard",
       "RaycastSidebarLeft", "RaycastSwatch"
     ].map { ($0, raycastIconImage($0)) }
   )

@@ -109,12 +109,23 @@ require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behind
 # are pure whitespace (no hairline) and the pill + is drawn at 2pt, not
 # the heavier-stroke raster.
 reject_grep "sectionRule" "Sources/Spotlight/RaycastActionsModal.swift"
-# The actions sheet hugs its content (computed listHeight) and draws the
-# probed hairline under its search field; the lights are hover-gated but
-# the pill is not (David 2026-08-10).
-require_grep "frame(height: min(400, listHeight))" "Sources/Spotlight/RaycastActionsModal.swift"
+# The actions sheet hugs its content (computed listHeight, NO height
+# cap -- a 400pt cap hid Show Sidebar/Change Theme below the fold while
+# the live menu shows its whole list) and draws the probed hairline
+# under its search field; the lights are hover-gated but the pill is not
+# (David 2026-08-10).
+require_grep "frame(height: listHeight)" "Sources/Spotlight/RaycastActionsModal.swift"
 require_grep "searchDivider" "Sources/Spotlight/RaycastActionsModal.swift"
 require_grep "showsLights: windowHovered || anyModalShown" "Sources/Spotlight/SpotlightRootView.swift"
+# Pill icon hover is a CIRCLE at a bare +8 RGB, not a rounded rect
+# (probed on David's 2026-08-10 Raycast hover capture).
+require_grep "Circle()" "Sources/Spotlight/RaycastChrome.swift"
+# Editor hint labels are bare colored letters (nvim hl_mode "replace"
+# look) -- the opaque pink pills were retired 2026-08-10; hop_red is the
+# love-toward-red blend, never bare love.
+require_grep "drawHintLabel" "Sources/Spotlight/MultilineEditorWordHint.swift"
+reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
+reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
 require_grep "RaycastPlusShape" "Sources/Spotlight/RaycastChrome.swift"
 # The sidebar is a SHELF child panel with its own height; the window
