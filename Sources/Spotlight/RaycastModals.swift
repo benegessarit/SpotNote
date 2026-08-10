@@ -33,10 +33,11 @@ enum RaycastModalPalette {
   /// by the 0.45 tint puts the delta in the ink, keeping transmission.
   static let sheet = Color(red: 0x10 / 255, green: 0x12 / 255, blue: 0x19 / 255)
   static let sheetTintOpacity: CGFloat = 0.45
-  /// Selected/hovered row: the live hovered rows probe (40,40,52) in
-  /// both menus (2026-08-10 side-by-side; the earlier #2B2B38 read
-  /// (43,43,56) ran ~+4 hot and a step too blue).
-  static let selectedRow = Color(red: 0x28 / 255, green: 0x28 / 255, blue: 0x34 / 255)
+  /// Selected/hovered row: the live hovered rows probe (40,40,52) in the
+  /// actions menu and (38,38,50) in browse (2026-08-10 native captures --
+  /// a ±2 noise band, so the center #272733 serves both; the original
+  /// #2B2B38 read (43,43,56), ~+4 hot and a step too blue).
+  static let selectedRow = Color(red: 0x27 / 255, green: 0x27 / 255, blue: 0x33 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
   /// Browse metadata line runs BRIGHTER than the chip/secondary tone:
@@ -221,7 +222,7 @@ struct RaycastNotesModal: View {
         }
         .padding(.horizontal, RaycastModalPalette.rowInset)
       }
-      .frame(maxHeight: 320)
+      .frame(height: listHeight)
       .onChange(of: controller.selectedIndex) { _, newIndex in
         if let result = controller.results[safe: newIndex] {
           proxy.scrollTo(result.id, anchor: .center)
@@ -229,6 +230,20 @@ struct RaycastNotesModal: View {
       }
     }
   }
+
+  /// The list hugs its content like the live app, scrolling only past
+  /// six rows: David's 2026-08-10 native capture shows Raycast's browse
+  /// displaying six full 70pt rows (1000px modal at 2x) while our 320pt
+  /// cap cut row five.
+  private var listHeight: CGFloat {
+    let headerHeight: CGFloat = 43
+    guard !controller.results.isEmpty else { return headerHeight + 60 }
+    return headerHeight + Self.rowPitch * CGFloat(min(controller.results.count, 6))
+  }
+
+  /// Live browse rows sit on a 140px-at-2x pitch (title-top to
+  /// title-top, 2026-08-10 native capture); ours measured 130px.
+  static let rowPitch: CGFloat = 70
 
   private func row(_ result: FuzzyResult, index: Int) -> some View {
     let isSelected = index == controller.selectedIndex
@@ -248,7 +263,7 @@ struct RaycastNotesModal: View {
         }
       }
       .padding(.horizontal, 12)
-      .padding(.vertical, 12)
+      .frame(height: Self.rowPitch)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: RaycastModalPalette.rowCornerRadius, style: .continuous)
@@ -271,7 +286,10 @@ struct RaycastNotesModal: View {
   }
 
   private func rowText(_ result: FuzzyResult) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
+    // Title-to-metadata gap: the live rows carry 27px at 2x between the
+    // title's bottom and the metadata's top (2026-08-10 native capture);
+    // our spacing-2 rendered 14px and squeezed the whole row.
+    VStack(alignment: .leading, spacing: 7) {
       HStack(spacing: 6) {
         if result.chat.isPinned {
           Image(systemName: "pin.fill")
@@ -317,7 +335,10 @@ struct RaycastNotesModal: View {
       .renderingMode(.template)
       .resizable()
       .frame(width: 19.5, height: 19.5)
-      .foregroundStyle(RaycastModalPalette.secondaryText)
+      // Live pin/trash render at TITLE brightness (peak 221 = the row
+      // title's own top-decile, 2026-08-10 native capture) -- tinting
+      // them secondaryText read as washed-out copies of Raycast's.
+      .foregroundStyle(RaycastModalPalette.primaryText)
       .contentShape(Rectangle())
   }
 

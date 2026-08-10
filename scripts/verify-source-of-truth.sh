@@ -131,10 +131,14 @@ require_grep "Circle()" "Sources/Spotlight/RaycastChrome.swift"
 require_grep "drawHintLabel" "Sources/Spotlight/MultilineEditorWordHint.swift"
 require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorWordHint.swift"
 require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
-# Browse hover buttons are Raycast's own Tack/Trash rasters, and the
-# metadata line runs on the brighter second secondary tone (2026-08-10).
+# Browse hover buttons are Raycast's own Tack/Trash rasters at PRIMARY
+# tint, the metadata line runs on the brighter second secondary tone,
+# rows sit on the live 70pt pitch, and the list hugs six rows before
+# scrolling (all probed on 2026-08-10 native captures).
 require_grep "RaycastTrash" "Sources/Spotlight/RaycastModals.swift"
 require_grep "metadataText" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowPitch: CGFloat = 70" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "maxHeight: 320" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
