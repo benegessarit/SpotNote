@@ -195,8 +195,32 @@ extension PlaceholderTextView {
   /// file so the giant per-case switch doesn't bloat
   /// `MultilineEditor.swift`.
   func executeVimAction(_ action: VimAction) {
+    defer { repairVisualCoherence() }
     if VimActionDispatcher.handleSimple(action, on: self) { return }
     executeMutatingVimAction(action)
+  }
+
+  /// The engine can leave visual mode on paths that never touch the
+  /// view's visual state (leader handoffs, future commands). Stale
+  /// anchors then make the NEXT motion extend a selection the engine no
+  /// longer owns -- the UI looks wedged in a broken half-visual state.
+  /// After every action: if the engine is out of visual mode but
+  /// anchors linger, remember the range for `gv`, drop the anchors,
+  /// and collapse the leftover highlight.
+  private func repairVisualCoherence() {
+    guard let engine = vimEngine, engine.mode != .visual, engine.mode != .visualLine,
+      visualAnchor != nil || visualLineAnchor != nil
+    else { return }
+    captureLastVisualRange()
+    visualAnchor = nil
+    visualCaret = nil
+    visualLineAnchor = nil
+    visualLineCaret = nil
+    if selectedRange.length > 0 {
+      setSelectedRange(NSRange(location: selectedRange.location, length: 0))
+    }
+    notifyVimModeChanged()
+    needsDisplay = true
   }
 
   private func executeMutatingVimAction(_ action: VimAction) {
@@ -327,6 +351,7 @@ extension PlaceholderTextView {
   /// `y` in visual line mode -- copies the selection (with the trailing
   /// newline preserved, matching real vim) and exits to normal.
   private func yankVisualLineSelection() {
+    captureLastVisualRange()
     let nsString = string as NSString
     let range = selectedRange
     if range.length > 0, range.length <= nsString.length {
@@ -340,6 +365,7 @@ extension PlaceholderTextView {
   /// `d` / `c` in visual line mode -- deletes the selection and either
   /// returns to normal (delete) or switches to insert (change).
   private func deleteVisualLineSelection(switchingToInsert: Bool) {
+    captureLastVisualRange()
     let range = selectedRange
     let restorePoint = range.location
     if range.length > 0, shouldChangeText(in: range, replacementString: "") {
@@ -355,6 +381,7 @@ extension PlaceholderTextView {
   }
 
   private func exitVisualLineSelection(restoreCaretTo location: Int) {
+    captureLastVisualRange()
     visualLineAnchor = nil
     visualLineCaret = nil
     let clamped = min(location, (string as NSString).length)

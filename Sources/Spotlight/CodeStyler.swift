@@ -30,8 +30,25 @@ enum CodeStyler {
     let comment: NSColor
   }
 
+  /// nvim Visual parity: the selection is a SUBTLE flat lift of the
+  /// surface toward the text ink, never the macOS accent blue. David's
+  /// live rose-pine resolves Visual to #221F2E over the #191724 base --
+  /// exactly a 5% background→text blend (probed via headless nvim
+  /// nvim_get_hl, 2026-08-10); light schemes need a stronger step to
+  /// stay visible (his own rose-pine config raises Dawn's for the same
+  /// reason). Foreground is NOT overridden -- nvim keeps syntax colors
+  /// inside the selection.
+  @MainActor
+  static func applyVisualSelectionColor(to textView: NSTextView, theme: Theme) {
+    let base = NSColor(theme.background)
+    let fraction: CGFloat = theme.mode == .dark ? 0.05 : 0.09
+    let visualBg = base.blended(withFraction: fraction, of: NSColor(theme.text)) ?? base
+    textView.selectedTextAttributes = [.backgroundColor: visualBg]
+  }
+
   @MainActor
   static func apply(to textView: NSTextView, theme: Theme) {
+    applyVisualSelectionColor(to: textView, theme: theme)
     guard let layoutManager = textView.layoutManager else { return }
     let nsText = textView.string as NSString
     let fullRange = NSRange(location: 0, length: nsText.length)

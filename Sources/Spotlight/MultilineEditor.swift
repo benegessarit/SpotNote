@@ -630,6 +630,14 @@ final class PlaceholderTextView: NSTextView {
   /// extend symmetrically instead of always re-collapsing to a fixed
   /// edge of the snapped line range.
   var visualLineCaret: Int?
+  /// Last visual range for `gv` (wise + endpoints, captured on every
+  /// visual exit).
+  struct VisualRangeMemo {
+    let anchor: Int
+    let caret: Int
+    let linewise: Bool
+  }
+  var lastVisualRange: VisualRangeMemo?
   var vimPasteboard: NSPasteboard = .general
   var vimEngine: VimEngine?
   weak var vimController: VimController?
@@ -894,6 +902,8 @@ final class PlaceholderTextView: NSTextView {
       moveToDocumentStartForVim()
     case .documentEnd:
       moveToDocumentEndForVim()
+    case .toLine(let line):
+      _ = jumpToLine(line)
     default:
       return
     }
@@ -1884,6 +1894,7 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
+    drawVisualBlockCursor(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
     drawWordHints(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
@@ -1937,7 +1948,7 @@ final class PlaceholderTextView: NSTextView {
     return shrinkInsertionPointRectToFont(baseRect)
   }
 
-  private func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
+  func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
     let caretFont = font ?? .systemFont(ofSize: 14)
     let fontHeight = caretFont.ascender - caretFont.descender
     let centeredGlyphInset = max(0, rect.height - fontHeight) / 2

@@ -20,6 +20,10 @@ enum Motion: Equatable, Sendable {
   case firstNonBlank
   case documentStart
   case documentEnd
+  /// `<n>G` as a MOTION so visual mode can extend to an absolute line
+  /// (the old relative `down(n-1)` snap walked from the caret, not
+  /// line n). Normal mode keeps the `.gotoLine` action.
+  case toLine(Int)
 }
 
 enum VimAction: Equatable, Sendable {
@@ -73,6 +77,13 @@ enum VimAction: Equatable, Sendable {
   case yankVisualLine
   case deleteVisualLineSelection
   case changeVisualLineSelection
+  /// Visual `o` -- swap the anchor and the moving end (both wises).
+  case swapVisualEnds
+  /// Visual `p` -- replace the selection with the register WITHOUT
+  /// clobbering it (David's nvim maps visual p to `"_dP`).
+  case pasteOverVisualSelection
+  /// Normal `gv` -- reselect the last visual range.
+  case reselectLastVisual
 }
 
 final class VimEngine {
@@ -96,9 +107,9 @@ final class VimEngine {
     case .normal:
       return handleNormal(key: key)
     case .visual:
-      return handleVisual(key: key)
+      return handleVisualMode(key: key, wise: .char)
     case .visualLine:
-      return handleVisualLine(key: key)
+      return handleVisualMode(key: key, wise: .line)
     }
   }
 
@@ -268,11 +279,17 @@ extension VimEngine {
     }
   }
 
-  // MARK: - Visual line mode
+  // MARK: - Visual modes (one handler; `wise` picks the emissions)
 
-  private func handleVisualLine(key: String) -> VimAction {
+  /// Characterwise vs linewise visual: the SAME grammar (digits, g/\
+  /// prefixes, <n>G absolute snap, motions extend, one command table)
+  /// with per-wise action emissions. The old twin handlers drifted --
+  /// this is the single owner.
+  private enum VisualWise { case char, line }
+
+  private func handleVisualMode(key: String, wise: VisualWise) -> VimAction {
     if !pendingBuffer.isEmpty {
-      return handleVisualLinePending(key: key)
+      return handleVisualPending(key: key, wise: wise)
     }
     if key.count == 1, let ch = key.first, ch.isNumber {
       let digit = ch.wholeNumberValue ?? 0
@@ -281,39 +298,38 @@ extension VimEngine {
         return .none
       }
     }
-    if key == "g" {
-      pendingBuffer = "g"
+    if key == "g" || key == "\\" {
+      pendingBuffer = key
       return .none
     }
-    if key == "\\" {
-      pendingBuffer = "\\"
-      return .none
-    }
-
-    // `<count>G` jumps to a specific line and snaps the visual range
-    // to it; bare `G` falls through to the documentEnd motion.
+    // `<count>G` snaps the moving end to that ABSOLUTE line (vim);
+    // bare `G` falls through to the documentEnd motion.
     if key == "G", countAccumulator > 0 {
       let target = countAccumulator
       clearAccumulator()
-      return .extendVisualLine(.down(max(0, target - 1)))
+      return extendAction(.toLine(target), wise: wise)
     }
 
     let count = resolvedCount
     defer { clearAccumulator() }
 
     if let motion = motionForKey(key, count: count) {
-      return .extendVisualLine(motion)
+      return extendAction(motion, wise: wise)
     }
-    return visualLineCommand(for: key)
+    return visualCommand(for: key, wise: wise)
   }
 
-  private func handleVisualLinePending(key: String) -> VimAction {
+  private func extendAction(_ motion: Motion, wise: VisualWise) -> VimAction {
+    wise == .char ? .extendVisual(motion) : .extendVisualLine(motion)
+  }
+
+  private func handleVisualPending(key: String, wise: VisualWise) -> VimAction {
     let buffered = pendingBuffer
     let count = resolvedCount
     pendingBuffer = ""
     if buffered == "g", key == "g" {
       clearAccumulator()
-      return .extendVisualLine(.documentStart)
+      return extendAction(.documentStart, wise: wise)
     }
     if buffered == "\\", key == "t" {
       clearAccumulator()
@@ -328,103 +344,48 @@ extension VimEngine {
     return .none
   }
 
-  private func visualLineCommand(for key: String) -> VimAction {
+  // swiftlint:disable:next cyclomatic_complexity
+  private func visualCommand(for key: String, wise: VisualWise) -> VimAction {
     switch key {
-    case "V", "\u{1B}", "escape":
+    case "\u{1B}", "escape":
       mode = .normal
       return .switchToNormal
-    case "y":
-      mode = .normal
-      return .yankVisualLine
-    case "d", "x":
-      mode = .normal
-      return .deleteVisualLineSelection
-    case "c":
-      mode = .insert
-      return .changeVisualLineSelection
-    case "s":
-      return .enterWordHint
-    default:
-      return .none
-    }
-  }
-
-  func handleVisual(key: String) -> VimAction {
-    if !pendingBuffer.isEmpty {
-      return handleVisualPending(key: key)
-    }
-    if key.count == 1, let ch = key.first, ch.isNumber {
-      let digit = ch.wholeNumberValue ?? 0
-      if digit > 0 || countAccumulator > 0 {
-        countAccumulator = countAccumulator * 10 + digit
-        return .none
+    case "v":
+      if wise == .line {
+        mode = .visual
+        return .enterVisual
       }
-    }
-    if key == "g" {
-      pendingBuffer = "g"
-      return .none
-    }
-    if key == "\\" {
-      pendingBuffer = "\\"
-      return .none
-    }
-    if key == "G", countAccumulator > 0 {
-      let target = countAccumulator
-      clearAccumulator()
-      return .extendVisual(.down(max(0, target - 1)))
-    }
-
-    let count = resolvedCount
-    defer { clearAccumulator() }
-
-    if let motion = motionForKey(key, count: count) {
-      return .extendVisual(motion)
-    }
-    return visualCommand(for: key)
-  }
-
-  private func handleVisualPending(key: String) -> VimAction {
-    let buffered = pendingBuffer
-    let count = resolvedCount
-    pendingBuffer = ""
-    if buffered == "g", key == "g" {
-      clearAccumulator()
-      return .extendVisual(.documentStart)
-    }
-    if buffered == "\\", key == "t" {
-      clearAccumulator()
-      mode = .normal
-      return .appendCurrentLineToTrayNote(count: count)
-    }
-    if buffered == "\\", key == "c" {
-      clearAccumulator()
-      mode = .normal
-      return .appendCurrentLineToStateNote(count: count)
-    }
-    return .none
-  }
-
-  private func visualCommand(for key: String) -> VimAction {
-    switch key {
-    case "v", "\u{1B}", "escape":
       mode = .normal
       return .switchToNormal
     case "V":
-      mode = .visualLine
-      return .enterVisualLine
+      if wise == .char {
+        mode = .visualLine
+        return .enterVisualLine
+      }
+      mode = .normal
+      return .switchToNormal
     case "y":
       mode = .normal
-      return .yankVisualSelection
+      return wise == .char ? .yankVisualSelection : .yankVisualLine
     case "d", "x":
       mode = .normal
-      return .deleteVisualSelection
+      return wise == .char ? .deleteVisualSelection : .deleteVisualLineSelection
     case "c":
       mode = .insert
-      return .changeVisualSelection
+      return wise == .char ? .changeVisualSelection : .changeVisualLineSelection
+    case "o":
+      return .swapVisualEnds
+    case "p":
+      mode = .normal
+      return .pasteOverVisualSelection
     case "s":
       return .enterWordHint
     default:
       return .none
     }
   }
+
+  /// Sanctioned re-entry for `gv` (the view owns the remembered range
+  /// and its wise; the engine cannot know which to restore).
+  func enterVisualMode(linewise: Bool) { mode = linewise ? .visualLine : .visual }
 }

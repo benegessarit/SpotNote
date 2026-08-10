@@ -691,15 +691,48 @@ struct VimEngineTests {
     )
   }
 
-  @Test("<count>G in visual line mode extends down to that line")
+  @Test("<count>G in visual line mode extends to that ABSOLUTE line")
   func visualLineCountedG() {
     let engine = VimEngine()
     _ = engine.handle(key: "V", hasModifiers: false)
     _ = engine.handle(key: "1", hasModifiers: false)
     _ = engine.handle(key: "0", hasModifiers: false)
+    // Vim snaps to line 10 itself; the old relative `.down(9)` walked
+    // nine lines from wherever the caret sat.
     #expect(
-      engine.handle(key: "G", hasModifiers: false) == .extendVisualLine(.down(9))
+      engine.handle(key: "G", hasModifiers: false) == .extendVisualLine(.toLine(10))
     )
+  }
+
+  @Test("o in visual mode swaps the selection ends")
+  func visualSwapEnds() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+    #expect(engine.handle(key: "o", hasModifiers: false) == .swapVisualEnds)
+    #expect(engine.mode == .visual)
+  }
+
+  @Test("p in visual mode pastes over the selection and returns to normal")
+  func visualPasteOver() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+    #expect(engine.handle(key: "p", hasModifiers: false) == .pasteOverVisualSelection)
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("gv from normal reselects the last visual range")
+  func gvReselects() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "g", hasModifiers: false)
+    #expect(engine.handle(key: "v", hasModifiers: false) == .reselectLastVisual)
+  }
+
+  @Test("v in visual line mode switches to characterwise visual")
+  func visualLineToCharwise() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+    #expect(engine.handle(key: "v", hasModifiers: false) == .enterVisual)
+    #expect(engine.mode == .visual)
   }
 
   @Test("y in visual line mode yanks and returns to normal")

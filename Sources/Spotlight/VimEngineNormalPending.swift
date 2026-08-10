@@ -109,6 +109,7 @@ extension VimEngine {
   private func handlePendingG(key: String, count: Int) -> VimAction {
     resolvePending()
     if key == "g" { return .moveCursor(.documentStart) }
+    if key == "v" { return .reselectLastVisual }
     if key == "d" {
       return .sendCurrentTaskToLinear(status: .done, workspace: .personal, count: count)
     }

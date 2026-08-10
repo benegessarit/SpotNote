@@ -194,6 +194,21 @@ require_grep "2d3w multiplies the counts" "Tests/SpotlightTests/VimEngineTests.s
 require_grep "ciw/diw/yiw compose operators" "Tests/SpotlightTests/VimEngineTests.swift"
 reject_grep "case delete(Motion)" "Sources/Spotlight/VimEngine.swift"
 reject_grep "executeDeleteMotion" "Sources/Spotlight/MultilineEditor.swift"
+# Visual mode is nvim-exact (rebuilt 2026-08-10 after David's "crashing
+# + ugly" report): ONE engine handler for both wises; selection is the
+# flat 5%/9% background→text lift (never accent blue), foreground kept;
+# a block cursor draws at the moving end; o/gv/visual-p(no-clobber)/
+# absolute <n>G exist; a coherence repair clears stranded anchors after
+# every action so the engine and view can never disagree about visual.
+require_grep "applyVisualSelectionColor" "Sources/Spotlight/CodeStyler.swift"
+require_grep "visualBlockCursorRect" "Sources/Spotlight/MultilineEditorVimVisual.swift"
+require_grep "repairVisualCoherence" "Sources/Spotlight/MultilineEditorVim.swift"
+require_grep "handleVisualMode(key: String, wise: VisualWise)" "Sources/Spotlight/VimEngine.swift"
+require_grep "case swapVisualEnds" "Sources/Spotlight/VimEngine.swift"
+require_grep "case pasteOverVisualSelection" "Sources/Spotlight/VimEngine.swift"
+require_grep "never clobbers the register" "Tests/SpotlightTests/MultilineEditorVimVisualNvimTests.swift"
+require_grep "cannot strand anchors" "Tests/SpotlightTests/MultilineEditorVimVisualNvimTests.swift"
+reject_grep "func handleVisualLine" "Sources/Spotlight/VimEngine.swift"
 require_grep "gg scrolls the document start to the top" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
 require_grep "roomyVisibleLinesFloor = 1" "Sources/Spotlight/EditorMetrics.swift"
 require_grep "appendCurrentLineToTrayNote" "Sources/Spotlight/VimEngine.swift"

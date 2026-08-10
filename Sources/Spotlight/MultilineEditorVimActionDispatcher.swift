@@ -22,7 +22,9 @@ enum VimActionDispatcher {
     case .switchToInsert, .switchToNormal:
       // Collapse any lingering visual-line selection back to the
       // motion's last caret so Esc/V from VISUAL LINE leaves the user
-      // exactly where they were, not on a wide highlight.
+      // exactly where they were, not on a wide highlight. The range is
+      // remembered first so `gv` can reselect it.
+      view.captureLastVisualRange()
       if let caret = view.visualLineCaret ?? view.visualCaret {
         let clamped = min(caret, (view.string as NSString).length)
         view.setSelectedRange(NSRange(location: clamped, length: 0))
