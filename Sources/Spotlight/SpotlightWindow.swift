@@ -187,9 +187,17 @@ public final class SpotlightWindowController {
   }
 
   private func observeSidebar() {
+    // `@Published` emits during `willSet`. Without the queue hop, the
+    // sink's `setPanelFrame(display: true)` forces a synchronous SwiftUI
+    // render while `sidebarShown` still holds the OLD value; SwiftUI
+    // marks its graph clean, the new value lands unobserved, and every
+    // subsequent toggle renders ONE STATE BEHIND -- the ⌘\ wide-window-
+    // no-sidebar bug (deterministic repro: SpotlightSidebarToggleTests).
+    // DispatchQueue.main, not RunLoop.main: RunLoop skips tracking mode.
     preferences.$sidebarShown
       .removeDuplicates()
       .dropFirst()
+      .receive(on: DispatchQueue.main)
       .sink { [weak self] shown in
         MainActor.assumeIsolated { self?.applySidebarWidth(shown: shown) }
       }
