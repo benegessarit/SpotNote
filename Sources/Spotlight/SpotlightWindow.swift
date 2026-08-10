@@ -55,6 +55,10 @@ public final class SpotlightWindowController {
   }
 
   private var panel: SpotlightPanel?
+  /// Test seam: suites that open real controller panels must assert on
+  /// THEIR panel, not an app-wide `NSApp.windows` scan (parallel suites
+  /// interleave at every await).
+  var panelForTesting: SpotlightPanel? { panel }
   private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
   private let keyState = PanelKeyState()
@@ -78,6 +82,11 @@ public final class SpotlightWindowController {
   /// cached on first placement and reused thereafter so the bottom-right corner
   /// stays put and the panel doesn't "jump" between reshows.
   private var pinnedBottomY: CGFloat?
+  /// Screen-space X of the panel's pinned *right* edge once the user has
+  /// dragged the panel. `nil` = never dragged: the rest X re-derives as
+  /// the right-hugging default. Right edge (not left) so sidebar width
+  /// changes keep the dragged position stable like every other resize.
+  private var pinnedRightX: CGFloat?
   /// Drives `setPanelHeight`. The HUD is bottom-anchored at the bottom-right
   /// corner, so the rest state is `.bottomPinned(pinnedBottomY)`: the panel's
   /// bottom edge stays fixed and content (editor + navigation overlay) grows
@@ -176,8 +185,33 @@ public final class SpotlightWindowController {
     observeActiveApp()
     observeToastMessages()
     observeSidebar()
+    observeScreenChanges()
     installVimCommandRunner()
+    wireSaveFailureSurfacing(store: store, vaultDocuments: vaultDocuments ?? [])
     Task { [session] in await session.bootstrap() }
+  }
+
+  /// Debounced background persistence has no throwing caller left; a
+  /// swallowed failure is silent data loss. Both stores keep the text in
+  /// memory -- this surfaces the failure through the toast lane.
+  private func wireSaveFailureSurfacing(store: ChatStore, vaultDocuments: [VaultNoteDocument]) {
+    let vimController = vimController
+    Task {
+      await store.setPersistFailureHandler { _, error in
+        let detail = (error as NSError).localizedDescription
+        Task { @MainActor in
+          vimController.showMessage("Save failed — note kept in memory (\(detail))", kind: .error)
+        }
+      }
+      for document in vaultDocuments {
+        await document.setConflictHandler { sibling in
+          let name = sibling.lastPathComponent
+          Task { @MainActor in
+            vimController.showMessage("Inbox changed on disk — your text is in \(name)", kind: .error)
+          }
+        }
+      }
+    }
   }
 
   /// The window grows leftward by `EditorMetrics.sidebarWidth` when the
@@ -371,21 +405,66 @@ public final class SpotlightWindowController {
     guard let screen = NSScreen.main else { return }
     let screenFrame = screen.visibleFrame
     let height = expectedPanelHeight
-    let bottom: CGFloat
+    var bottom: CGFloat
     if let cached = pinnedBottomY {
       bottom = cached
     } else {
       bottom = Self.restingOriginY(in: screenFrame, panelHeight: height)
-      pinnedBottomY = bottom
     }
-    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    let x: CGFloat
+    if let pinnedRightX {
+      x = pinnedRightX - panel.frame.width
+    } else {
+      x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    }
+    // A pin cached on a screen layout that no longer exists (display
+    // unplugged while hidden) must never strand the panel off-screen:
+    // clamp the SHOW frame and re-adopt the clamped pins.
+    let clamped = Self.clampedFrame(
+      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
+      into: screenFrame
+    )
+    bottom = clamped.origin.y
+    pinnedBottomY = bottom
+    if pinnedRightX != nil { pinnedRightX = clamped.maxX }
     // Bottom-anchored at the bottom-right corner: the origin (bottom edge) is
     // fixed and the panel grows upward as content reflows.
     navAnchor = .bottomPinned(bottom)
-    setPanelFrame(
-      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
-      display: false
+    setPanelFrame(clamped, display: false)
+  }
+
+  private func observeScreenChanges() {
+    observers.append(
+      NotificationCenter.default.addObserver(
+        forName: NSApplication.didChangeScreenParametersNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated { self?.reclampToVisibleScreen() }
+      }
     )
+  }
+
+  /// Resolution change, display unplug, or Dock/menu-bar resize can leave
+  /// the pinned position outside every visible frame. Re-clamp the live
+  /// panel and adopt the clamped pins so later shows stay on-screen.
+  private func reclampToVisibleScreen() {
+    guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
+    let clamped = Self.clampedFrame(panel.frame, into: screen.visibleFrame)
+    pinnedBottomY = clamped.origin.y
+    if pinnedRightX != nil { pinnedRightX = clamped.maxX }
+    guard clamped != panel.frame else { return }
+    navAnchor = .bottomPinned(clamped.origin.y)
+    setPanelFrame(clamped, display: true)
+  }
+
+  /// Pure clamp: translates `frame` the minimal distance so it lies inside
+  /// `visible` (or hugs its lower-left corner when it cannot fit).
+  static func clampedFrame(_ frame: NSRect, into visible: NSRect) -> NSRect {
+    var clamped = frame
+    clamped.origin.x = min(max(frame.origin.x, visible.minX), max(visible.maxX - frame.width, visible.minX))
+    clamped.origin.y = min(max(frame.origin.y, visible.minY), max(visible.maxY - frame.height, visible.minY))
+    return clamped
   }
 
   private func makePanel() -> SpotlightPanel {
@@ -474,7 +553,12 @@ public final class SpotlightWindowController {
       bottom = Self.restingOriginY(in: screenFrame, panelHeight: initialHeight)
       pinnedBottomY = bottom
     }
-    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    let x: CGFloat
+    if let pinnedRightX {
+      x = pinnedRightX - panel.frame.width
+    } else {
+      x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    }
     return NSPoint(x: x, y: bottom)
   }
 
@@ -607,6 +691,10 @@ extension SpotlightWindowController {
           if self.shouldIgnoreProgrammaticMove(panel.frame) { return }
           let newBottom = panel.frame.origin.y
           self.pinnedBottomY = newBottom
+          // Adopt X too: without it, `pinnedOrigin` keeps re-deriving the
+          // right-hugging rest X and the next drift correction can snap a
+          // deliberately dragged panel back to the screen edge.
+          self.pinnedRightX = panel.frame.maxX
           self.navAnchor = .bottomPinned(newBottom)
           self.syncToastPanel()
         }

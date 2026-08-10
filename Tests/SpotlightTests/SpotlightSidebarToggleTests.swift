@@ -18,18 +18,24 @@ struct SpotlightSidebarToggleTests {
   func widthAndRenderAgreeAcrossToggles() async throws {
     let fixture = try makeFixture()
     defer { fixture.cleanup() }
+    // A resign mid-run (David clicking elsewhere during an attended
+    // ci.sh) must only dim the panel, not close/hide the app under the
+    // remaining toggles; frame assertions are alpha-independent.
+    fixture.preferences.dimOnFocusLoss = true
     fixture.controller.openHUD()
-    try await waitUntil("panel appears") { visibleControllerPanel() != nil }
-    let panel = try #require(visibleControllerPanel())
+    try await waitUntil("panel appears") {
+      fixture.controller.panelForTesting?.isVisible == true
+    }
+    let panel = try #require(fixture.controller.panelForTesting)
     try await waitUntil("editor mounts") { firstTextView(in: panel) != nil }
 
     // 12 round trips; the live failure hit ~half of attempts, so a
     // consistent pass here must survive repetition, not one lucky toggle.
     for attempt in 0..<12 {
       let target = !fixture.preferences.sidebarShown
-      // Mirror the hotkey dispatch shape (SpotlightWindow.swift:631):
-      // the toggle runs as its own main-actor job, not inline in an
-      // event callback.
+      // Mirror the hotkey dispatch shape (`handleKeyEquivalent` →
+      // `dispatch`): the toggle runs as its own main-actor job, not
+      // inline in an event callback.
       await Task { @MainActor in
         fixture.preferences.sidebarShown = target
       }.value
@@ -59,11 +65,18 @@ struct SpotlightSidebarToggleTests {
     let controller: SpotlightWindowController
     let preferences: ThemePreferences
     let tempDirectory: URL
+    /// Frontmost app before `openHUD` steals activation; cleanup hands
+    /// focus back so an attended test run doesn't strand keystrokes.
+    let previouslyFrontmost: NSRunningApplication?
 
     @MainActor
     func cleanup() {
       for window in NSApplication.shared.windows where window is SpotlightPanel {
         window.orderOut(nil)
+      }
+      let ownBundle = Bundle.main.bundleIdentifier
+      if let app = previouslyFrontmost, app.bundleIdentifier != ownBundle {
+        app.activate()
       }
       try? FileManager.default.removeItem(at: tempDirectory)
     }
@@ -71,6 +84,7 @@ struct SpotlightSidebarToggleTests {
 
   private enum FixtureError: Error {
     case defaultsUnavailable
+    case timedOut(String)
   }
 
   private func makeFixture() throws -> Fixture {
@@ -89,16 +103,12 @@ struct SpotlightSidebarToggleTests {
       shortcuts: ShortcutStore(defaults: defaults),
       onOpenSettings: {}
     )
-    return Fixture(controller: controller, preferences: preferences, tempDirectory: tmpDir)
-  }
-
-  /// The controller's panel is private; the suite runs serialized and no
-  /// other suite mounts a full root view into a `SpotlightPanel`, so the
-  /// visible panel hosting an editor text view is unambiguous.
-  private func visibleControllerPanel() -> SpotlightPanel? {
-    NSApplication.shared.windows
-      .compactMap { $0 as? SpotlightPanel }
-      .first { $0.isVisible && firstTextView(in: $0) != nil }
+    return Fixture(
+      controller: controller,
+      preferences: preferences,
+      tempDirectory: tmpDir,
+      previouslyFrontmost: NSWorkspace.shared.frontmostApplication
+    )
   }
 
   private func firstTextView(in panel: NSPanel) -> PlaceholderTextView? {
@@ -114,6 +124,8 @@ struct SpotlightSidebarToggleTests {
     return nil
   }
 
+  /// Throws on timeout so one broken invariant aborts the toggle loop
+  /// instead of accumulating twelve timeouts of duplicate issues.
   private func waitUntil(
     _ label: String,
     condition: @MainActor @escaping () -> Bool
@@ -122,7 +134,7 @@ struct SpotlightSidebarToggleTests {
       if condition() { return }
       try await Task.sleep(for: .milliseconds(10))
     }
-    Issue.record("timed out waiting: \(label)")
+    throw FixtureError.timedOut(label)
   }
 
   private func settleSwiftUI() async {

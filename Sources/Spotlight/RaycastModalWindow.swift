@@ -19,8 +19,9 @@ struct RaycastModalOverhang: NSViewRepresentable {
   let content: AnyView?
   let onDismissTap: () -> Void
 
-  /// Margin around the sheet for shadow bleed; taps here dismiss, like
-  /// the parent backdrop.
+  /// Transparent margin around the sheet; taps here dismiss, like the
+  /// parent window's tap-catch. (The drop shadow is the window server's
+  /// and draws regardless of this margin.)
   static let margin: CGFloat = 40
   static let height: CGFloat = 560
 
