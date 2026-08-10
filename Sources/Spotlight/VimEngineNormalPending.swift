@@ -1,60 +1,103 @@
 import Foundation
 
 /// Normal-mode pending-prefix dispatch for `VimEngine`, split out so `VimEngine.swift`
-/// stays within its length budget. Three prefixes:
-/// - `d`/`c`/`ci`: delete / change operators.
+/// stays within its length budget. Prefixes:
+/// - `d`/`c`/`y` (+ `i`/`a` object stages): the operator grammar -- one handler
+///   composes any operator with any motion or text object.
 /// - `g`: Linear handoff (`gd/gp/gs/gt/gl` → personal; `gc` → Code workspace); `gg`
 ///   keeps the document-start motion.
 /// - `,`: section jumps (`,d/,t`) that drop into insert on a fresh bullet.
 /// - `\`: reusable leader (`\t` tray-append, `\c` state-append, `\f` tidy header spacing).
 extension VimEngine {
   func handlePending(key: String) -> VimAction {
-    let count = resolvedCount
+    let count = pendingResolvedCount
     defer { clearAccumulator() }
 
     switch pendingBuffer {
-    case "d": return handlePendingD(key: key, count: count)
-    case "c": return handlePendingC(key: key, count: count)
-    case "ci": return handlePendingCI(key: key)
+    case "d", "c", "y":
+      return handleOperatorPending(key: key, count: count)
+    case "di", "da", "ci", "ca", "yi", "ya":
+      return handleObjectPending(key: key)
     case "g": return handlePendingG(key: key, count: count)
     case ",": return handlePendingComma(key: key)
     case "\\": return handlePendingBackslash(key: key, count: count)
     default:
-      pendingBuffer = ""
+      resolvePending()
       return .none
     }
   }
 
-  private func handlePendingD(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
-    if key == "d" { return .deleteLine(count: count) }
-    if let motion = motionForKey(key, count: count) { return .delete(motion) }
-    return .none
+  private var pendingOperator: VimOperator? {
+    switch pendingBuffer.first {
+    case "d": return .delete
+    case "c": return .change
+    case "y": return .yank
+    default: return nil
+    }
   }
 
-  private func handlePendingC(key: String, count: Int) -> VimAction {
-    if key == "i" {
-      pendingBuffer = "ci"
+  /// Ends the pending sequence: the prefix and its captured count die
+  /// together (a half-typed operator must not leak its count into the
+  /// next keystroke).
+  private func resolvePending() {
+    pendingBuffer = ""
+    pendingCount = 0
+  }
+
+  // swiftlint:disable:next cyclomatic_complexity
+  private func handleOperatorPending(key: String, count: Int) -> VimAction {
+    guard let op = pendingOperator else {
+      resolvePending()
       return .none
     }
-    pendingBuffer = ""
-    if key == "c" {
-      enterInsertMode()
-      return .deleteLineInsert(count: count)
+    // `i`/`a` advance to the text-object stage without resolving.
+    if key == "i" || key == "a" {
+      pendingBuffer += key
+      return .none
     }
-    if key == "B" {
+    let doubled =
+      (op == .delete && key == "d") || (op == .change && key == "c")
+      || (op == .yank && key == "y")
+    if doubled {
+      resolvePending()
+      switch op {
+      case .delete: return .deleteLine(count: count)
+      case .change:
+        enterInsertMode()
+        return .deleteLineInsert(count: count)
+      case .yank: return .yankLine(count: count)
+      }
+    }
+    if op == .change, key == "B" {
+      resolvePending()
       enterInsertMode()
       return .changeBulletBody
     }
-    if let motion = motionForKey(key, count: count) { return .delete(motion) }
+    if let motion = motionForKey(key, count: count) {
+      resolvePending()
+      if op == .change { enterInsertMode() }
+      return .applyOperator(op, .motion(motion))
+    }
+    resolvePending()
     return .none
   }
 
-  private func handlePendingCI(key: String) -> VimAction {
-    pendingBuffer = ""
-    if key == "b" {
+  /// Text-object stage (`diw`, `caw`, `yiw`, ... plus the established
+  /// `cib` = change bullet body).
+  private func handleObjectPending(key: String) -> VimAction {
+    guard let op = pendingOperator else {
+      resolvePending()
+      return .none
+    }
+    let around = pendingBuffer.hasSuffix("a")
+    resolvePending()
+    if op == .change, key == "b", !around {
       enterInsertMode()
       return .changeBulletBody
+    }
+    if key == "w" {
+      if op == .change { enterInsertMode() }
+      return .applyOperator(op, around ? .aroundWord : .innerWord)
     }
     return .none
   }
@@ -64,7 +107,7 @@ extension VimEngine {
   // Code workspace at Triage (the editor adds the Develop label). `gg` keeps the
   // document-start motion.
   private func handlePendingG(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
+    resolvePending()
     if key == "g" { return .moveCursor(.documentStart) }
     if key == "d" {
       return .sendCurrentTaskToLinear(status: .done, workspace: .personal, count: count)
@@ -90,7 +133,7 @@ extension VimEngine {
   // `,` is the section-jump prefix: jump to a `## …` section and drop into
   // insert on a fresh bullet (creating the section if absent).
   private func handlePendingComma(key: String) -> VimAction {
-    pendingBuffer = ""
+    resolvePending()
     if key == "d" { return jumpToSectionInsertAction(.jumpToToDoSection) }
     if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
     return .none
@@ -101,7 +144,7 @@ extension VimEngine {
   // per block, then clears the source); `\f` tidies blank-line spacing around section
   // headers (one line above and below each header, none above the top header).
   private func handlePendingBackslash(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
+    resolvePending()
     if key == "t" { return .appendCurrentLineToTrayNote(count: count) }
     if key == "c" { return .appendCurrentLineToStateNote(count: count) }
     if key == "f" { return .normalizeDocument }

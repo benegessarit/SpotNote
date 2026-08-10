@@ -27,7 +27,11 @@ enum VimAction: Equatable, Sendable {
   case switchToInsert
   case switchToNormal
   case moveCursor(Motion)
-  case delete(Motion)
+  /// Operator × range-producer composition (d/c/y over motions and text
+  /// objects) -- the applicator resolves the range and applies the
+  /// operator in one place (`MultilineEditorVimOperator.swift`).
+  case applyOperator(VimOperator, VimRangeTarget)
+  case yankLine(count: Int)
   case deleteLine(count: Int)
   case deleteLineInsert(count: Int)
   case changeBulletBody
@@ -78,6 +82,10 @@ final class VimEngine {
   // file (VimEngineNormalPending.swift), keeping this file within its length budget.
   var pendingBuffer: String = ""
   private var countAccumulator: Int = 0
+  /// Count typed BEFORE the pending prefix (`2` in `2d3w`). Vim
+  /// multiplies it with the post-operator count; a single accumulator
+  /// concatenated the digits (`2d3w` became 23 words).
+  var pendingCount: Int = 0
 
   func handle(key: String, hasModifiers: Bool) -> VimAction {
     if hasModifiers { return .none }
@@ -98,6 +106,7 @@ final class VimEngine {
     mode = .normal
     pendingBuffer = ""
     countAccumulator = 0
+    pendingCount = 0
   }
 
   /// Sanctioned mode transition for the extension-hosted pending handlers, which
@@ -109,6 +118,7 @@ final class VimEngine {
     mode = .normal
     pendingBuffer = ""
     countAccumulator = 0
+    pendingCount = 0
     return .switchToNormal
   }
 
@@ -129,8 +139,12 @@ final class VimEngine {
   }
 
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "g" || key == "c" || key == "," || key == "\\" {
+    if key == "d" || key == "c" || key == "y" || key == "g" || key == "," || key == "\\" {
       pendingBuffer = key
+      // Capture the pre-operator count so post-operator digits start a
+      // FRESH count that multiplies (vim: 2d3w = 6 words).
+      pendingCount = countAccumulator
+      countAccumulator = 0
       return .none
     }
 
@@ -232,6 +246,10 @@ final class VimEngine {
   }
 
   var resolvedCount: Int { max(1, countAccumulator) }
+
+  /// Vim count semantics across an operator: count-before × count-after
+  /// (each defaulting to 1).
+  var pendingResolvedCount: Int { max(1, pendingCount) * max(1, countAccumulator) }
 
   func clearAccumulator() { countAccumulator = 0 }
 }

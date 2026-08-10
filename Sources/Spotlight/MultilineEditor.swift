@@ -2,8 +2,6 @@
 import AppKit
 import SwiftUI
 
-private enum VimWordClass: Equatable { case whitespace, keyword, punctuation }
-
 /// The HUD's text surface -- `NSTextView` in an `NSScrollView` with a
 /// custom `NSRulerView` line-number gutter.
 ///
@@ -1006,13 +1004,9 @@ final class PlaceholderTextView: NSTextView {
     return nsString.length
   }
 
-  private func vimWordClass(at location: Int, in nsString: NSString) -> VimWordClass {
+  private func vimWordClass(at location: Int, in nsString: NSString) -> VimCharClass {
     guard location >= 0, location < nsString.length else { return .whitespace }
-    let codeUnit = nsString.character(at: location)
-    guard let scalar = UnicodeScalar(UInt32(codeUnit)) else { return .punctuation }
-    if CharacterSet.whitespacesAndNewlines.contains(scalar) { return .whitespace }
-    if CharacterSet.alphanumerics.contains(scalar) || scalar.value == 95 { return .keyword }
-    return .punctuation
+    return VimCharClass.of(nsString.character(at: location))
   }
 
   private func markdownListBodyStart(containing location: Int, in nsString: NSString) -> Int? {
@@ -1448,17 +1442,6 @@ final class PlaceholderTextView: NSTextView {
       current = nsString.lineRange(for: NSRange(location: current.location - 1, length: 0))
     }
     return current
-  }
-
-  func executeDeleteMotion(_ motion: Motion) {
-    let before = selectedRange.location
-    executeMotion(motion)
-    let after = selectedRange.location
-    let start = min(before, after)
-    let length = abs(after - before)
-    guard length > 0 else { return }
-    setSelectedRange(NSRange(location: start, length: 0))
-    insertText("", replacementRange: NSRange(location: start, length: length))
   }
 
   func executeDeleteLines(_ count: Int) {

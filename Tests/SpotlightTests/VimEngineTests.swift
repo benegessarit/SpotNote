@@ -472,28 +472,124 @@ struct VimEngineTests {
   func dw() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "w", hasModifiers: false) == .delete(.wordForward(1)))
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .normal)
   }
 
   @Test("d$ deletes to line end")
   func dDollar() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "$", hasModifiers: false) == .delete(.lineEnd))
+    #expect(
+      engine.handle(key: "$", hasModifiers: false) == .applyOperator(.delete, .motion(.lineEnd))
+    )
   }
 
   @Test("d0 deletes to line start")
   func dZero() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "0", hasModifiers: false) == .delete(.lineStart))
+    #expect(
+      engine.handle(key: "0", hasModifiers: false) == .applyOperator(.delete, .motion(.lineStart))
+    )
   }
 
   @Test("db deletes a word backward")
   func db() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "b", hasModifiers: false) == .delete(.wordBackward(1)))
+    #expect(
+      engine.handle(key: "b", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordBackward(1)))
+    )
+  }
+
+  @Test("cw changes a word and enters insert mode")
+  func cwEntersInsert() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "c", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.change, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("2d3w multiplies the counts like vim (6 words)")
+  func countMultiplication() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordForward(6)))
+    )
+  }
+
+  @Test("yy yanks the current line; 3yy yanks three")
+  func yankLine() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .yankLine(count: 1))
+    _ = engine.handle(key: "3", hasModifiers: false)
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .yankLine(count: 3))
+  }
+
+  @Test("yw yanks a word and stays in normal mode")
+  func yankWord() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.yank, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("ciw/diw/yiw compose operators with the inner-word object")
+  func innerWordObject() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "c", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.change, .innerWord)
+    )
+    #expect(engine.mode == .insert)
+    engine.reset()
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.delete, .innerWord)
+    )
+    #expect(engine.mode == .normal)
+    engine.reset()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(engine.handle(key: "w", hasModifiers: false) == .applyOperator(.yank, .innerWord))
+  }
+
+  @Test("daw composes delete with the around-word object")
+  func aroundWordObject() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "a", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.delete, .aroundWord)
+    )
+  }
+
+  @Test("an aborted operator does not leak its count into the next key")
+  func abortedOperatorDropsCount() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "d", hasModifiers: false)
+    #expect(engine.handle(key: "q", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }
 
   // MARK: - Undo

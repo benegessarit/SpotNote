@@ -180,6 +180,20 @@ require_grep "case code" "Sources/Spotlight/ScratchpadHandoff.swift"
 require_file "Sources/Spotlight/SpotNoteFormatter.swift"
 require_grep "static func normalize" "Sources/Spotlight/SpotNoteFormatter.swift"
 require_grep "case normalizeDocument" "Sources/Spotlight/VimEngine.swift"
+# Vim operator grammar (engine program S1, 2026-08-10): operators
+# compose with range producers in one applicator; cw enters insert and
+# acts as ce; deletes yank; counts multiply across the operator; dj is
+# linewise. The old per-pair .delete(Motion) action is retired.
+require_file "Sources/Spotlight/VimOperators.swift"
+require_file "Sources/Spotlight/MultilineEditorVimOperator.swift"
+require_grep "case applyOperator(VimOperator, VimRangeTarget)" "Sources/Spotlight/VimEngine.swift"
+require_grep "pendingResolvedCount" "Sources/Spotlight/VimEngine.swift"
+require_grep "cw acts as ce" "Tests/SpotlightTests/MultilineEditorVimOperatorTests.swift"
+require_grep "dj deletes both whole lines" "Tests/SpotlightTests/MultilineEditorVimOperatorTests.swift"
+require_grep "2d3w multiplies the counts" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep "ciw/diw/yiw compose operators" "Tests/SpotlightTests/VimEngineTests.swift"
+reject_grep "case delete(Motion)" "Sources/Spotlight/VimEngine.swift"
+reject_grep "executeDeleteMotion" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "gg scrolls the document start to the top" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
 require_grep "roomyVisibleLinesFloor = 1" "Sources/Spotlight/EditorMetrics.swift"
 require_grep "appendCurrentLineToTrayNote" "Sources/Spotlight/VimEngine.swift"

@@ -230,7 +230,8 @@ extension PlaceholderTextView {
 
   private func executeDeletionVimAction(_ action: VimAction) -> Bool {
     switch action {
-    case .delete(let motion): executeDeleteMotion(motion)
+    case .applyOperator(let op, let target): applyVimOperator(op, to: target)
+    case .yankLine(let count): executeYankLines(count)
     case .deleteLine(let count): executeDeleteLines(count)
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .changeBulletBody: changeCurrentBulletBodyForVim()
