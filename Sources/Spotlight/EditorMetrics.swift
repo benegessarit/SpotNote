@@ -46,17 +46,6 @@ enum EditorMetrics {
   static let normalModeCursorWidth: CGFloat = 13
   /// Panel width (Raycast Notes window width).
   static let panelWidth: CGFloat = 670
-  /// Width of the notes sidebar shelf -- a child panel floating off the
-  /// HUD's left edge; the window itself never widens, so the editor
-  /// column keeps `panelWidth` and text never rewraps.
-  static let sidebarWidth: CGFloat = 250
-  /// The shelf owns its height instead of inheriting the note's: a
-  /// 3-line note still gets a usable list, extending below the window
-  /// like the floating menus do.
-  static let sidebarShelfHeight: CGFloat = 440
-  /// Visual gap between the shelf's right edge and the window.
-  static let sidebarShelfGap: CGFloat = 8
-  static let sidebarShelfCornerRadius: CGFloat = 16
   /// Fixed height of the find-in-note bar (⌘F).
   static let findBarHeight: CGFloat = 40
   /// Minimum default row count. Raycast Notes grows from a single line:

@@ -59,14 +59,7 @@ public final class SpotlightWindowController {
   /// THEIR panel, not an app-wide `NSApp.windows` scan (parallel suites
   /// interleave at every await).
   var panelForTesting: SpotlightPanel? { panel }
-  var sidebarShelfForTesting: NSPanel? { sidebarShelfPanel }
   private var toastPanel: HermesToastPanel?
-  /// The notes sidebar rides its own SHELF child panel off the HUD's left
-  /// edge with its own height (a 3-line note would cramp an in-window
-  /// pane); the window itself never widens. `RaycastModalChildPanel` so
-  /// the shelf's search field can take key.
-  private var sidebarShelfPanel: RaycastModalChildPanel?
-  private var sidebarShelfObservers: [NSObjectProtocol] = []
   private let focusTrigger = FocusTrigger()
   private let keyState = PanelKeyState()
   let preferences: ThemePreferences
@@ -91,8 +84,8 @@ public final class SpotlightWindowController {
   private var pinnedBottomY: CGFloat?
   /// Screen-space X of the panel's pinned *right* edge once the user has
   /// dragged the panel. `nil` = never dragged: the rest X re-derives as
-  /// the right-hugging default. Right edge (not left) so sidebar width
-  /// changes keep the dragged position stable like every other resize.
+  /// the right-hugging default. Right edge (not left) so width changes
+  /// keep the dragged position stable like every other resize.
   private var pinnedRightX: CGFloat?
   /// Drives `setPanelHeight`. The HUD is bottom-anchored at the bottom-right
   /// corner, so the rest state is `.bottomPinned(pinnedBottomY)`: the panel's
@@ -191,7 +184,6 @@ public final class SpotlightWindowController {
     FontLoader.registerBundledFonts()
     observeActiveApp()
     observeToastMessages()
-    observeSidebar()
     observeScreenChanges()
     installVimCommandRunner()
     wireSaveFailureSurfacing(store: store, vaultDocuments: vaultDocuments ?? [])
@@ -219,138 +211,6 @@ public final class SpotlightWindowController {
         }
       }
     }
-  }
-
-  private func observeSidebar() {
-    // `@Published` emits during `willSet`: hop to the next runloop turn so
-    // shelf presentation never runs window-server work while observers
-    // still see the OLD value (the ⌘\ one-state-behind class, S2).
-    // DispatchQueue.main, not RunLoop.main: RunLoop skips tracking mode.
-    preferences.$sidebarShown
-      .removeDuplicates()
-      .dropFirst()
-      .receive(on: DispatchQueue.main)
-      .sink { [weak self] shown in
-        MainActor.assumeIsolated { self?.syncSidebarShelf(shown: shown) }
-      }
-      .store(in: &cancellables)
-  }
-
-  /// Presents or removes the sidebar shelf child panel. The shelf hangs
-  /// off the HUD's left edge, top-aligned, with its OWN height
-  /// (`EditorMetrics.sidebarShelfHeight`) -- like the floating menus, it
-  /// extends past a short note instead of cramping into it.
-  private func syncSidebarShelf(shown: Bool) {
-    guard let panel, shown else {
-      dismissSidebarShelf()
-      return
-    }
-    let shelf = sidebarShelfPanel ?? makeSidebarShelf(level: panel.level)
-    sidebarShelfPanel = shelf
-    // The shelf record exists whenever the preference is on; DISPLAY is
-    // gated on the panel actually being on screen (attaching a child to
-    // a hidden window mis-orders it). `bringPanelToFront` re-syncs on
-    // every show, so a toggle while hidden displays correctly later.
-    if shelf.parent !== panel, panel.isVisible {
-      panel.addChildWindow(shelf, ordered: .above)
-    }
-    positionSidebarShelf()
-    if panel.isVisible, !shelf.isVisible {
-      shelf.orderFront(nil)
-    }
-  }
-
-  private func makeSidebarShelf(level: NSWindow.Level) -> RaycastModalChildPanel {
-    let shelf = RaycastModalChildPanel(
-      contentRect: .zero,
-      styleMask: [.borderless, .nonactivatingPanel],
-      backing: .buffered,
-      defer: false
-    )
-    shelf.isOpaque = false
-    shelf.backgroundColor = .clear
-    // Window-server shadow shaped by the shelf's opaque surface, exactly
-    // like the menu child panel.
-    shelf.hasShadow = true
-    shelf.level = level
-    shelf.isReleasedWhenClosed = false
-    let content = SpotNoteSidebar(
-      preferences: preferences,
-      session: session,
-      onPick: { [weak self] chat in
-        guard let self else { return }
-        self.session.jump(to: chat)
-        self.panel?.makeKey()
-        self.focusTrigger.pulse()
-      }
-    )
-    let hosting = NSHostingView(rootView: content)
-    hosting.sizingOptions = []
-    shelf.contentView = hosting
-    // The shelf itself losing key to anything that isn't ours is real
-    // focus loss (the main panel's own resign was skipped when the shelf
-    // took key).
-    sidebarShelfObservers.append(
-      NotificationCenter.default.addObserver(
-        forName: NSWindow.didResignKeyNotification,
-        object: shelf,
-        queue: .main
-      ) { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self else { return }
-          DispatchQueue.main.async { self.handlePanelFocusLoss() }
-        }
-      }
-    )
-    // Clicking straight into a dimmed HUD's shelf must relight both
-    // windows, the same as the main panel taking key.
-    sidebarShelfObservers.append(
-      NotificationCenter.default.addObserver(
-        forName: NSWindow.didBecomeKeyNotification,
-        object: shelf,
-        queue: .main
-      ) { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self else { return }
-          self.panel?.animator().alphaValue = 1.0
-          self.sidebarShelfPanel?.animator().alphaValue = 1.0
-          self.keyState.isKey = true
-        }
-      }
-    )
-    return shelf
-  }
-
-  private func dismissSidebarShelf() {
-    guard let shelf = sidebarShelfPanel else { return }
-    for observer in sidebarShelfObservers {
-      NotificationCenter.default.removeObserver(observer)
-    }
-    sidebarShelfObservers = []
-    let hadKey = shelf.isKeyWindow
-    shelf.parent?.removeChildWindow(shelf)
-    shelf.orderOut(nil)
-    sidebarShelfPanel = nil
-    if hadKey, let panel, panel.isVisible, NSApp.isActive {
-      panel.makeKey()
-    }
-  }
-
-  /// Shelf top rides the window top and the shelf extends below it; the
-  /// whole shelf clamps to the screen so it never renders off-display.
-  private func positionSidebarShelf() {
-    guard let shelf = sidebarShelfPanel, let panel else { return }
-    var frame = NSRect(
-      x: panel.frame.minX - EditorMetrics.sidebarShelfGap - EditorMetrics.sidebarWidth,
-      y: panel.frame.maxY - EditorMetrics.sidebarShelfHeight,
-      width: EditorMetrics.sidebarWidth,
-      height: EditorMetrics.sidebarShelfHeight
-    )
-    if let screen = panel.screen ?? NSScreen.main {
-      frame = Self.clampedFrame(frame, into: screen.visibleFrame)
-    }
-    guard !Self.rect(shelf.frame, isApproximatelyEqualTo: frame) else { return }
-    shelf.setFrame(frame, display: true)
   }
 
   private func observeToastMessages() {
@@ -459,7 +319,6 @@ public final class SpotlightWindowController {
 
   public func close() {
     toastPanel?.orderOut(nil)
-    dismissSidebarShelf()
     panel?.orderOut(nil)
     // If a bona-fide SpotNote window (Settings) is visible, leave the
     // app active so the user can keep working there. Filter to
@@ -504,7 +363,6 @@ public final class SpotlightWindowController {
     panel.makeKeyAndOrderFront(nil)
     panel.orderFrontRegardless()
     syncToastPanel()
-    syncSidebarShelf(shown: preferences.sidebarShown)
   }
 
   private func repositionForShow(_ panel: NSPanel) {
@@ -721,21 +579,17 @@ public final class SpotlightWindowController {
     programmaticFrameToIgnore = frame
     panel.setFrame(frame, display: display, animate: animate)
     syncToastPanel()
-    // Child windows only translate with origin moves; the HUD grows its
-    // TOP edge (bottom-anchored), so the top-aligned shelf re-derives.
-    positionSidebarShelf()
   }
 
-  /// Shared focus-loss reaction for the main panel AND the sidebar shelf
-  /// resigning key: key landing on any of our own windows is not focus
-  /// loss; anything else dims or closes per preference.
+  /// Shared focus-loss reaction for the panel family resigning key: key
+  /// landing on any of our own windows is not focus loss; anything else
+  /// dims or closes per preference.
   private func handlePanelFocusLoss() {
-    let ownWindows: [NSWindow?] = [panel, RaycastModalOverhang.activeChildWindow, sidebarShelfPanel]
+    let ownWindows: [NSWindow?] = [panel, RaycastModalOverhang.activeChildWindow]
     if let key = NSApp.keyWindow, ownWindows.contains(where: { $0 === key }) { return }
     keyState.isKey = false
     if preferences.dimOnFocusLoss {
       panel?.animator().alphaValue = CGFloat(preferences.unfocusedOpacity)
-      sidebarShelfPanel?.animator().alphaValue = CGFloat(preferences.unfocusedOpacity)
     } else {
       close()
     }
@@ -770,8 +624,8 @@ extension SpotlightWindowController {
         MainActor.assumeIsolated {
           guard let self else { return }
           // Key moves to the new window AFTER this fires: defer one tick
-          // so a child window taking key (modals, the sidebar shelf)
-          // never dims or closes the HUD under its own surface.
+          // so a child window taking key (the floating modals) never
+          // dims or closes the HUD under its own surface.
           DispatchQueue.main.async { self.handlePanelFocusLoss() }
         }
       }
@@ -785,7 +639,6 @@ extension SpotlightWindowController {
         MainActor.assumeIsolated {
           panel?.animator().alphaValue = 1.0
           if let self, let panel {
-            self.sidebarShelfPanel?.animator().alphaValue = 1.0
             self.keyState.isKey = true
             self.correctDriftIfNeeded(panel)
           }
@@ -809,7 +662,6 @@ extension SpotlightWindowController {
           self.pinnedRightX = panel.frame.maxX
           self.navAnchor = .bottomPinned(newBottom)
           self.syncToastPanel()
-          self.positionSidebarShelf()
         }
       }
     )
@@ -876,7 +728,6 @@ extension SpotlightWindowController {
     case .copyContent:
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
-    case .toggleSidebar: preferences.sidebarShown.toggle()
     case .newNote:
       if fuzzyController.isVisible { fuzzyController.close() }
       Task { @MainActor [weak self] in await self?.session.newNote() }

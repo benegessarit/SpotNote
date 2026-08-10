@@ -77,7 +77,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case findInNote
   case copyContent
   case openSettings
-  case toggleSidebar
   case newNote
   case browseNotes
   case duplicateNote
@@ -97,7 +96,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return "Find in note"
     case .copyContent: return "Copy note"
     case .openSettings: return "Open settings"
-    case .toggleSidebar: return "Toggle notes sidebar"
     case .newNote: return "New note"
     case .browseNotes: return "Browse notes"
     case .duplicateNote: return "Duplicate note"
@@ -119,7 +117,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return "Search for text inside the current note."
     case .copyContent: return "Copy the whole note. With a selection, copies just the selection."
     case .openSettings: return "Open this settings window."
-    case .toggleSidebar: return "Show or hide the notes sidebar on the left edge of the HUD."
     case .newNote: return "Save the current note and open a fresh blank one."
     case .browseNotes: return "Open the Browse Notes menu."
     case .duplicateNote: return "Open a new note carrying a copy of the current one."
@@ -139,7 +136,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .findInNote: return Shortcut(key: "f", modifiers: [.command])
     case .copyContent: return Shortcut(key: "c", modifiers: [.command])
     case .openSettings: return Shortcut(key: ",", modifiers: [.command])
-    case .toggleSidebar: return Shortcut(key: "\\", modifiers: [.command])
     // Raycast Notes parity: ⌘N new, ⌘P browse, ⌘D duplicate, ⇧⌘P pin,
     // ⌘[ back, ⌘] forward.
     case .newNote: return Shortcut(key: "n", modifiers: [.command])

@@ -68,7 +68,7 @@ struct SpotlightWindowFrameSafetyTests {
     }
   }
 
-  // MARK: - Fixture (same shape as SpotlightSidebarToggleTests)
+  // MARK: - Fixture
 
   private struct Fixture {
     let controller: SpotlightWindowController

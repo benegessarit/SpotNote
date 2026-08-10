@@ -10,7 +10,7 @@ struct RaycastThemesModal: View {
     RaycastModalSheet {
       VStack(alignment: .leading, spacing: 0) {
         Text("Theme")
-          .font(.system(size: 12, weight: .medium))
+          .font(RaycastFont.medium(12))
           .foregroundStyle(RaycastModalPalette.secondaryText)
           .padding(.horizontal, 16)
           .padding(.top, 14)
@@ -45,7 +45,7 @@ struct RaycastThemesModal: View {
           .overlay(Circle().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
           .frame(width: 14, height: 14)
         Text(theme.name)
-          .font(.system(size: 14))
+          .font(RaycastFont.regular(14))
           .foregroundStyle(RaycastModalPalette.primaryText)
         Spacer(minLength: 12)
         if isSelected {

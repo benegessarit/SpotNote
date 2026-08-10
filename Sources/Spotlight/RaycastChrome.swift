@@ -12,7 +12,6 @@ enum RaycastChromePalette {
   static let inactiveDot = Color(red: 0x46 / 255, green: 0x48 / 255, blue: 0x56 / 255)
   static let titleKey = Color(red: 0x8C / 255, green: 0x90 / 255, blue: 0xA6 / 255)
   static let counter = Color(red: 0x48 / 255, green: 0x4C / 255, blue: 0x5B / 255)
-  static let control = Color(red: 0x76 / 255, green: 0x7D / 255, blue: 0x91 / 255)
   /// Pill icon tint while the panel is resigned (probed (76,78,89) in the
   /// live resigned window -- the pill stays visible, only dimmed).
   static let controlResigned = Color(red: 0x4C / 255, green: 0x4E / 255, blue: 0x59 / 255)
@@ -154,7 +153,7 @@ struct RaycastTopBar: View {
   var body: some View {
     ZStack {
       Text(title)
-        .font(.system(size: 16, weight: .medium))
+        .font(RaycastFont.medium(16))
         .foregroundStyle(RaycastChromePalette.titleKey)
         .lineLimit(1)
         .truncationMode(.tail)
@@ -243,7 +242,7 @@ struct RaycastBottomBar: View {
 
   var body: some View {
     Text(counterText)
-      .font(.system(size: 16))
+      .font(RaycastFont.regular(16))
       .foregroundStyle(RaycastChromePalette.counter)
       .frame(height: EditorMetrics.bottomBarHeight)
       .frame(maxWidth: .infinity)

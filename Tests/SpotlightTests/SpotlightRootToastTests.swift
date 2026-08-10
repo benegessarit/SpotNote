@@ -45,27 +45,6 @@ struct SpotlightRootToastTests {
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
 
-  @Test("sidebar toggle does not trigger panel height callbacks")
-  func sidebarToggleDoesNotTriggerPanelHeightCallbacks() async throws {
-    let fixture = try makeFixture()
-    defer { fixture.cleanup() }
-
-    try await waitUntil { !fixture.recorder.values.isEmpty }
-    await settleSwiftUI()
-    let stableCallbackCount = fixture.recorder.values.count
-
-    // The sidebar rides its own shelf child panel: the pref flip may
-    // re-evaluate the root body (actions-menu title) but must never
-    // touch the measured height tree.
-    fixture.preferences.sidebarShown = true
-    await settleSwiftUI()
-    #expect(fixture.recorder.values.count == stableCallbackCount)
-
-    fixture.preferences.sidebarShown = false
-    await settleSwiftUI()
-    #expect(fixture.recorder.values.count == stableCallbackCount)
-  }
-
   @Test("legacy hint preference does not render or reserve statusline space")
   func hintPreferenceDoesNotAffectRootHeight() async throws {
     let fixture = try makeFixture()

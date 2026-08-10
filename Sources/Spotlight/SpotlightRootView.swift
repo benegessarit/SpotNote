@@ -78,9 +78,6 @@ struct SpotlightRootView: View {
   @State private var windowHovered = false
 
   var body: some View {
-    // The notes sidebar is NOT in this tree: it rides its own shelf child
-    // panel (`SpotlightWindowController.syncSidebarShelf`) so a short note
-    // never cramps the list and the window never widens.
     mainColumn
       .frame(width: EditorMetrics.panelWidth)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -124,8 +121,7 @@ struct SpotlightRootView: View {
       }
   }
 
-  /// The Raycast Notes column: bars and editor, always `panelWidth` wide
-  /// so the text never rewraps when the sidebar slides open.
+  /// The Raycast Notes column: bars and editor, always `panelWidth` wide.
   private var mainColumn: some View {
     VStack(spacing: 0) {
       RaycastTopBar(
@@ -301,7 +297,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "new-note",
         title: "New Note",
-        icon: .raster(resource: "RaycastPlus", frame: 19),
+        icon: .raster(resource: "RaycastPlus", frame: 18),
         keys: keycaps(for: .newNote),
         section: 0,
         // Raycast dims New Note while the current note is empty -- the
@@ -312,7 +308,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "duplicate-note",
         title: "Duplicate Note",
-        icon: .raster(resource: "RaycastDuplicate", frame: 14),
+        icon: .raster(resource: "RaycastDuplicate", frame: 17.5),
         keys: keycaps(for: .duplicateNote),
         section: 0,
         // Raycast dims Duplicate on an empty note -- nothing to copy.
@@ -322,7 +318,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "pin-note",
         title: currentPinned ? "Unpin Note" : "Pin Note",
-        icon: .raster(resource: "RaycastTack", frame: 14),
+        icon: .raster(resource: "RaycastTack", frame: 17.5),
         keys: keycaps(for: .togglePin),
         section: 0,
         // Vault-backed notes live outside the store and cannot pin.
@@ -343,7 +339,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "go-back",
         title: "Go Back",
-        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 14),
+        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 17.5),
         keys: keycaps(for: .goBack),
         section: 0,
         isEnabled: session.canGoBack,
@@ -352,7 +348,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "go-forward",
         title: "Go Forward",
-        icon: .raster(resource: "RaycastArrowRightCircle", frame: 14),
+        icon: .raster(resource: "RaycastArrowRightCircle", frame: 17.5),
         keys: keycaps(for: .goForward),
         section: 0,
         isEnabled: session.canGoForward,
@@ -364,7 +360,7 @@ extension SpotlightRootView {
         // Raycast's Find glyph is text lines + magnifier; not in the
         // public @raycast/icons set, so the SVG (in Resources, beside
         // its raster) is composed from David's capture geometry.
-        icon: .raster(resource: "RaycastTextSearch", frame: 15),
+        icon: .raster(resource: "RaycastTextSearch", frame: 19),
         keys: keycaps(for: .findInNote),
         section: 1,
         // Inapplicable on an empty note: dims like the live menu's
@@ -375,7 +371,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "copy-note",
         title: "Copy Note",
-        icon: .raster(resource: "RaycastCopyClipboard", frame: 14),
+        icon: .raster(resource: "RaycastCopyClipboard", frame: 17.5),
         keys: keycaps(for: .copyContent),
         section: 1,
         isEnabled: !session.currentText.isEmpty,
@@ -385,17 +381,9 @@ extension SpotlightRootView {
         }
       ),
       RaycastAction(
-        id: "toggle-sidebar",
-        title: preferences.sidebarShown ? "Hide Sidebar" : "Show Sidebar",
-        icon: .raster(resource: "RaycastSidebarLeft", frame: 14),
-        keys: keycaps(for: .toggleSidebar),
-        section: 2,
-        perform: { preferences.sidebarShown.toggle() }
-      ),
-      RaycastAction(
         id: "change-theme",
         title: "Change Theme",
-        icon: .raster(resource: "RaycastSwatch", frame: 14),
+        icon: .raster(resource: "RaycastSwatch", frame: 17.5),
         keys: [],
         section: 2,
         perform: { themePickerShown = true }

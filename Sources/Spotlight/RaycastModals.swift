@@ -1,6 +1,21 @@
 import Core
 import SwiftUI
 
+/// Raycast's chrome/menu typeface is INTER, not SF -- the live app ships
+/// `InterVariable.woff2` in its frontend bundle and every menu/title/chip
+/// renders with it (same cap heights as SF at these sizes, ~2% wider,
+/// visibly different letterforms). Bundled static instances registered by
+/// `FontLoader`; SwiftUI `.custom` falls back silently, so the exact
+/// PostScript names matter ("Inter-Regular"/"Inter-Medium").
+enum RaycastFont {
+  static func regular(_ size: CGFloat) -> Font {
+    .custom("Inter-Regular", size: size)
+  }
+  static func medium(_ size: CGFloat) -> Font {
+    .custom("Inter-Medium", size: size)
+  }
+}
+
 /// Palette for the Raycast Notes floating modals (Browse Notes, Actions).
 /// Pixel-sampled from the live Raycast Beta Notes modals: the sheet is
 /// DARKER than the note surface, with a soft hover row and muted metadata.
@@ -10,12 +25,13 @@ enum RaycastModalPalette {
   /// row behind it lifts B by 43/200 of the raw delta) and DARKENS red
   /// (tR ~ -0.19, a desaturating material). Swatch-lab sweeps of
   /// (material x tint) against uniform blue/dark backdrops (2026-08-09)
-  /// matched that signature with `.popover` under this ink at 0.45:
-  /// composite over a (31,31,46) backdrop measures (34,35,46) vs
-  /// Raycast's (33,34,45), transmission (-0.22, 0.23, 0.21) vs their
-  /// (-0.19, ~0.14, 0.215). A 0.90 tint (the first attempt) matched the
-  /// composite but killed the bleed entirely (t ~ 0.02).
-  static let sheet = Color(red: 0x1D / 255, green: 0x1D / 255, blue: 0x28 / 255)
+  /// matched that signature with `.popover` at 0.45. A 0.90 tint (the
+  /// first attempt) matched composite but killed the bleed (t ~ 0.02) --
+  /// do not raise the tint to chase flat color. Ink corrected 2026-08-10
+  /// from David's SAME-DESK side-by-side: our composite ran (+6,+5,+7)
+  /// brighter than the live sheet ((37,38,49) vs (31,33,42)); dividing
+  /// by the 0.45 tint puts the delta in the ink, keeping transmission.
+  static let sheet = Color(red: 0x10 / 255, green: 0x12 / 255, blue: 0x19 / 255)
   static let sheetTintOpacity: CGFloat = 0.45
   /// Selected row (43,43,56) probed on the live actions menu.
   static let selectedRow = Color(red: 0x2B / 255, green: 0x2B / 255, blue: 0x38 / 255)
@@ -98,7 +114,7 @@ struct RaycastModalSearchField: View {
       // rather than under it, in a dimmer tone than section headers.
       if text.isEmpty {
         Text(placeholder)
-          .font(.system(size: 16))
+          .font(RaycastFont.regular(16))
           .foregroundStyle(RaycastModalPalette.searchPlaceholder)
           .padding(.leading, 3)
           .allowsHitTesting(false)
@@ -114,7 +130,7 @@ struct RaycastModalSearchField: View {
   private var field: some View {
     TextField("", text: $text)
       .textFieldStyle(.plain)
-      .font(.system(size: 16))
+      .font(RaycastFont.regular(16))
       .foregroundStyle(RaycastModalPalette.primaryText)
       // Raycast's caret is the row text color, not accent blue.
       .tint(RaycastModalPalette.primaryText)
@@ -151,6 +167,9 @@ struct RaycastNotesModal: View {
   let onPick: (Chat) -> Void
   let onTogglePin: (Chat) -> Void
   let onDelete: (Chat) -> Void
+  /// Raycast reveals pin + trash on the row under the POINTER, not the
+  /// keyboard selection (David's 2026-08-10 hover captures).
+  @State private var hoveredIndex: Int?
 
   var body: some View {
     RaycastModalSheet {
@@ -176,7 +195,7 @@ struct RaycastNotesModal: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
           Text("Notes")
-            .font(.system(size: 14, weight: .medium))
+            .font(RaycastFont.medium(14))
             .foregroundStyle(RaycastModalPalette.secondaryText)
             .padding(.horizontal, 12)
             .padding(.top, 18)
@@ -214,9 +233,10 @@ struct RaycastNotesModal: View {
       HStack(spacing: 10) {
         rowText(result)
         Spacer(minLength: 8)
-        // Raycast shows pin + trash on the SELECTED row only (pin first,
-        // trash trailing). Vault-backed notes can do neither.
-        if isSelected, isDeletable(result.chat) {
+        // Raycast shows pin + trash on the HOVERED row (pin first, trash
+        // trailing); a keyboard-selected row stays clean until the
+        // pointer visits it. Vault-backed notes can do neither.
+        if hoveredIndex == index, isDeletable(result.chat) {
           pinButton(result)
           deleteButton(result)
         }
@@ -231,6 +251,13 @@ struct RaycastNotesModal: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .onHover { inside in
+      if inside {
+        hoveredIndex = index
+      } else if hoveredIndex == index {
+        hoveredIndex = nil
+      }
+    }
   }
 
   private func rowText(_ result: FuzzyResult) -> some View {
@@ -242,7 +269,7 @@ struct RaycastNotesModal: View {
             .foregroundStyle(RaycastModalPalette.secondaryText)
         }
         Text(result.snippet.isEmpty ? "(empty note)" : result.snippet)
-          .font(.system(size: 17, weight: .medium))
+          .font(RaycastFont.medium(17))
           .foregroundStyle(RaycastModalPalette.primaryText)
           .lineLimit(1)
       }
@@ -285,7 +312,7 @@ struct RaycastNotesModal: View {
           .frame(width: 7, height: 7)
       }
       Text(metadata(result, isCurrent: isCurrent))
-        .font(.system(size: 15))
+        .font(RaycastFont.regular(15))
         .foregroundStyle(RaycastModalPalette.secondaryText)
         .lineLimit(1)
     }

@@ -128,10 +128,11 @@ reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swif
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
 require_grep "RaycastPlusShape" "Sources/Spotlight/RaycastChrome.swift"
-# The sidebar is a SHELF child panel with its own height; the window
-# never widens (the retired width-widening path must stay dead).
+# The notes sidebar is REMOVED entirely (David 2026-08-10) -- no shelf
+# panel, no ⌘\ shortcut, no sidebarShown pref; the window never widens.
 reject_grep "expectedPanelWidth" "Sources/Spotlight/SpotlightWindow.swift"
-require_grep "sidebarShelfHeight" "Sources/Spotlight/SpotlightWindow.swift"
+reject_grep "sidebarShelf" "Sources/Spotlight/SpotlightWindow.swift"
+reject_grep "toggleSidebar" "Sources/Spotlight/Shortcut.swift"
 require_grep "task editor keeps restored breathing room before text" "Tests/SpotlightTests/EditorMetricsTests.swift"
 require_grep "sendCurrentTaskToLinear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "case planned = \"Planned\"" "Sources/Spotlight/ScratchpadHandoff.swift"

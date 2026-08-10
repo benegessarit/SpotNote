@@ -64,7 +64,7 @@ struct RaycastActionsModal: View {
         let rows = filtered
         if rows.isEmpty {
           Text("No matching actions")
-            .font(.system(size: 13))
+            .font(RaycastFont.regular(13))
             .foregroundStyle(RaycastModalPalette.secondaryText)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 20)
@@ -86,9 +86,9 @@ struct RaycastActionsModal: View {
     // even when rows need less (David's 2026-08-10 capture showed a
     // ~116pt empty tail). Rows are fixed-height, so the natural height
     // is exact. No cap: the unfiltered list IS the tallest case, and the
-    // live menu shows its whole ~500pt list (a 400pt cap hid Show
-    // Sidebar + Change Theme below the fold in David's capture); the
-    // overhang panel already clamps to the screen.
+    // live menu shows its whole ~500pt list (a 400pt cap hid rows below
+    // the fold in David's capture); the overhang panel already clamps
+    // to the screen.
     .frame(height: listHeight)
   }
 
@@ -138,7 +138,7 @@ struct RaycastActionsModal: View {
           .frame(width: 20, height: 20)
         Spacer().frame(width: 11)
         Text(action.title)
-          .font(.system(size: 16))
+          .font(RaycastFont.regular(16))
           .foregroundStyle(RaycastModalPalette.primaryText)
         Spacer(minLength: 12)
         keycaps(action.keys)
@@ -160,8 +160,7 @@ struct RaycastActionsModal: View {
   /// Rasters preloaded once; actions rebuild on every body evaluation.
   private static let rasters: [String: NSImage] = Dictionary(
     uniqueKeysWithValues: [
-      "RaycastPlus", "RaycastTextSearch", "RaycastCopyClipboard",
-      "RaycastSidebarLeft", "RaycastSwatch"
+      "RaycastPlus", "RaycastTextSearch", "RaycastCopyClipboard", "RaycastSwatch"
     ].map { ($0, raycastIconImage($0)) }
   )
 
@@ -184,7 +183,7 @@ struct RaycastActionsModal: View {
       HStack(spacing: 3) {
         ForEach(keys, id: \.self) { key in
           Text(key)
-            .font(.system(size: 13, weight: .medium))
+            .font(RaycastFont.medium(13))
             .foregroundStyle(RaycastModalPalette.secondaryText)
             .frame(minWidth: 22)
             .frame(height: 22)
