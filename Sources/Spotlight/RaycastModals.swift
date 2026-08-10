@@ -61,11 +61,28 @@ enum RaycastModalPalette {
   static let cornerRadius: CGFloat = 10
   /// Sheet top sits 100pt below the window top (probed in both modals).
   static let topOffset: CGFloat = 100
-  /// Row rects inset 6pt from the sheet edge; 38pt tall on 42pt pitch.
-  static let rowInset: CGFloat = 6
-  static let rowHeight: CGFloat = 38
-  static let rowSpacing: CGFloat = 4
+  /// Row highlights inset 9.5pt from the sheet edge: both live modals'
+  /// selected rects measure 728px wide inside the 766px sheet at 2x
+  /// (19px per side, 2026-08-10 native captures); the earlier 6pt inset
+  /// drew them 14px too wide. Row CONTENT keeps its screen position via
+  /// compensated label pads (the live icon/title ink did not move).
+  static let rowInset: CGFloat = 9.5
+  /// Actions rows are 42pt TOUCHING: the live selected rect is 84px tall
+  /// at 2x -- one full pitch, no inter-row gap (the old 38pt + 4pt
+  /// spacing put the same pitch but a visibly shorter highlight).
+  static let rowHeight: CGFloat = 42
   static let rowCornerRadius: CGFloat = 6
+}
+
+/// The 0.5pt white-0.08 hairline Raycast draws edge-to-edge under the
+/// search field of BOTH modals and inside the actions group gaps: a
+/// SINGLE pixel at 2x (row-mean scans of the live captures show one
+/// ~+18-luminance row, 2026-08-10). Our earlier 1pt rule rendered two
+/// rows and read twice as heavy -- David flagged it.
+struct RaycastModalHairline: View {
+  var body: some View {
+    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+  }
 }
 
 /// Shared floating-sheet chrome: rounded dark sheet with border and shadow,
@@ -130,7 +147,10 @@ struct RaycastModalSearchField: View {
     }
     // Caret rests 20pt from the sheet edge (probed x=473 at 2x).
     .padding(.horizontal, 20)
-    .frame(height: 44)
+    // Live search zone is 47pt: caret + placeholder center 47px at 2x
+    // from the sheet top in both modals (2026-08-10 captures); our 44pt
+    // field floated the text 3-4px high.
+    .frame(height: 47)
     .onAppear { focused = true }
   }
 
@@ -163,10 +183,12 @@ struct RaycastModalSearchField: View {
   }
 }
 
-/// The Raycast Notes "Browse Notes" modal: search field, "Notes" section
-/// header, and rows of title + metadata with the current note marked.
-/// Raycast separates the regions with spacing only -- no divider lines
-/// anywhere in the sheet (pixel-probed).
+/// The Raycast Notes "Browse Notes" modal: search field, hairline, "Notes"
+/// section header, and rows of title + metadata with the current note
+/// marked. The live browse modal DOES draw the search hairline (row-mean
+/// scan, 2026-08-10: single bright row 94px from the sheet top, same
+/// white-0.08 as the actions rule) -- the round-4 "no divider lines
+/// anywhere" read came from a coarse threshold scan; do not re-delete it.
 struct RaycastNotesModal: View {
   @ObservedObject var controller: FuzzyController
   let currentChatID: UUID?
@@ -191,9 +213,9 @@ struct RaycastNotesModal: View {
           onEscape: { controller.close() },
           onMove: { controller.moveSelection(by: $0) }
         )
+        RaycastModalHairline()
         list
       }
-      .padding(.bottom, 8)
     }
   }
 
@@ -201,12 +223,15 @@ struct RaycastNotesModal: View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
+          // Live header zone: hairline to first row box is 77px at 2x
+          // with the "Notes" cap-top 37px below the hairline (sits low,
+          // not centered) -- 15pt top pad inside a fixed 38.5pt frame.
           Text("Notes")
             .font(RaycastFont.medium(14))
             .foregroundStyle(RaycastModalPalette.secondaryText)
-            .padding(.horizontal, 12)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 8.5)
+            .padding(.top, 15)
+            .frame(height: Self.headerHeight, alignment: .topLeading)
           if controller.results.isEmpty {
             Text(controller.query.isEmpty ? "No notes" : "No matches")
               .font(.system(size: 13))
@@ -234,12 +259,20 @@ struct RaycastNotesModal: View {
   /// The list hugs its content like the live app, scrolling only past
   /// six rows: David's 2026-08-10 native capture shows Raycast's browse
   /// displaying six full 70pt rows (1000px modal at 2x) while our 320pt
-  /// cap cut row five.
+  /// cap cut row five. The full 6-row panel CLIPS the last row's box by
+  /// ~6px at 2x (their sheet is 1005.5px where six untrimmed pitches +
+  /// header land at 1011) -- the -3pt tail reproduces it; shorter lists
+  /// keep the same 7pt bottom breathing room as the actions menu (ours
+  /// previously trailed 20px more than the live sheet).
   private var listHeight: CGFloat {
-    let headerHeight: CGFloat = 43
-    guard !controller.results.isEmpty else { return headerHeight + 60 }
-    return headerHeight + Self.rowPitch * CGFloat(min(controller.results.count, 6))
+    guard !controller.results.isEmpty else { return Self.headerHeight + 60 }
+    let count = controller.results.count
+    let tail: CGFloat = count >= 6 ? -3 : 7
+    return Self.headerHeight + Self.rowPitch * CGFloat(min(count, 6)) + tail
   }
+
+  /// Hairline to first row box: 77px at 2x on the live sheet.
+  static let headerHeight: CGFloat = 38.5
 
   /// Live browse rows sit on a 140px-at-2x pitch (title-top to
   /// title-top, 2026-08-10 native capture); ours measured 130px.
@@ -262,7 +295,9 @@ struct RaycastNotesModal: View {
           deleteButton(result)
         }
       }
-      .padding(.horizontal, 12)
+      // 8.5pt compensates the 9.5pt rowInset: title ink stays 39px from
+      // the sheet edge at 2x (live 38.5) while the highlight narrows.
+      .padding(.horizontal, 8.5)
       .frame(height: Self.rowPitch)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(

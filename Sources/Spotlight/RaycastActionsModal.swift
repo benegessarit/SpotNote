@@ -51,7 +51,6 @@ struct RaycastActionsModal: View {
         searchDivider
         list
       }
-      .padding(.bottom, 8)
     }
     .onChange(of: query) { _, _ in
       selectedIndex = filtered.firstIndex(where: \.isEnabled) ?? 0
@@ -60,7 +59,7 @@ struct RaycastActionsModal: View {
 
   private var list: some View {
     ScrollView {
-      LazyVStack(alignment: .leading, spacing: RaycastModalPalette.rowSpacing) {
+      LazyVStack(alignment: .leading, spacing: 0) {
         let rows = filtered
         if rows.isEmpty {
           Text("No matching actions")
@@ -78,8 +77,10 @@ struct RaycastActionsModal: View {
         }
       }
       .padding(.horizontal, RaycastModalPalette.rowInset)
-      .padding(.top, 6)
-      .padding(.bottom, 8)
+      // Live menu: hairline to first row box is 5px at 2x, last row box
+      // to sheet bottom 13.5px (2026-08-10); ours ran 14.5/32.5.
+      .padding(.top, 2.5)
+      .padding(.bottom, 7)
     }
     // The sheet HUGS its content like the live menu: a bare
     // `.frame(maxHeight:)` lets the greedy ScrollView take the full cap
@@ -94,16 +95,16 @@ struct RaycastActionsModal: View {
 
   /// Full-width hairline under the actions search field -- probed
   /// (49,50,62) over the (31,32,42) sheet on the live menu (2026-08-10).
-  /// The browse modal has NO such rule (its "Notes" header separates).
+  /// The browse modal draws the SAME rule (see RaycastNotesModal).
   private var searchDivider: some View {
-    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+    RaycastModalHairline()
   }
 
-  /// Group-gap EXTRA over normal row pitch probes 21pt on the live menu
-  /// (128px group pitch vs 86px row pitch at 2x); with the 4pt row
-  /// spacing that means a 17pt spacer (25 read visibly too airy in
-  /// David's side-by-side).
-  private static let sectionGapHeight: CGFloat = 17
+  /// Group gap: the live menu's row boxes sit 53px apart at 2x across a
+  /// section break (26.5pt box-to-box; 2026-08-10 native capture). With
+  /// rows now touching, the spacer carries the whole gap -- the earlier
+  /// 17pt + 2x4pt row spacing summed to 50px.
+  private static let sectionGapHeight: CGFloat = 26.5
 
   private var listHeight: CGFloat {
     let rows = filtered
@@ -112,19 +113,18 @@ struct RaycastActionsModal: View {
     let content =
       CGFloat(rows.count) * RaycastModalPalette.rowHeight
       + CGFloat(gaps) * Self.sectionGapHeight
-      + CGFloat(rows.count + gaps - 1) * RaycastModalPalette.rowSpacing
-    return content + 6 + 8
+    return content + 2.5 + 7
   }
 
-  /// Group gap with Raycast's 1px separator rule centered in it: a
-  /// row-mean luminance scan across the live gap (2026-08-10) found a
-  /// single-row hairline at (48,49,62) over the (30,31,42) sheet --
-  /// white at ~0.08, same weight as the search-field rule. (The earlier
-  /// "pure gap" call came from a coarser threshold scan that missed a
-  /// 1px line; do not re-delete it.)
+  /// Group gap with Raycast's separator rule centered in it: a row-mean
+  /// luminance scan across the live gap (2026-08-10) found a single-row
+  /// hairline at (48,49,62) over the (30,31,42) sheet -- white at ~0.08,
+  /// same weight as the search-field rule. (The earlier "pure gap" call
+  /// came from a coarser threshold scan that missed a 1px line; do not
+  /// re-delete it.)
   private var sectionGap: some View {
     Color.clear.frame(height: Self.sectionGapHeight)
-      .overlay(Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1))
+      .overlay(RaycastModalHairline())
   }
 
   private func row(_ action: RaycastAction, index: Int) -> some View {
@@ -148,8 +148,11 @@ struct RaycastActionsModal: View {
         keycaps(action.keys)
       }
       .opacity(action.isEnabled ? 1 : RaycastModalPalette.disabledOpacity)
-      .padding(.leading, 13)
-      .padding(.trailing, 12)
+      // 9.5/8.5pt compensate the 9.5pt rowInset: icon and chip ink keep
+      // their screen positions while the highlight rect narrows to the
+      // live 728px (2026-08-10).
+      .padding(.leading, 9.5)
+      .padding(.trailing, 8.5)
       .frame(height: RaycastModalPalette.rowHeight)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(

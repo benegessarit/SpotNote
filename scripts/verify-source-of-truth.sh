@@ -108,9 +108,10 @@ reject_grep "RaycastModalPalette.backdrop" "Sources/Spotlight/SpotlightRootView.
 # the 0.45 ink matches Raycast's ~21% backdrop bleed; .menu at 0.90
 # matched the composite color but transmitted ~0 (visibly flat).
 require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
-# Menu polish round 2 (probed 2026-08-09 same-scale captures): group gaps
-# are pure whitespace (no hairline) and the pill + is drawn at 2pt, not
-# the heavier-stroke raster.
+# Menu polish round 2 (probed 2026-08-09 same-scale captures): the pill +
+# is drawn at 2pt, not the heavier-stroke raster. (The round-2 "gaps are
+# pure whitespace" call was retracted round 9 -- the gap carries a
+# centered hairline via sectionGap; `sectionRule` is just the dead name.)
 reject_grep "sectionRule" "Sources/Spotlight/RaycastActionsModal.swift"
 # The actions sheet hugs its content (computed listHeight, NO height
 # cap -- a 400pt cap hid Show Sidebar/Change Theme below the fold while
@@ -139,6 +140,24 @@ require_grep "RaycastTrash" "Sources/Spotlight/RaycastModals.swift"
 require_grep "metadataText" "Sources/Spotlight/RaycastModals.swift"
 require_grep "rowPitch: CGFloat = 70" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "maxHeight: 320" "Sources/Spotlight/RaycastModals.swift"
+# Round 10 (2026-08-10 side-by-side captures, both modals in ONE frame):
+# hairlines are a SINGLE pixel at 2x (0.5pt white-0.08) and the browse
+# modal draws one under its search field too (the round-4 "no divider"
+# read was a coarse-scan miss); the search zone is 47pt (caret centers
+# 47px at 2x); row highlights inset 9.5pt (728px wide in the 766px
+# sheet) with content pads compensated; actions rows are 42pt TOUCHING
+# (the live selected rect is one full 84px pitch -- rowSpacing is gone);
+# the browse header zone is 38.5pt and the 6-row hug clips 3pt like the
+# live sheet.
+require_grep "RaycastModalHairline" "Sources/Spotlight/RaycastModals.swift"
+require_grep "RaycastModalHairline()" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "frame(height: 0.5)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "frame(height: 47)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowInset: CGFloat = 9.5" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowHeight: CGFloat = 42" "Sources/Spotlight/RaycastModals.swift"
+require_grep "headerHeight: CGFloat = 38.5" "Sources/Spotlight/RaycastModals.swift"
+require_grep "sectionGapHeight: CGFloat = 26.5" "Sources/Spotlight/RaycastActionsModal.swift"
+reject_grep "rowSpacing" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
