@@ -2303,7 +2303,7 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
   /// `at: 0` from storage on every glyph placement, which is fragile
   /// when position 0 falls back to a different font metric than the
   /// editor font.
-  var editorFont: NSFont = .systemFont(ofSize: EditorMetrics.fontSize)
+  var editorFont: NSFont = SpotNoteFont.editor()
 
   override func setLineFragmentRect(
     _ fragmentRect: NSRect,

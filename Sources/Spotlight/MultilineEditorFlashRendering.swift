@@ -54,7 +54,7 @@ extension PlaceholderTextView {
     guard location >= 0, location < nsString.length else {
       return NSRange(location: max(0, location), length: 0)
     }
-    let baseFont = font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize)
+    let baseFont = font ?? SpotNoteFont.editor()
     let labelFont =
       bold
       ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
@@ -197,7 +197,7 @@ extension PlaceholderTextView {
     bold: Bool,
     dirtyRect: NSRect
   ) {
-    let baseFont = font ?? NSFont.systemFont(ofSize: EditorMetrics.fontSize)
+    let baseFont = font ?? SpotNoteFont.editor()
     let labelFont =
       bold
       ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)

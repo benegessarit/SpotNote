@@ -116,11 +116,15 @@ struct RaycastActionsModal: View {
     return content + 6 + 8
   }
 
-  /// Pure whitespace between action groups -- the live menu draws NO
-  /// hairline (threshold scans across the gap found nothing, 2026-08-09;
-  /// the earlier "rule probed" came from dim-polluted captures).
+  /// Group gap with Raycast's 1px separator rule centered in it: a
+  /// row-mean luminance scan across the live gap (2026-08-10) found a
+  /// single-row hairline at (48,49,62) over the (30,31,42) sheet --
+  /// white at ~0.08, same weight as the search-field rule. (The earlier
+  /// "pure gap" call came from a coarser threshold scan that missed a
+  /// 1px line; do not re-delete it.)
   private var sectionGap: some View {
     Color.clear.frame(height: Self.sectionGapHeight)
+      .overlay(Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1))
   }
 
   private func row(_ action: RaycastAction, index: Int) -> some View {
@@ -155,6 +159,14 @@ struct RaycastActionsModal: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    // Raycast's highlight FOLLOWS the pointer (their live menu hovers a
+    // row and it lights without a click); the highlight stays on the
+    // last hovered row when the pointer leaves, like theirs.
+    .onHover { inside in
+      if inside, action.isEnabled {
+        selectedIndex = index
+      }
+    }
   }
 
   /// Rasters preloaded once; actions rebuild on every body evaluation.

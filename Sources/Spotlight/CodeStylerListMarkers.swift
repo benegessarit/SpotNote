@@ -61,7 +61,7 @@ enum CodeStylerListMarkers {
   }
 
   private static func markerFont(matching font: NSFont?) -> NSFont {
-    let base = font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let base = font ?? SpotNoteFont.editor()
     let sized = base.withSize(base.pointSize + 2)
     let manager = NSFontManager.shared
     let bold = manager.convert(sized, toHaveTrait: .boldFontMask)

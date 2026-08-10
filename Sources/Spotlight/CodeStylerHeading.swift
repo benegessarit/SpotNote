@@ -127,7 +127,7 @@ enum CodeStylerHeading {
   }
 
   private static func bodyFont(matching font: NSFont?) -> NSFont {
-    let base = font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let base = font ?? SpotNoteFont.editor()
     let manager = NSFontManager.shared
     let converted = manager.convert(base, toNotHaveTrait: .boldFontMask)
     if !manager.traits(of: converted).contains(.boldFontMask) {
@@ -140,7 +140,7 @@ enum CodeStylerHeading {
   }
 
   private static func boldFont(matching font: NSFont?) -> NSFont {
-    let base = font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    let base = font ?? SpotNoteFont.editor()
     let manager = NSFontManager.shared
     let converted = manager.convert(base, toHaveTrait: .boldFontMask)
     if manager.traits(of: converted).contains(.boldFontMask) {

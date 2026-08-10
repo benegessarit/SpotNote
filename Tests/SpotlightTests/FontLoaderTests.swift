@@ -5,33 +5,30 @@ import Testing
 
 @Suite("FontLoader")
 struct FontLoaderTests {
-  @Test("registerBundledFonts is idempotent and safe to call with zero resources")
+  @Test("registerBundledFonts is idempotent")
   func registerIsIdempotent() {
-    // No fonts are shipped in the repo by default (see Resources/README.md).
-    // The loader must still complete cleanly and tolerate being called
-    // multiple times without raising.
     FontLoader.registerBundledFonts()
     FontLoader.registerBundledFonts()
     FontLoader.registerBundledFonts()
     #expect(Bool(true))
   }
 
-  @Test("IBM Plex Mono regular is bundled as a Spotlight resource")
-  func ibmPlexMonoRegularIsBundled() throws {
-    let url = try #require(
-      Bundle.spotlightResources.url(
-        forResource: "IBMPlexMono-Regular",
-        withExtension: "ttf"
+  @Test("the nvim mono editor faces are bundled as Spotlight resources")
+  func lilexMonoIsBundled() throws {
+    for name in ["LilexNerdFontMono-Regular", "LilexNerdFontMono-Bold"] {
+      let url = try #require(
+        Bundle.spotlightResources.url(forResource: name, withExtension: "ttf")
       )
-    )
-    #expect(url.lastPathComponent == "IBMPlexMono-Regular.ttf")
+      #expect(url.lastPathComponent == "\(name).ttf")
+    }
   }
 
-  @Test("editor font is the system sans at the Raycast body scale")
-  func editorFontIsSystemSans() {
+  @Test("editor font is Lilex Nerd Font Mono at the Raycast body scale")
+  func editorFontIsLilexMono() {
+    FontLoader.registerBundledFonts()
     let font = SpotNoteFont.editor()
     #expect(font.pointSize == EditorMetrics.fontSize)
-    #expect(font.fontName == NSFont.systemFont(ofSize: EditorMetrics.fontSize).fontName)
-    #expect(!font.isFixedPitch)
+    #expect(font.fontName == "LilexNFM-Regular")
+    #expect(font.isFixedPitch)
   }
 }

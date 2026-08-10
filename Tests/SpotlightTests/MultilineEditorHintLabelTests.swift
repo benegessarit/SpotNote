@@ -14,19 +14,28 @@ import Testing
 // with the next glyph (David 2026-08-10, "flash hints all messed up").
 @MainActor
 extension MultilineEditorVimLogicalLineMotionTests {
-  @Test("the hidden span is advance-measured: wide labels cover extra narrow glyphs, never past a newline")
+  @Test("the hidden span is advance-measured: labels cover their cells on the mono grid, never past a newline")
   func hintHiddenRangeMeasuresLabelInk() {
     let textView = makeVimMotionTextView(text: "i\nii William")
 
-    let clipped = textView.hintHiddenRange(at: 0, label: "W", bold: false)
+    let clipped = textView.hintHiddenRange(at: 0, label: "gs", bold: false)
     #expect(clipped == NSRange(location: 0, length: 1), "the span never crosses a line break")
 
-    let wide = textView.hintHiddenRange(at: 2, label: "W", bold: false)
-    #expect(wide.location == 2)
-    #expect(wide.length > 1, "a wide label over narrow glyphs must cover more than one character")
+    let two = textView.hintHiddenRange(at: 2, label: "gs", bold: false)
+    #expect(two == NSRange(location: 2, length: 2), "a two-char label covers two mono cells")
 
-    let narrow = textView.hintHiddenRange(at: 5, label: "i", bold: false)
-    #expect(narrow == NSRange(location: 5, length: 1), "a narrow label hides only its anchor")
+    let one = textView.hintHiddenRange(at: 5, label: "i", bold: false)
+    #expect(one == NSRange(location: 5, length: 1), "a one-char label hides only its anchor")
+  }
+
+  @Test("bold trait conversion stays in the mono family and keeps the advance (labels stay on-grid)")
+  func boldFlashLabelsKeepTheMonoAdvance() {
+    let editor = SpotNoteFont.editor()
+    let bold = NSFontManager.shared.convert(editor, toHaveTrait: .boldFontMask)
+    #expect(bold.fontName == "LilexNFM-Bold", "flash labels need the family's true bold")
+    let advance = ("W" as NSString).size(withAttributes: [.font: editor]).width
+    let boldAdvance = ("W" as NSString).size(withAttributes: [.font: bold]).width
+    #expect(abs(advance - boldAdvance) < 0.01, "bold keeps the mono advance so labels stay on-grid")
   }
 
   @Test("word-hint anchors hide under their labels; the rest only dims and the text never mutates")

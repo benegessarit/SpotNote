@@ -11,7 +11,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     width: CGFloat = EditorMetrics.panelWidth
   ) -> PlaceholderTextView {
     let textView = PlaceholderTextView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
-    textView.font = .systemFont(ofSize: EditorMetrics.fontSize)
+    textView.font = SpotNoteFont.editor()
     textView.string = text
     textView.checklistLines = checklistLines
     textView.textContainer?.lineFragmentPadding = 0
@@ -21,7 +21,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     else { return textView }
     let fixed = FixedLineHeightLayoutManager()
     fixed.fixedLineHeight = EditorMetrics.lineHeight
-    fixed.editorFont = textView.font ?? .systemFont(ofSize: EditorMetrics.fontSize)
+    fixed.editorFont = textView.font ?? SpotNoteFont.editor()
     if let existing = storage.layoutManagers.first {
       storage.removeLayoutManager(existing)
     }

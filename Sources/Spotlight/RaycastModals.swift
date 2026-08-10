@@ -33,10 +33,16 @@ enum RaycastModalPalette {
   /// by the 0.45 tint puts the delta in the ink, keeping transmission.
   static let sheet = Color(red: 0x10 / 255, green: 0x12 / 255, blue: 0x19 / 255)
   static let sheetTintOpacity: CGFloat = 0.45
-  /// Selected row (43,43,56) probed on the live actions menu.
-  static let selectedRow = Color(red: 0x2B / 255, green: 0x2B / 255, blue: 0x38 / 255)
+  /// Selected/hovered row: the live hovered rows probe (40,40,52) in
+  /// both menus (2026-08-10 side-by-side; the earlier #2B2B38 read
+  /// (43,43,56) ran ~+4 hot and a step too blue).
+  static let selectedRow = Color(red: 0x28 / 255, green: 0x28 / 255, blue: 0x34 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
+  /// Browse metadata line runs BRIGHTER than the chip/secondary tone:
+  /// the live rows' top-decile luminance probes 168 vs our 152 at
+  /// `secondaryText` (2026-08-10) -- Raycast uses two secondary tones.
+  static let metadataText = Color(red: 0x9E / 255, green: 0xA3 / 255, blue: 0xB9 / 255)
   /// Search placeholder is dimmer than section headers (#64687A probed).
   static let searchPlaceholder = Color(red: 0x64 / 255, green: 0x68 / 255, blue: 0x7A / 255)
   /// The sheet stroke is a bluish-purple hairline, not neutral white:
@@ -251,9 +257,13 @@ struct RaycastNotesModal: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    // Raycast's highlight follows the pointer (the hovered row lights,
+    // 2026-08-10 side-by-side); keyboard and pointer write the same
+    // selection. `hoveredIndex` additionally gates the pin/trash pair.
     .onHover { inside in
       if inside {
         hoveredIndex = index
+        controller.selectedIndex = index
       } else if hoveredIndex == index {
         hoveredIndex = nil
       }
@@ -269,7 +279,9 @@ struct RaycastNotesModal: View {
             .foregroundStyle(RaycastModalPalette.secondaryText)
         }
         Text(result.snippet.isEmpty ? "(empty note)" : result.snippet)
-          .font(RaycastFont.medium(17))
+          // Live row titles measure 25px ascender-height at 2x -- our 17
+          // rendered 27 (2026-08-10 side-by-side); 16 matches.
+          .font(RaycastFont.medium(16))
           .foregroundStyle(RaycastModalPalette.primaryText)
           .lineLimit(1)
       }
@@ -277,14 +289,14 @@ struct RaycastNotesModal: View {
     }
   }
 
+  /// Hover buttons are Raycast's OWN glyphs (their pin is the Tack, their
+  /// trash the round-lid can), not SF Symbols, at the live ~17pt visible
+  /// (34px at 2x, 2026-08-10 probe; ratio-0.875 rasters -> frame 19.5).
   private func pinButton(_ result: FuzzyResult) -> some View {
     Button {
       onTogglePin(result.chat)
     } label: {
-      Image(systemName: result.chat.isPinned ? "pin.slash" : "pin")
-        .font(.system(size: 13))
-        .foregroundStyle(RaycastModalPalette.secondaryText)
-        .contentShape(Rectangle())
+      hoverIcon("RaycastTack")
     }
     .buttonStyle(.plain)
     .help(result.chat.isPinned ? "Unpin note" : "Pin note")
@@ -294,13 +306,19 @@ struct RaycastNotesModal: View {
     Button {
       onDelete(result.chat)
     } label: {
-      Image(systemName: "trash")
-        .font(.system(size: 13))
-        .foregroundStyle(RaycastModalPalette.secondaryText)
-        .contentShape(Rectangle())
+      hoverIcon("RaycastTrash")
     }
     .buttonStyle(.plain)
     .help("Delete note")
+  }
+
+  private func hoverIcon(_ resource: String) -> some View {
+    Image(nsImage: raycastIconImage(resource))
+      .renderingMode(.template)
+      .resizable()
+      .frame(width: 19.5, height: 19.5)
+      .foregroundStyle(RaycastModalPalette.secondaryText)
+      .contentShape(Rectangle())
   }
 
   /// Raycast marks the open note with a small blue dot before "Current".
@@ -313,7 +331,7 @@ struct RaycastNotesModal: View {
       }
       Text(metadata(result, isCurrent: isCurrent))
         .font(RaycastFont.regular(15))
-        .foregroundStyle(RaycastModalPalette.secondaryText)
+        .foregroundStyle(RaycastModalPalette.metadataText)
         .lineLimit(1)
     }
   }
