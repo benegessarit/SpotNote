@@ -1,19 +1,22 @@
 import Core
 import SwiftUI
 
-/// Slide-out notes sidebar in the native macOS idiom (iMessage/Craft):
-/// traffic lights in the sidebar header, a rounded search field, and a
-/// scrollable note list. Theme-matched -- the surface is the active theme's
-/// background darkened a step, split from the editor by a hairline.
+/// Notes sidebar rendered as a floating SHELF: content for the child
+/// panel `SpotlightWindowController.syncSidebarShelf` hangs off the HUD's
+/// left edge. It owns its full surface (the HUD's glass recipe, darkened
+/// a step) because it is a standalone window, not a pane inside one.
 struct SpotNoteSidebar: View {
   @ObservedObject var preferences: ThemePreferences
   @ObservedObject var session: ChatSession
-  let theme: Theme
-  let isKey: Bool
-  let onClose: () -> Void
   let onPick: (Chat) -> Void
 
   @State private var query = ""
+
+  private var theme: Theme { preferences.activeTheme }
+
+  private var shelfShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: EditorMetrics.sidebarShelfCornerRadius, style: .continuous)
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -23,37 +26,39 @@ struct SpotNoteSidebar: View {
         .padding(.bottom, 10)
       noteList
     }
-    .frame(width: EditorMetrics.sidebarWidth)
-    .background(sidebarSurface)
-    .overlay(alignment: .trailing) {
-      Rectangle()
-        .fill(theme.border)
-        .frame(width: 1)
+    .frame(width: EditorMetrics.sidebarWidth, height: EditorMetrics.sidebarShelfHeight)
+    .background {
+      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+        .clipShape(shelfShape)
+        .overlay(shelfShape.fill(theme.background.opacity(SpotlightRootView.darkGlassTintOpacity)))
+        .overlay(shelfShape.fill(sidebarSurface))
     }
+    .overlay(shelfShape.strokeBorder(theme.border, lineWidth: 1))
+    .colorScheme(theme.mode == .dark ? .dark : .light)
   }
 
-  /// Lights live in the sidebar while it is open -- a Mac window's lights
-  /// sit at the window's top-left corner, which the sidebar now owns.
+  /// The traffic lights stay in the main window (the shelf no longer
+  /// owns its top-left corner); the header is just the title + hide.
   private var header: some View {
     HStack {
-      RaycastTrafficLights(isKey: isKey, onClose: onClose)
-        .padding(.leading, 22)
+      Text("Notes")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(theme.placeholder)
+        .padding(.leading, 16)
       Spacer()
       Button {
         preferences.sidebarShown = false
       } label: {
         Image(systemName: "sidebar.left")
           .font(.system(size: 14, weight: .medium))
-          .foregroundStyle(
-            isKey ? RaycastChromePalette.control : RaycastChromePalette.controlResigned
-          )
+          .foregroundStyle(RaycastChromePalette.control)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .help("Hide sidebar")
       .padding(.trailing, 14)
     }
-    .frame(height: EditorMetrics.topBarHeight)
+    .frame(height: 44)
   }
 
   private var searchField: some View {
@@ -134,7 +139,7 @@ struct SpotNoteSidebar: View {
 
   /// One darkening step over the theme background, like a native sidebar
   /// pane. On raycast-dark this lands beside the modal sheet shade.
-  private var sidebarSurface: some View {
+  private var sidebarSurface: Color {
     Color.black.opacity(theme.mode == .dark ? 0.18 : 0.05)
   }
 }

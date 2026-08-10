@@ -102,6 +102,16 @@ reject_grep "showLineNumbers" "Sources/Spotlight/ThemePreferences.swift"
 # Raycast leaves the editor undimmed with a menu open (probed 2026-08-09).
 reject_grep "RaycastModalPalette.backdrop" "Sources/Spotlight/SpotlightRootView.swift"
 require_grep "SpotNoteVisualEffectView(material: .menu, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
+# Menu polish round 2 (probed 2026-08-09 same-scale captures): group gaps
+# are pure whitespace (no hairline) and the pill + is drawn at 2pt, not
+# the heavier-stroke raster.
+reject_grep "sectionRule" "Sources/Spotlight/RaycastActionsModal.swift"
+reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
+require_grep "RaycastPlusShape" "Sources/Spotlight/RaycastChrome.swift"
+# The sidebar is a SHELF child panel with its own height; the window
+# never widens (the retired width-widening path must stay dead).
+reject_grep "expectedPanelWidth" "Sources/Spotlight/SpotlightWindow.swift"
+require_grep "sidebarShelfHeight" "Sources/Spotlight/SpotlightWindow.swift"
 require_grep "task editor keeps restored breathing room before text" "Tests/SpotlightTests/EditorMetricsTests.swift"
 require_grep "sendCurrentTaskToLinear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "case planned = \"Planned\"" "Sources/Spotlight/ScratchpadHandoff.swift"

@@ -11,10 +11,12 @@ enum RaycastModalPalette {
   /// backdrop contributes ~10%. (The "top-lit gradient" probed earlier was
   /// that blur bleeding through, not a real gradient.) `sheet` is the tint
   /// ink over `SpotNoteVisualEffectView`.
-  static let sheet = Color(red: 0x1A / 255, green: 0x19 / 255, blue: 0x22 / 255)
+  /// Ink chosen so the composite over dark backdrops probes (29,29,40)
+  /// like the live sheet (2026-08-09 same-scale captures).
+  static let sheet = Color(red: 0x1D / 255, green: 0x1D / 255, blue: 0x28 / 255)
   static let sheetTintOpacity: CGFloat = 0.90
-  /// Selected row (35,34,45) probed.
-  static let selectedRow = Color(red: 0x23 / 255, green: 0x22 / 255, blue: 0x2D / 255)
+  /// Selected row (43,43,56) probed on the live actions menu.
+  static let selectedRow = Color(red: 0x2B / 255, green: 0x2B / 255, blue: 0x38 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
   /// Search placeholder is dimmer than section headers (#64687A probed).
@@ -25,8 +27,9 @@ enum RaycastModalPalette {
   static let borderWidth: CGFloat = 0.5
   /// Blue "Current" dot in the notes rows (#64A1F1, probed).
   static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
-  /// Hairline between action groups (probed ~(46,45,57) over the sheet).
-  static let sectionRule = Color.white.opacity(0.09)
+  /// Disabled actions dim to ~40% (live disabled icon probes (82,85,101)
+  /// against enabled (207,214,241)).
+  static let disabledOpacity: CGFloat = 0.4
 
   /// Sheet outer width: 767px at 2x in David's live captures.
   static let width: CGFloat = 383
@@ -76,8 +79,9 @@ struct RaycastModalSheet<Content: View>: View {
   }
 }
 
-/// Raycast-style search field row shown at the top of both modals.
-private struct RaycastModalSearchField: View {
+/// Raycast-style search field row shown at the top of the notes,
+/// actions, and themes modals.
+struct RaycastModalSearchField: View {
   let placeholder: String
   @Binding var text: String
   var onSubmit: () -> Void
@@ -289,176 +293,5 @@ struct RaycastNotesModal: View {
 extension Array {
   subscript(safe index: Int) -> Element? {
     indices.contains(index) ? self[index] : nil
-  }
-}
-
-/// Row glyph in the actions modal: an exact @raycast/icons raster (frame
-/// tuned per asset so visible glyphs match the probed ~12.5pt), or the
-/// custom fanned-cards note-switcher.
-enum RaycastActionIcon {
-  case raster(resource: String, frame: CGFloat)
-  case stackedCards
-}
-
-/// One entry in the Raycast-style actions modal.
-struct RaycastAction: Identifiable {
-  let id: String
-  let title: String
-  let icon: RaycastActionIcon
-  /// Display keycaps, e.g. ["⌘", "N"]. Empty = no shortcut shown.
-  let keys: [String]
-  /// Divider group; a thin rule renders between groups.
-  let section: Int
-  let perform: () -> Void
-}
-
-/// The Raycast Notes actions modal (the ⌘ pill button): searchable list of
-/// real SpotNote actions with their keycap shortcuts.
-struct RaycastActionsModal: View {
-  let actions: [RaycastAction]
-  let onClose: () -> Void
-  @State private var query = ""
-  @State private var selectedIndex = 0
-
-  private var filtered: [RaycastAction] {
-    let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-    guard !needle.isEmpty else { return actions }
-    return actions.filter { $0.title.lowercased().contains(needle) }
-  }
-
-  var body: some View {
-    RaycastModalSheet {
-      VStack(alignment: .leading, spacing: 0) {
-        RaycastModalSearchField(
-          placeholder: "Search for actions...",
-          text: $query,
-          onSubmit: { commit() },
-          onEscape: onClose,
-          onMove: { move($0) }
-        )
-        list
-      }
-      .padding(.bottom, 8)
-    }
-    .onChange(of: query) { _, _ in selectedIndex = 0 }
-  }
-
-  private var list: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: RaycastModalPalette.rowSpacing) {
-        let rows = filtered
-        if rows.isEmpty {
-          Text("No matching actions")
-            .font(.system(size: 13))
-            .foregroundStyle(RaycastModalPalette.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 20)
-        } else {
-          ForEach(Array(rows.enumerated()), id: \.element.id) { index, action in
-            if index > 0, action.section != rows[index - 1].section {
-              sectionRule
-            }
-            row(action, index: index)
-          }
-        }
-      }
-      .padding(.horizontal, RaycastModalPalette.rowInset)
-      .padding(.top, 6)
-      .padding(.bottom, 8)
-    }
-    .frame(maxHeight: 400)
-  }
-
-  /// Hairline between action groups, centered in a 32pt gap (probed).
-  private var sectionRule: some View {
-    Rectangle()
-      .fill(RaycastModalPalette.sectionRule)
-      .frame(height: 1)
-      .padding(.horizontal, 6)
-      .padding(.vertical, 12)
-  }
-
-  private func row(_ action: RaycastAction, index: Int) -> some View {
-    let isSelected = index == selectedIndex
-    return Button {
-      selectedIndex = index
-      commit()
-    } label: {
-      HStack(spacing: 0) {
-        iconView(action.icon)
-          .foregroundStyle(RaycastModalPalette.secondaryText)
-          .frame(width: 20, height: 20)
-        Spacer().frame(width: 11)
-        Text(action.title)
-          .font(.system(size: 16))
-          .foregroundStyle(RaycastModalPalette.primaryText)
-        Spacer(minLength: 12)
-        keycaps(action.keys)
-      }
-      .padding(.leading, 13)
-      .padding(.trailing, 12)
-      .frame(height: RaycastModalPalette.rowHeight)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: RaycastModalPalette.rowCornerRadius, style: .continuous)
-          .fill(isSelected ? RaycastModalPalette.selectedRow : Color.clear)
-      )
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-  }
-
-  /// Rasters preloaded once; actions rebuild on every body evaluation.
-  private static let rasters: [String: NSImage] = Dictionary(
-    uniqueKeysWithValues: [
-      "RaycastPlus", "RaycastMagnifyingGlass", "RaycastCopyClipboard",
-      "RaycastSidebarLeft", "RaycastSwatch"
-    ].map { ($0, raycastIconImage($0)) }
-  )
-
-  @ViewBuilder
-  private func iconView(_ icon: RaycastActionIcon) -> some View {
-    switch icon {
-    case .raster(let resource, let frame):
-      Image(nsImage: Self.rasters[resource] ?? raycastIconImage(resource))
-        .renderingMode(.template)
-        .resizable()
-        .frame(width: frame, height: frame)
-    case .stackedCards:
-      RaycastStackedCardsIcon(scale: 0.77)
-    }
-  }
-
-  @ViewBuilder
-  private func keycaps(_ keys: [String]) -> some View {
-    if !keys.isEmpty {
-      HStack(spacing: 3) {
-        ForEach(keys, id: \.self) { key in
-          Text(key)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(RaycastModalPalette.secondaryText)
-            .frame(minWidth: 22)
-            .frame(height: 22)
-            .background(
-              RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-            )
-        }
-      }
-    }
-  }
-
-  private func move(_ delta: Int) {
-    let count = filtered.count
-    guard count > 0 else { return }
-    selectedIndex = (selectedIndex + delta + count) % count
-  }
-
-  private func commit() {
-    let rows = filtered
-    guard rows.indices.contains(selectedIndex) else { return }
-    let action = rows[selectedIndex]
-    onClose()
-    action.perform()
   }
 }

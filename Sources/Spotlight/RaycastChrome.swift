@@ -98,6 +98,24 @@ struct RaycastStackedCardsIcon: View {
   }
 }
 
+/// The pill's new-note plus, drawn instead of rasterized: the live glyph
+/// is an 18pt cross stroked at 2pt with round caps (probed 36x36px @2x
+/// with 4px stems); the bundled raster's stroke scales to 3pt at pill
+/// size, which reads visibly heavier.
+struct RaycastPlusShape: Shape {
+  func path(in rect: CGRect) -> Path {
+    // Inset by the 1pt cap radius so the ROUND CAPS land exactly on the
+    // frame edge -- the visible cross fills the frame, no more.
+    let inset = rect.insetBy(dx: 1, dy: 1)
+    var path = Path()
+    path.move(to: CGPoint(x: inset.midX, y: inset.minY))
+    path.addLine(to: CGPoint(x: inset.midX, y: inset.maxY))
+    path.move(to: CGPoint(x: inset.minX, y: inset.midY))
+    path.addLine(to: CGPoint(x: inset.maxX, y: inset.midY))
+    return path
+  }
+}
+
 /// Loads a bundled Raycast icon rasterized from the exact @raycast/icons
 /// path data, tinted at render time via template mode.
 func raycastIconImage(_ resource: String) -> NSImage {
@@ -120,9 +138,6 @@ struct RaycastTopBar: View {
   let title: String
   let theme: Theme
   let isKey: Bool
-  /// False while the sidebar is open -- the lights move into the sidebar
-  /// header (a Mac window's lights track the window's top-left corner).
-  let showsTrafficLights: Bool
   let onClose: () -> Void
   let onShowActions: () -> Void
   let onToggleNotes: () -> Void
@@ -132,7 +147,6 @@ struct RaycastTopBar: View {
   static let trafficLightGutter: CGFloat = 90
 
   private static let commandIcon = raycastIconImage("RaycastCommandSymbol")
-  private static let plusIcon = raycastIconImage("RaycastPlus")
 
   var body: some View {
     ZStack {
@@ -144,10 +158,8 @@ struct RaycastTopBar: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.trafficLightGutter + 30)
       HStack {
-        if showsTrafficLights {
-          RaycastTrafficLights(isKey: isKey, onClose: onClose)
-            .padding(.leading, 23)
-        }
+        RaycastTrafficLights(isKey: isKey, onClose: onClose)
+          .padding(.leading, 23)
         Spacer()
         iconPill
           .padding(.trailing, 9)
@@ -156,34 +168,33 @@ struct RaycastTopBar: View {
     .frame(height: EditorMetrics.topBarHeight)
   }
 
-  /// Icon frames are sized so each VISIBLE glyph matches the live app's
-  /// uniform ~17.5pt: the raster assets carry different internal padding
-  /// (command glyph fills 89% of its box, plus only 62%), so equal frames
-  /// render visibly unequal icons. Explicit gaps keep the visible
-  /// glyph-to-glyph spacing at the probed 15.5pt.
+  /// Every button sits in a uniform 30pt hover cell; the glyph frames
+  /// inside differ (rasters carry internal padding, the drawn icons
+  /// none) so each VISIBLE glyph matches the live app's uniform ~17.5pt.
+  /// The gaps keep the visible glyph-to-glyph spacing at the probed
+  /// 15.5pt despite the differing internal padding.
   private var iconPill: some View {
     HStack(spacing: 0) {
-      pillButton(help: "Actions", action: onShowActions) {
+      PillIconButton(help: "Actions", action: onShowActions) {
         Image(nsImage: Self.commandIcon)
           .renderingMode(.template)
           .resizable()
           .frame(width: 20, height: 20)
       }
-      Spacer().frame(width: 14)
-      pillButton(help: "Browse notes", action: onToggleNotes) {
+      Spacer().frame(width: 4)
+      PillIconButton(help: "Browse notes", action: onToggleNotes) {
         RaycastStackedCardsIcon()
       }
-      Spacer().frame(width: 10)
-      pillButton(help: "New note", action: onNewNote) {
-        Image(nsImage: Self.plusIcon)
-          .renderingMode(.template)
-          .resizable()
-          .frame(width: 29, height: 29)
+      Spacer().frame(width: 4)
+      PillIconButton(help: "New note", action: onNewNote) {
+        RaycastPlusShape()
+          .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round))
+          .frame(width: 18, height: 18)
       }
     }
     .foregroundStyle(isKey ? theme.text : RaycastChromePalette.controlResigned)
-    .padding(.leading, 12)
-    .padding(.trailing, 7)
+    .padding(.leading, 7)
+    .padding(.trailing, 6)
     .frame(height: 44)
     .background(
       Capsule(style: .continuous)
@@ -191,18 +202,29 @@ struct RaycastTopBar: View {
         .overlay(Capsule(style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
     )
   }
+}
 
-  private func pillButton(
-    help: String,
-    action: @escaping () -> Void,
-    @ViewBuilder label: () -> some View
-  ) -> some View {
+/// Pill icon button with the live app's hover reaction: a soft rounded
+/// highlight fills the button's cell while the pointer is over it.
+private struct PillIconButton<Label: View>: View {
+  let help: String
+  let action: () -> Void
+  @ViewBuilder let label: () -> Label
+  @State private var hovering = false
+
+  var body: some View {
     Button(action: action) {
       label()
+        .frame(width: 30, height: 30)
+        .background(
+          RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(Color.white.opacity(hovering ? 0.08 : 0))
+        )
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .help(help)
+    .onHover { hovering = $0 }
   }
 }
 

@@ -4,18 +4,16 @@ import Testing
 
 @testable import Spotlight
 
-/// Regression suite for the ⌘\ sidebar bug (2026-08-09): the pref flipped
-/// and the panel widened to 920pt, but SwiftUI intermittently never
-/// inserted the sidebar -- a 670pt main column floating centered in a
-/// 920pt window. The load-bearing ingredient is the controller's
-/// `$sidebarShown` sink resizing + displaying the panel during `willSet`,
-/// so the repro must drive the REAL `SpotlightWindowController` panel,
-/// not a bare hosting view.
+/// Regression suite for ⌘\ sidebar behavior. History: the in-window
+/// sidebar's width sink rendered one state behind (2026-08-09, S2); the
+/// sidebar is now a SHELF child panel with its own height (S6) -- the
+/// window must never widen, and the shelf's presence must agree with the
+/// preference across repeated hotkey-path toggles.
 @MainActor
-@Suite("Sidebar toggle render agreement", .serialized)
+@Suite("Sidebar shelf toggle agreement", .serialized)
 struct SpotlightSidebarToggleTests {
-  @Test("panel width and sidebar render agree across repeated hotkey-path toggles")
-  func widthAndRenderAgreeAcrossToggles() async throws {
+  @Test("shelf presence and window width agree across repeated hotkey-path toggles")
+  func shelfAndWidthAgreeAcrossToggles() async throws {
     let fixture = try makeFixture()
     defer { fixture.cleanup() }
     // A resign mid-run (David clicking elsewhere during an attended
@@ -27,9 +25,8 @@ struct SpotlightSidebarToggleTests {
       fixture.controller.panelForTesting?.isVisible == true
     }
     let panel = try #require(fixture.controller.panelForTesting)
-    try await waitUntil("editor mounts") { firstTextView(in: panel) != nil }
 
-    // 12 round trips; the live failure hit ~half of attempts, so a
+    // 12 round trips; the historical failure hit ~half of attempts, so a
     // consistent pass here must survive repetition, not one lucky toggle.
     for attempt in 0..<12 {
       let target = !fixture.preferences.sidebarShown
@@ -41,21 +38,48 @@ struct SpotlightSidebarToggleTests {
       }.value
       await settleSwiftUI()
 
-      let expectedWidth =
-        EditorMetrics.panelWidth + (target ? EditorMetrics.sidebarWidth : 0)
-      try await waitUntil("width settles (attempt \(attempt))") {
-        panel.frame.width == expectedWidth
+      // Structural assertions only: interleaved @MainActor suites can
+      // hide the app mid-run (another fixture's `close()`), so
+      // window-server visibility is not a stable signal here -- shelf
+      // existence and geometry are.
+      try await waitUntil("shelf agrees (attempt \(attempt))") {
+        let shelf = fixture.controller.sidebarShelfForTesting
+        return target ? shelf != nil : shelf == nil
       }
-      // The main column is a fixed 670pt: with the sidebar rendered it
-      // starts at x=250, without it at x=0 -- and in the BUG state
-      // (wide window, no sidebar) it floats centered at x=125. The
-      // editor's NSTextView x-position in window coordinates therefore
-      // separates "rendered" from "missing" unambiguously.
-      try await waitUntil("render agrees (attempt \(attempt))") {
-        guard let textView = firstTextView(in: panel) else { return false }
-        let textMinX = textView.convert(textView.bounds, to: nil).minX
-        return target ? textMinX > 200 : textMinX < 125
+      // The shelf never widens the window: the S6 contract.
+      #expect(panel.frame.width == EditorMetrics.panelWidth)
+      if target {
+        let shelf = try #require(fixture.controller.sidebarShelfForTesting)
+        #expect(shelf.frame.width == EditorMetrics.sidebarWidth)
+        #expect(shelf.frame.height == EditorMetrics.sidebarShelfHeight)
+        // The shelf hangs off the LEFT edge, never over the note.
+        #expect(shelf.frame.maxX <= panel.frame.minX)
+        if panel.isVisible {
+          #expect(shelf.parent === panel)
+        }
       }
+    }
+  }
+
+  @Test("closing the HUD dismisses the shelf; reopening restores it")
+  func shelfFollowsHUDLifecycle() async throws {
+    let fixture = try makeFixture()
+    defer { fixture.cleanup() }
+    fixture.preferences.dimOnFocusLoss = true
+    fixture.preferences.sidebarShown = true
+    fixture.controller.openHUD()
+    try await waitUntil("shelf appears") {
+      fixture.controller.sidebarShelfForTesting != nil
+    }
+
+    fixture.controller.close()
+    try await waitUntil("shelf dismissed") {
+      fixture.controller.sidebarShelfForTesting == nil
+    }
+
+    fixture.controller.openHUD()
+    try await waitUntil("shelf restored") {
+      fixture.controller.sidebarShelfForTesting != nil
     }
   }
 
@@ -109,19 +133,6 @@ struct SpotlightSidebarToggleTests {
       tempDirectory: tmpDir,
       previouslyFrontmost: NSWorkspace.shared.frontmostApplication
     )
-  }
-
-  private func firstTextView(in panel: NSPanel) -> PlaceholderTextView? {
-    guard let content = panel.contentView else { return nil }
-    return firstTextView(in: content)
-  }
-
-  private func firstTextView(in view: NSView) -> PlaceholderTextView? {
-    if let match = view as? PlaceholderTextView { return match }
-    for subview in view.subviews {
-      if let match = firstTextView(in: subview) { return match }
-    }
-    return nil
   }
 
   /// Throws on timeout so one broken invariant aborts the toggle loop

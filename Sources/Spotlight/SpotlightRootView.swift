@@ -74,62 +74,49 @@ struct SpotlightRootView: View {
   @State private var themePickerShown = false
 
   var body: some View {
-    HStack(spacing: 0) {
-      if preferences.sidebarShown {
-        SpotNoteSidebar(
-          preferences: preferences,
-          session: session,
-          theme: theme,
-          isKey: keyState.isKey || anyModalShown,
-          onClose: onEscape,
-          onPick: { chat in
-            session.jump(to: chat)
-            focusTrigger.pulse()
-          }
-        )
-        .transition(.move(edge: .leading))
+    // The notes sidebar is NOT in this tree: it rides its own shelf child
+    // panel (`SpotlightWindowController.syncSidebarShelf`) so a short note
+    // never cramps the list and the window never widens.
+    mainColumn
+      .frame(width: EditorMetrics.panelWidth)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background {
+        SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+          .clipShape(surfaceShape)
+          .overlay(surfaceShape.fill(surfaceFill))
       }
-      mainColumn
-        .frame(width: EditorMetrics.panelWidth)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background {
-      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-        .clipShape(surfaceShape)
-        .overlay(surfaceShape.fill(surfaceFill))
-    }
-    .overlay(modalLayer)
-    .background(
-      RaycastModalOverhang(
-        content: anyModalShown ? AnyView(activeModal) : nil,
-        onDismissTap: { dismissModals() }
+      .overlay(modalLayer)
+      .background(
+        RaycastModalOverhang(
+          content: anyModalShown ? AnyView(activeModal) : nil,
+          onDismissTap: { dismissModals() }
+        )
       )
-    )
-    .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
-    .colorScheme(theme.mode == .dark ? .dark : .light)
-    .animation(.easeOut(duration: 0.10), value: find.isVisible)
-    .onChange(of: session.chats) { _, updatedChats in
-      fuzzy.updateCorpus(updatedChats)
-    }
-    .onChange(of: find.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onChange(of: fuzzy.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onChange(of: actionsModalShown) { _, isShown in
-      if !isShown { focusTrigger.pulse() }
-    }
-    .onChange(of: themePickerShown) { _, isShown in
-      if !isShown { focusTrigger.pulse() }
-    }
-    .onAppear {
-      let editorHeight = EditorMetrics.panelHeight(
-        forLines: EditorMetrics.lineCount(in: session.currentText),
-        maxLines: preferences.maxVisibleLines
-      )
-      onHeightChange(editorHeight + extraChromeHeight)
-    }
+      .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
+      .colorScheme(theme.mode == .dark ? .dark : .light)
+      .animation(.easeOut(duration: 0.10), value: find.isVisible)
+      .onChange(of: session.chats) { _, updatedChats in
+        fuzzy.updateCorpus(updatedChats)
+      }
+      .onChange(of: find.isVisible) { _, isVisible in
+        if !isVisible { focusTrigger.pulse() }
+      }
+      .onChange(of: fuzzy.isVisible) { _, isVisible in
+        if !isVisible { focusTrigger.pulse() }
+      }
+      .onChange(of: actionsModalShown) { _, isShown in
+        if !isShown { focusTrigger.pulse() }
+      }
+      .onChange(of: themePickerShown) { _, isShown in
+        if !isShown { focusTrigger.pulse() }
+      }
+      .onAppear {
+        let editorHeight = EditorMetrics.panelHeight(
+          forLines: EditorMetrics.lineCount(in: session.currentText),
+          maxLines: preferences.maxVisibleLines
+        )
+        onHeightChange(editorHeight + extraChromeHeight)
+      }
   }
 
   /// The Raycast Notes column: bars and editor, always `panelWidth` wide
@@ -142,7 +129,6 @@ struct SpotlightRootView: View {
         // The chrome stays lit while a modal child window holds key --
         // the live app keeps the close light red under its menus.
         isKey: keyState.isKey || anyModalShown,
-        showsTrafficLights: !preferences.sidebarShown,
         onClose: onEscape,
         onShowActions: { actionsModalShown = true },
         onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
@@ -328,6 +314,9 @@ extension SpotlightRootView {
         icon: .raster(resource: "RaycastMagnifyingGlass", frame: 14),
         keys: keycaps(for: .findInNote),
         section: 1,
+        // Inapplicable on an empty note: dims like the live menu's
+        // greyed rows instead of offering a no-op.
+        isEnabled: !session.currentText.isEmpty,
         perform: { find.toggle(text: session.currentText) }
       ),
       RaycastAction(
@@ -336,6 +325,7 @@ extension SpotlightRootView {
         icon: .raster(resource: "RaycastCopyClipboard", frame: 14),
         keys: keycaps(for: .copyContent),
         section: 1,
+        isEnabled: !session.currentText.isEmpty,
         perform: {
           NSPasteboard.general.clearContents()
           NSPasteboard.general.setString(session.currentText, forType: .string)

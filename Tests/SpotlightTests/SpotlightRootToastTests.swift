@@ -54,13 +54,14 @@ struct SpotlightRootToastTests {
     await settleSwiftUI()
     let stableCallbackCount = fixture.recorder.values.count
 
-    fixture.hostingView.frame.size.width = EditorMetrics.panelWidth + EditorMetrics.sidebarWidth
+    // The sidebar rides its own shelf child panel: the pref flip may
+    // re-evaluate the root body (actions-menu title) but must never
+    // touch the measured height tree.
     fixture.preferences.sidebarShown = true
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
 
     fixture.preferences.sidebarShown = false
-    fixture.hostingView.frame.size.width = EditorMetrics.panelWidth
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
