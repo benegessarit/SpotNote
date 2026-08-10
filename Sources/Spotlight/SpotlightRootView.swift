@@ -294,7 +294,10 @@ extension SpotlightRootView {
   }
 
   private var modalActions: [RaycastAction] {
-    [
+    // Raycast's live row order: note actions, then find/copy, then chrome.
+    let currentChat = session.chats.first(where: { $0.id == session.currentID })
+    let currentPinned = currentChat?.isPinned ?? false
+    return [
       RaycastAction(
         id: "new-note",
         title: "New Note",
@@ -302,6 +305,29 @@ extension SpotlightRootView {
         keys: keycaps(for: .newNote),
         section: 0,
         perform: { newNote() }
+      ),
+      RaycastAction(
+        id: "duplicate-note",
+        title: "Duplicate Note",
+        icon: .raster(resource: "RaycastDuplicate", frame: 14),
+        keys: keycaps(for: .duplicateNote),
+        section: 0,
+        // Raycast dims Duplicate on an empty note -- nothing to copy.
+        isEnabled: !session.currentText.isEmpty,
+        perform: { Task { @MainActor in await session.duplicateCurrent() } }
+      ),
+      RaycastAction(
+        id: "pin-note",
+        title: currentPinned ? "Unpin Note" : "Pin Note",
+        icon: .raster(resource: "RaycastTack", frame: 14),
+        keys: keycaps(for: .togglePin),
+        section: 0,
+        // Vault-backed notes live outside the store and cannot pin.
+        isEnabled: currentChat.map { session.isDeletable($0) } ?? false,
+        perform: {
+          guard let chat = currentChat else { return }
+          Task { @MainActor in await session.togglePin(chat) }
+        }
       ),
       RaycastAction(
         id: "browse-notes",
@@ -312,12 +338,22 @@ extension SpotlightRootView {
         perform: { fuzzy.toggle(corpus: session.chats) }
       ),
       RaycastAction(
-        id: "toggle-sidebar",
-        title: preferences.sidebarShown ? "Hide Sidebar" : "Show Sidebar",
-        icon: .raster(resource: "RaycastSidebarLeft", frame: 14),
-        keys: keycaps(for: .toggleSidebar),
+        id: "go-back",
+        title: "Go Back",
+        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 14),
+        keys: keycaps(for: .goBack),
         section: 0,
-        perform: { preferences.sidebarShown.toggle() }
+        isEnabled: session.canGoBack,
+        perform: { Task { @MainActor in await session.goBack() } }
+      ),
+      RaycastAction(
+        id: "go-forward",
+        title: "Go Forward",
+        icon: .raster(resource: "RaycastArrowRightCircle", frame: 14),
+        keys: keycaps(for: .goForward),
+        section: 0,
+        isEnabled: session.canGoForward,
+        perform: { Task { @MainActor in await session.goForward() } }
       ),
       RaycastAction(
         id: "find-in-note",
@@ -341,6 +377,14 @@ extension SpotlightRootView {
           NSPasteboard.general.clearContents()
           NSPasteboard.general.setString(session.currentText, forType: .string)
         }
+      ),
+      RaycastAction(
+        id: "toggle-sidebar",
+        title: preferences.sidebarShown ? "Hide Sidebar" : "Show Sidebar",
+        icon: .raster(resource: "RaycastSidebarLeft", frame: 14),
+        keys: keycaps(for: .toggleSidebar),
+        section: 2,
+        perform: { preferences.sidebarShown.toggle() }
       ),
       RaycastAction(
         id: "change-theme",

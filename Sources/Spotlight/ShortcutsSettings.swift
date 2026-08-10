@@ -22,12 +22,12 @@ struct ShortcutsPane: View {
       )
       ShortcutGroup(
         title: "Editor",
-        actions: [.insertTodayBadge, .appendToDailyNote, .copyContent],
+        actions: [.insertTodayBadge, .appendToDailyNote, .copyContent, .duplicateNote, .togglePin],
         store: shortcuts
       )
       ShortcutGroup(
         title: "Navigation",
-        actions: [.newNote, .browseNotes, .findInNote, .openSettings],
+        actions: [.newNote, .browseNotes, .goBack, .goForward, .findInNote, .openSettings],
         store: shortcuts
       )
 

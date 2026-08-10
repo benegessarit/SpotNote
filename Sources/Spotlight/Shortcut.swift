@@ -80,6 +80,10 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case toggleSidebar
   case newNote
   case browseNotes
+  case duplicateNote
+  case togglePin
+  case goBack
+  case goForward
 
   public var id: String { rawValue }
 
@@ -96,6 +100,10 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .toggleSidebar: return "Toggle notes sidebar"
     case .newNote: return "New note"
     case .browseNotes: return "Browse notes"
+    case .duplicateNote: return "Duplicate note"
+    case .togglePin: return "Pin note"
+    case .goBack: return "Go back"
+    case .goForward: return "Go forward"
     }
   }
 
@@ -114,6 +122,10 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .toggleSidebar: return "Show or hide the notes sidebar on the left edge of the HUD."
     case .newNote: return "Save the current note and open a fresh blank one."
     case .browseNotes: return "Open the Browse Notes menu."
+    case .duplicateNote: return "Open a new note carrying a copy of the current one."
+    case .togglePin: return "Pin or unpin the current note; pinned notes sort first when browsing."
+    case .goBack: return "Return to the previously open note."
+    case .goForward: return "Redo a Go Back, returning to the newer note."
     }
   }
 
@@ -128,9 +140,14 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .copyContent: return Shortcut(key: "c", modifiers: [.command])
     case .openSettings: return Shortcut(key: ",", modifiers: [.command])
     case .toggleSidebar: return Shortcut(key: "\\", modifiers: [.command])
-    // Raycast Notes parity: ⌘N new note, ⌘P browse notes.
+    // Raycast Notes parity: ⌘N new, ⌘P browse, ⌘D duplicate, ⇧⌘P pin,
+    // ⌘[ back, ⌘] forward.
     case .newNote: return Shortcut(key: "n", modifiers: [.command])
     case .browseNotes: return Shortcut(key: "p", modifiers: [.command])
+    case .duplicateNote: return Shortcut(key: "d", modifiers: [.command])
+    case .togglePin: return Shortcut(key: "p", modifiers: [.command, .shift])
+    case .goBack: return Shortcut(key: "[", modifiers: [.command])
+    case .goForward: return Shortcut(key: "]", modifiers: [.command])
     }
   }
 

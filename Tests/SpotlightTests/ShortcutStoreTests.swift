@@ -79,7 +79,6 @@ struct ShortcutStoreTests {
     #expect(store.match(key: "k", modifiers: [.command]) == nil)
     #expect(store.match(key: "k", modifiers: [.command, .option]) == nil)
     #expect(store.match(key: "s", modifiers: [.command]) == nil)
-    #expect(store.match(key: "d", modifiers: [.command]) == nil)
   }
 
   @Test("multi-note Raycast-parity shortcuts: Cmd N new note, Cmd P browse")
@@ -90,6 +89,10 @@ struct ShortcutStoreTests {
     // actions menus revived them (2026-08-10) to match Raycast Notes.
     #expect(store.match(key: "n", modifiers: [.command]) == .newNote)
     #expect(store.match(key: "p", modifiers: [.command]) == .browseNotes)
+    #expect(store.match(key: "d", modifiers: [.command]) == .duplicateNote)
+    #expect(store.match(key: "p", modifiers: [.command, .shift]) == .togglePin)
+    #expect(store.match(key: "[", modifiers: [.command]) == .goBack)
+    #expect(store.match(key: "]", modifiers: [.command]) == .goForward)
   }
 
   @Test("send to Linear defaults to Cmd Option L")

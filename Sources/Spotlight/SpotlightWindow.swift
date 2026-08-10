@@ -882,6 +882,19 @@ extension SpotlightWindowController {
       Task { @MainActor [weak self] in await self?.session.newNote() }
     case .browseNotes:
       fuzzyController.toggle(corpus: session.chats)
+    case .duplicateNote:
+      Task { @MainActor [weak self] in await self?.session.duplicateCurrent() }
+    case .togglePin:
+      Task { @MainActor [weak self] in
+        guard let session = self?.session,
+          let chat = session.chats.first(where: { $0.id == session.currentID })
+        else { return }
+        await session.togglePin(chat)
+      }
+    case .goBack:
+      Task { @MainActor [weak self] in await self?.session.goBack() }
+    case .goForward:
+      Task { @MainActor [weak self] in await self?.session.goForward() }
     case .toggleHotkey, .appendToLastNote: break
     }
   }

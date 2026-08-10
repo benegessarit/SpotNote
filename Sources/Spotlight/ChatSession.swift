@@ -24,6 +24,13 @@ final class ChatSession: ObservableObject {
   private let vaultDocuments: [VaultNoteState: VaultNoteDocument]
   private let vaultDocumentOrder: [VaultNoteState]
 
+  /// Note-to-note history for Go Back / Go Forward (browser semantics:
+  /// any navigation pushes the departed note and clears the forward
+  /// stack; back/forward move between the stacks without recording).
+  @Published private(set) var backStack: [UUID] = []
+  @Published private(set) var forwardStack: [UUID] = []
+  private var suppressHistory = false
+
   init(
     store: ChatStore,
     vaultInbox: VaultInboxDocument? = nil,
@@ -113,11 +120,18 @@ final class ChatSession: ObservableObject {
   // MARK: - Private
 
   private func loadCurrentChat(_ chat: Chat) {
+    recordHistory(movingTo: chat.id)
     let document = ChecklistDocument.parseMarkdown(chat.text)
     currentID = chat.id
     currentVaultState = vaultState(for: chat.id)
     currentText = document.text
     currentChecklistLines = document.checklistLines
+  }
+
+  private func recordHistory(movingTo newID: UUID?) {
+    guard !suppressHistory, let id = currentID, id != newID else { return }
+    backStack.append(id)
+    forwardStack.removeAll()
   }
 
   private func serializedCurrentText() -> String {
@@ -161,8 +175,47 @@ final class ChatSession: ObservableObject {
     _ = await createBlankChat()
   }
 
+  /// Actions-menu Duplicate: a new app-local note carrying the current
+  /// note's serialized text (checklist markers survive the round trip).
+  func duplicateCurrent() async {
+    persistIfNeeded()
+    await flush()
+    _ = await createBlankChat(initialText: serializedCurrentText())
+  }
+
+  var canGoBack: Bool { !backStack.isEmpty }
+  var canGoForward: Bool { !forwardStack.isEmpty }
+
+  func goBack() async {
+    await navigate(popping: \.backStack, pushing: \.forwardStack)
+  }
+
+  func goForward() async {
+    await navigate(popping: \.forwardStack, pushing: \.backStack)
+  }
+
+  /// Pops the first still-existing note off one stack, pushes the
+  /// departed note onto the other, and loads it -- deleted notes are
+  /// dropped silently on the way.
+  private func navigate(
+    popping from: ReferenceWritableKeyPath<ChatSession, [UUID]>,
+    pushing to: ReferenceWritableKeyPath<ChatSession, [UUID]>
+  ) async {
+    suppressHistory = true
+    defer { suppressHistory = false }
+    persistIfNeeded()
+    await flush()
+    while let target = self[keyPath: from].popLast() {
+      guard let chat = chats.first(where: { $0.id == target }) else { continue }
+      if let id = currentID { self[keyPath: to].append(id) }
+      loadCurrentChat(chat)
+      return
+    }
+  }
+
   private func createBlankChat(initialText: String = "") async -> Bool {
     guard let chat = try? await store.create() else { return false }
+    recordHistory(movingTo: chat.id)
     currentID = chat.id
     currentVaultState = nil
     let document = ChecklistDocument.parseMarkdown(initialText)

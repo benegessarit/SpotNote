@@ -54,6 +54,53 @@ struct ChatSessionTests {
     #expect(session.chats.allSatisfy { !$0.isPinned })
   }
 
+  @Test("go back / go forward walk note history; new navigation clears forward")
+  func goBackForwardWalkHistory() async throws {
+    let store = try ChatStore(directory: makeTempDirectory(), debounce: .milliseconds(20))
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+    let first = try #require(session.currentID)
+
+    await session.newNote()
+    let second = try #require(session.currentID)
+    #expect(session.canGoBack)
+    #expect(!session.canGoForward)
+
+    await session.goBack()
+    #expect(session.currentID == first)
+    #expect(session.canGoForward)
+
+    await session.goForward()
+    #expect(session.currentID == second)
+    #expect(!session.canGoForward)
+
+    await session.goBack()
+    #expect(session.currentID == first)
+    await session.newNote()
+    #expect(!session.canGoForward, "fresh navigation clears the forward stack")
+    await session.goBack()
+    #expect(session.currentID == first)
+  }
+
+  @Test("duplicate opens a new note carrying the current text")
+  func duplicateCopiesCurrentNote() async throws {
+    let store = try ChatStore(directory: makeTempDirectory(), debounce: .milliseconds(20))
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+    session.currentText = "keep me"
+    session.persistIfNeeded()
+    let original = try #require(session.currentID)
+
+    await session.duplicateCurrent()
+
+    #expect(session.currentID != original)
+    #expect(session.currentText == "keep me")
+    #expect(session.canGoBack)
+    await session.goBack()
+    #expect(session.currentID == original)
+    #expect(session.currentText == "keep me")
+  }
+
   @Test("bootstrap displays checklist Markdown as icon-only plain text")
   func bootstrapStripsChecklistMarkdownFromEditableText() async throws {
     let dir = try makeTempDirectory()
