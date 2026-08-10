@@ -5,11 +5,14 @@ import SwiftUI
 /// Pixel-sampled from the live Raycast Beta Notes modals: the sheet is
 /// DARKER than the note surface, with a soft hover row and muted metadata.
 enum RaycastModalPalette {
-  /// The sheet is subtly top-lit like the note surface: #1D1D27 at the
-  /// top fading to #1A1922 by mid-sheet (pixel-probed 2026-08-09 in the
-  /// live actions menu).
-  static let sheetTop = Color(red: 0x1D / 255, green: 0x1D / 255, blue: 0x27 / 255)
+  /// The sheet is a translucent MATERIAL, not opaque paint: same-display
+  /// probes (2026-08-09) read (32,34,45) over a light backdrop vs
+  /// (26,25,34) over a dark one -- a heavily tinted blur where the
+  /// backdrop contributes ~10%. (The "top-lit gradient" probed earlier was
+  /// that blur bleeding through, not a real gradient.) `sheet` is the tint
+  /// ink over `SpotNoteVisualEffectView`.
   static let sheet = Color(red: 0x1A / 255, green: 0x19 / 255, blue: 0x22 / 255)
+  static let sheetTintOpacity: CGFloat = 0.90
   /// Selected row (35,34,45) probed.
   static let selectedRow = Color(red: 0x23 / 255, green: 0x22 / 255, blue: 0x2D / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
@@ -22,7 +25,6 @@ enum RaycastModalPalette {
   static let borderWidth: CGFloat = 0.5
   /// Blue "Current" dot in the notes rows (#64A1F1, probed).
   static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
-  static let backdrop = Color.black.opacity(0.35)
   /// Hairline between action groups (probed ~(46,45,57) over the sheet).
   static let sectionRule = Color.white.opacity(0.09)
 
@@ -51,13 +53,17 @@ struct RaycastModalSheet<Content: View>: View {
     content
       .frame(width: RaycastModalPalette.width)
       .background(
-        RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
-          .fill(
-            LinearGradient(
-              colors: [RaycastModalPalette.sheetTop, RaycastModalPalette.sheet],
-              startPoint: .top,
-              endPoint: .center
-            )
+        // Raycast-parity translucency: behind-window blur under a heavy
+        // tint. The sheet's drop shadow is the CHILD WINDOW's own
+        // (window-server, shape-accurate) -- a SwiftUI .shadow of an
+        // NSViewRepresentable background does not render reliably.
+        SpotNoteVisualEffectView(material: .menu, blendingMode: .behindWindow)
+          .clipShape(
+            RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
+              .fill(RaycastModalPalette.sheet.opacity(RaycastModalPalette.sheetTintOpacity))
           )
       )
       .overlay(
@@ -67,7 +73,6 @@ struct RaycastModalSheet<Content: View>: View {
             lineWidth: RaycastModalPalette.borderWidth
           )
       )
-      .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
   }
 }
 

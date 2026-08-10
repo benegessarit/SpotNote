@@ -67,6 +67,7 @@ struct RaycastModalOverhang: NSViewRepresentable {
       if let child {
         (child.contentView as? NSHostingView<RaycastModalOverhangRoot>)?.rootView = root
         position(child, over: anchor)
+        child.invalidateShadow()
         return
       }
       present(root, over: anchor)
@@ -81,7 +82,14 @@ struct RaycastModalOverhang: NSViewRepresentable {
       )
       panel.isOpaque = false
       panel.backgroundColor = .clear
-      panel.hasShadow = false
+      // Window-server shadow, shaped by the sheet's opaque region -- the
+      // sheet background is a behind-window material, so a SwiftUI
+      // .shadow can't draw it.
+      panel.hasShadow = true
+      // The overhang root is its OWN hosting tree: the HUD's
+      // `.colorScheme(.dark)` does not reach it, and the sheet material
+      // must stay dark in system light mode.
+      panel.appearance = NSAppearance(named: .darkAqua)
       panel.level = anchor.level
       panel.isReleasedWhenClosed = false
       let hosting = NSHostingView(rootView: root)

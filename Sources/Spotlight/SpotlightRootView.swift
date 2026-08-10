@@ -255,17 +255,20 @@ extension SpotlightRootView {
     fuzzy.isVisible || actionsModalShown || themePickerShown
   }
 
-  /// Dim backdrop over the note while a modal shows. The modal sheet
-  /// itself lives in an overhanging CHILD WINDOW (`RaycastModalOverhang`)
-  /// so it can extend past the panel's bottom edge like the live app;
-  /// neither layer ever touches the measured height tree.
+  /// Transparent tap-catch over the note while a modal shows -- Raycast
+  /// leaves the editor UNDIMMED with a menu open (window probes (40,42,56)
+  /// either way, 2026-08-09); a click on the note body just dismisses. The
+  /// modal sheet itself lives in an overhanging CHILD WINDOW
+  /// (`RaycastModalOverhang`) so it can extend past the panel's bottom
+  /// edge like the live app; neither layer ever touches the measured
+  /// height tree.
   @ViewBuilder
   private var modalLayer: some View {
     if anyModalShown {
       surfaceShape
-        .fill(RaycastModalPalette.backdrop)
+        .fill(Color.clear)
+        .contentShape(surfaceShape)
         .onTapGesture { dismissModals() }
-        .transition(.opacity)
     }
   }
 
