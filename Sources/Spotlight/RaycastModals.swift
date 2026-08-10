@@ -5,16 +5,18 @@ import SwiftUI
 /// Pixel-sampled from the live Raycast Beta Notes modals: the sheet is
 /// DARKER than the note surface, with a soft hover row and muted metadata.
 enum RaycastModalPalette {
-  /// The sheet is a translucent MATERIAL, not opaque paint: same-display
-  /// probes (2026-08-09) read (32,34,45) over a light backdrop vs
-  /// (26,25,34) over a dark one -- a heavily tinted blur where the
-  /// backdrop contributes ~10%. (The "top-lit gradient" probed earlier was
-  /// that blur bleeding through, not a real gradient.) `sheet` is the tint
-  /// ink over `SpotNoteVisualEffectView`.
-  /// Ink chosen so the composite over dark backdrops probes (29,29,40)
-  /// like the live sheet (2026-08-09 same-scale captures).
+  /// The sheet is a translucent MATERIAL, not opaque paint: the live
+  /// Raycast sheet transmits ~21% of the blurred backdrop (a blue chat
+  /// row behind it lifts B by 43/200 of the raw delta) and DARKENS red
+  /// (tR ~ -0.19, a desaturating material). Swatch-lab sweeps of
+  /// (material x tint) against uniform blue/dark backdrops (2026-08-09)
+  /// matched that signature with `.popover` under this ink at 0.45:
+  /// composite over a (31,31,46) backdrop measures (34,35,46) vs
+  /// Raycast's (33,34,45), transmission (-0.22, 0.23, 0.21) vs their
+  /// (-0.19, ~0.14, 0.215). A 0.90 tint (the first attempt) matched the
+  /// composite but killed the bleed entirely (t ~ 0.02).
   static let sheet = Color(red: 0x1D / 255, green: 0x1D / 255, blue: 0x28 / 255)
-  static let sheetTintOpacity: CGFloat = 0.90
+  static let sheetTintOpacity: CGFloat = 0.45
   /// Selected row (43,43,56) probed on the live actions menu.
   static let selectedRow = Color(red: 0x2B / 255, green: 0x2B / 255, blue: 0x38 / 255)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
@@ -56,11 +58,12 @@ struct RaycastModalSheet<Content: View>: View {
     content
       .frame(width: RaycastModalPalette.width)
       .background(
-        // Raycast-parity translucency: behind-window blur under a heavy
-        // tint. The sheet's drop shadow is the CHILD WINDOW's own
-        // (window-server, shape-accurate) -- a SwiftUI .shadow of an
-        // NSViewRepresentable background does not render reliably.
-        SpotNoteVisualEffectView(material: .menu, blendingMode: .behindWindow)
+        // Raycast-parity translucency: `.popover` blur under a 0.45 tint
+        // (measured match -- see RaycastModalPalette.sheet). The sheet's
+        // drop shadow is the CHILD WINDOW's own (window-server,
+        // shape-accurate) -- a SwiftUI .shadow of an NSViewRepresentable
+        // background does not render reliably.
+        SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)
           .clipShape(
             RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
           )
@@ -113,6 +116,8 @@ struct RaycastModalSearchField: View {
       .textFieldStyle(.plain)
       .font(.system(size: 16))
       .foregroundStyle(RaycastModalPalette.primaryText)
+      // Raycast's caret is the row text color, not accent blue.
+      .tint(RaycastModalPalette.primaryText)
       .focused($focused)
       .onSubmit(onSubmit)
       .onKeyPress(.escape) {

@@ -101,7 +101,10 @@ require_grep "the gutter is zero-width whenever line-flash hints are not showing
 reject_grep "showLineNumbers" "Sources/Spotlight/ThemePreferences.swift"
 # Raycast leaves the editor undimmed with a menu open (probed 2026-08-09).
 reject_grep "RaycastModalPalette.backdrop" "Sources/Spotlight/SpotlightRootView.swift"
-require_grep "SpotNoteVisualEffectView(material: .menu, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
+# Sheet translucency is MEASURED (2026-08-09 swatch-lab): .popover under
+# the 0.45 ink matches Raycast's ~21% backdrop bleed; .menu at 0.90
+# matched the composite color but transmitted ~0 (visibly flat).
+require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
 # Menu polish round 2 (probed 2026-08-09 same-scale captures): group gaps
 # are pure whitespace (no hairline) and the pill + is drawn at 2pt, not
 # the heavier-stroke raster.
