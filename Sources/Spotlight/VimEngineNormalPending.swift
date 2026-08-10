@@ -8,6 +8,7 @@ import Foundation
 ///   keeps the document-start motion.
 /// - `,`: section jumps (`,d/,t`) that drop into insert on a fresh bullet.
 /// - `\`: reusable leader (`\t` tray-append, `\c` state-append, `\f` tidy header spacing).
+/// - `r`: single-character replace capture (`r<char>`, Escape aborts).
 extension VimEngine {
   func handlePending(key: String) -> VimAction {
     let count = pendingResolvedCount
@@ -21,10 +22,21 @@ extension VimEngine {
     case "g": return handlePendingG(key: key, count: count)
     case ",": return handlePendingComma(key: key)
     case "\\": return handlePendingBackslash(key: key, count: count)
+    case "r": return handlePendingReplace(key: key, count: count)
     default:
       resolvePending()
       return .none
     }
+  }
+
+  /// `r` waits for exactly one printable character; Escape (or anything
+  /// unprintable) aborts, like vim.
+  private func handlePendingReplace(key: String, count: Int) -> VimAction {
+    resolvePending()
+    guard key.count == 1, let ch = key.first, !ch.isNewline,
+      ch != "\u{1B}", !ch.isASCII || ch.asciiValue.map({ $0 >= 0x20 }) == true
+    else { return .none }
+    return .replaceChar(key, count: count)
   }
 
   private var pendingOperator: VimOperator? {

@@ -41,10 +41,24 @@ enum VimAction: Equatable, Sendable {
   case changeBulletBody
   case deleteToEndOfLine
   case deleteChar(count: Int)
+  /// `X` -- delete before the caret, clamped to the line start. Like `x`
+  /// it deliberately skips the register (small-delete noise).
+  case deleteCharBefore(count: Int)
+  /// `J` -- join the next line up with a single space, count-1 extra
+  /// joins (vim: 3J joins three lines).
+  case joinLines(count: Int)
+  /// `~` -- toggle case under the caret and advance, count chars.
+  case toggleCase(count: Int)
+  /// `r<char>` -- replace count chars with the typed char, caret on the
+  /// last replacement; aborts when the line runs out (vim).
+  case replaceChar(String, count: Int)
   case openLineBelow
   case openLineAbove
   case undo(count: Int)
   case pasteAfter(count: Int)
+  /// `P` -- paste before the caret (charwise) or above the current line
+  /// (linewise).
+  case pasteBefore(count: Int)
   case insertAtEndOfLine
   case insertAtFirstNonBlank
   case composite([VimAction])
@@ -134,7 +148,9 @@ final class VimEngine {
   }
 
   private func handleNormal(key: String) -> VimAction {
-    if key.count == 1, let ch = key.first, ch.isNumber {
+    // Digits accumulate counts everywhere EXCEPT after `r`, where the
+    // next key is the literal replacement character (vim: `r3`).
+    if key.count == 1, let ch = key.first, ch.isNumber, pendingBuffer != "r" {
       let digit = ch.wholeNumberValue ?? 0
       if digit > 0 || countAccumulator > 0 {
         countAccumulator = countAccumulator * 10 + digit
@@ -149,8 +165,12 @@ final class VimEngine {
     return handleSingle(key: key)
   }
 
+  /// Keys that open a pending sequence: operators, prefix leaders, and
+  /// the single-char replace capture.
+  private static let pendingPrefixes: Set<String> = ["d", "c", "y", "g", ",", "\\", "r"]
+
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "c" || key == "y" || key == "g" || key == "," || key == "\\" {
+    if Self.pendingPrefixes.contains(key) {
       pendingBuffer = key
       // Capture the pre-operator count so post-operator digits start a
       // FRESH count that multiplies (vim: 2d3w = 6 words).
@@ -184,8 +204,25 @@ final class VimEngine {
   private func editingAction(for key: String, count: Int) -> VimAction? {
     switch key {
     case "x": return .deleteChar(count: count)
+    case "X": return .deleteCharBefore(count: count)
     case "D": return .deleteToEndOfLine
+    case "C":
+      // `C` = c$ -- change to end of line, like the D/Y caps family.
+      mode = .insert
+      return .applyOperator(.change, .motion(.lineEnd))
+    case "Y":
+      // nvim's default maps Y to y$ (not the vi yy quirk).
+      return .applyOperator(.yank, .motion(.lineEnd))
+    default: return lineEditAction(for: key, count: count)
+    }
+  }
+
+  private func lineEditAction(for key: String, count: Int) -> VimAction? {
+    switch key {
     case "p": return .pasteAfter(count: count)
+    case "P": return .pasteBefore(count: count)
+    case "J": return .joinLines(count: count)
+    case "~": return .toggleCase(count: count)
     case "u": return .undo(count: count)
     default: return nil
     }

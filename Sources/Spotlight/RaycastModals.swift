@@ -46,10 +46,22 @@ enum RaycastModalPalette {
   static let metadataText = Color(red: 0x9E / 255, green: 0xA3 / 255, blue: 0xB9 / 255)
   /// Search placeholder is dimmer than section headers (#64687A probed).
   static let searchPlaceholder = Color(red: 0x64 / 255, green: 0x68 / 255, blue: 0x7A / 255)
-  /// The sheet stroke is a bluish-purple hairline, not neutral white:
-  /// border pixels probe ~(69,65,90) over the sheet.
-  static let border = Color(red: 0x4A / 255, green: 0x46 / 255, blue: 0x60 / 255)
-  static let borderWidth: CGFloat = 0.5
+  /// Raycast's whole modal ink system is ONE foreground (#CFD6F1 =
+  /// `primaryText`) at opacity tiers -- their shipped stylesheet
+  /// (`notes-window-*.css` + tokens in the app bundle's frontend dir)
+  /// defines --color-text-secondary: fg/60%, --color-border-token:
+  /// fg/20%, --color-border-separator: fg/10%, and the pixel probes
+  /// confirm each composite exactly (chip outline (64,66,80) = fg-20
+  /// over the sheet; chip glyph (136,140,161) = fg-60; hairline
+  /// (49,50,62) = fg-10). Derive, don't hand-pick grays.
+  static let borderInk = primaryText.opacity(0.2)
+  static let hairlineInk = primaryText.opacity(0.10)
+  static let secondaryInk = primaryText.opacity(0.6)
+  /// The menu border is the SAME fg-20 token as the keycap outline
+  /// (`--shadow-panel-border: inset 0 0 0 1px var(--fg-20)`), rendered
+  /// ~2px at 2x -- our previous 0.5pt opaque #4A4660 read half as heavy.
+  static let border = borderInk
+  static let borderWidth: CGFloat = 1
   /// Blue "Current" dot in the notes rows (#64A1F1, probed).
   static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
   /// Disabled actions dim to ~40% (live disabled icon probes (82,85,101)
@@ -58,7 +70,11 @@ enum RaycastModalPalette {
 
   /// Sheet outer width: 767px at 2x in David's live captures.
   static let width: CGFloat = 383
-  static let cornerRadius: CGFloat = 10
+  /// Circle-fit on the live menu's corner arc (x-of-border vs y from the
+  /// sheet top, 2026-08-10 full-res capture) gives r = 33px at 2x; the
+  /// stylesheet's radius-12 at the notes window's render scale agrees.
+  /// The old 10pt read visibly squarer than the live menu.
+  static let cornerRadius: CGFloat = 16.5
   /// Sheet top sits 100pt below the window top (probed in both modals).
   static let topOffset: CGFloat = 100
   /// Row highlights inset 9.5pt from the sheet edge: both live modals'
@@ -74,14 +90,16 @@ enum RaycastModalPalette {
   static let rowCornerRadius: CGFloat = 6
 }
 
-/// The 0.5pt white-0.08 hairline Raycast draws edge-to-edge under the
-/// search field of BOTH modals and inside the actions group gaps: a
-/// SINGLE pixel at 2x (row-mean scans of the live captures show one
-/// ~+18-luminance row, 2026-08-10). Our earlier 1pt rule rendered two
-/// rows and read twice as heavy -- David flagged it.
+/// The 0.5pt hairline Raycast draws edge-to-edge under the search field
+/// of BOTH modals and inside the actions group gaps: a SINGLE pixel at
+/// 2x (row-mean scans of the live captures show one ~+18-luminance row,
+/// 2026-08-10). Our earlier 1pt rule rendered two rows and read twice as
+/// heavy -- David flagged it. Ink is fg-10 (their
+/// --color-border-separator), which the live probe (49,50,62) matches
+/// exactly; plain white-0.08 sat a step too neutral.
 struct RaycastModalHairline: View {
   var body: some View {
-    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+    Rectangle().fill(RaycastModalPalette.hairlineInk).frame(height: 0.5)
   }
 }
 
@@ -196,9 +214,11 @@ struct RaycastNotesModal: View {
   let onPick: (Chat) -> Void
   let onTogglePin: (Chat) -> Void
   let onDelete: (Chat) -> Void
-  /// Raycast reveals pin + trash on the row under the POINTER, not the
-  /// keyboard selection (David's 2026-08-10 hover captures).
-  @State private var hoveredIndex: Int?
+  /// Keyboard moves animate the list to the new selection; hover-driven
+  /// selection must NOT re-scroll (rows sliding under the pointer during
+  /// a trackpad scroll would retarget selection and fight the scroll --
+  /// the "rubber-banding" jank Raycast doesn't have).
+  @State private var pendingKeyboardScroll = false
 
   var body: some View {
     RaycastModalSheet {
@@ -211,7 +231,10 @@ struct RaycastNotesModal: View {
           ),
           onSubmit: { commit() },
           onEscape: { controller.close() },
-          onMove: { controller.moveSelection(by: $0) }
+          onMove: { delta in
+            pendingKeyboardScroll = true
+            controller.moveSelection(by: delta)
+          }
         )
         RaycastModalHairline()
         list
@@ -222,7 +245,10 @@ struct RaycastNotesModal: View {
   private var list: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(alignment: .leading, spacing: 0) {
+        // Eager VStack, not LazyVStack: rows are cheap fixed-height text
+        // and lazy instantiation hitches mid-flick; building them all up
+        // front is what keeps the trackpad scroll continuous.
+        VStack(alignment: .leading, spacing: 0) {
           // Live header zone: hairline to first row box is 77px at 2x
           // with the "Notes" cap-top 37px below the hairline (sits low,
           // not centered) -- 15pt top pad inside a fixed 38.5pt frame.
@@ -249,8 +275,14 @@ struct RaycastNotesModal: View {
       }
       .frame(height: listHeight)
       .onChange(of: controller.selectedIndex) { _, newIndex in
+        // Only keyboard moves steer the scroll, and they glide like
+        // Raycast's list instead of teleporting.
+        guard pendingKeyboardScroll else { return }
+        pendingKeyboardScroll = false
         if let result = controller.results[safe: newIndex] {
-          proxy.scrollTo(result.id, anchor: .center)
+          withAnimation(.easeOut(duration: 0.16)) {
+            proxy.scrollTo(result.id, anchor: .center)
+          }
         }
       }
     }
@@ -287,12 +319,18 @@ struct RaycastNotesModal: View {
       HStack(spacing: 10) {
         rowText(result)
         Spacer(minLength: 8)
-        // Raycast shows pin + trash on the HOVERED row (pin first, trash
-        // trailing); a keyboard-selected row stays clean until the
-        // pointer visits it. Vault-backed notes can do neither.
-        if hoveredIndex == index, isDeletable(result.chat) {
-          pinButton(result)
-          deleteButton(result)
+        // Raycast shows pin + trash on the SELECTED row (their browse
+        // rows render accessories under `e.isSelected` -- shipped
+        // notes-window JS), so keyboard highlight reveals them too; the
+        // pointer path still works because hover writes the same
+        // selection. The pair sits on their multiline accessories gap
+        // (space-12 at the notes render scale = 17pt box-to-box; our
+        // 10pt read cramped). Vault-backed notes show neither.
+        if controller.selectedIndex == index, isDeletable(result.chat) {
+          HStack(spacing: 17) {
+            pinButton(result)
+            deleteButton(result)
+          }
         }
       }
       // 8.5pt compensates the 9.5pt rowInset: title ink stays 39px from
@@ -309,13 +347,10 @@ struct RaycastNotesModal: View {
     .buttonStyle(.plain)
     // Raycast's highlight follows the pointer (the hovered row lights,
     // 2026-08-10 side-by-side); keyboard and pointer write the same
-    // selection. `hoveredIndex` additionally gates the pin/trash pair.
+    // selection, which also reveals the pin/trash pair.
     .onHover { inside in
       if inside {
-        hoveredIndex = index
         controller.selectedIndex = index
-      } else if hoveredIndex == index {
-        hoveredIndex = nil
       }
     }
   }

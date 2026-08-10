@@ -75,25 +75,29 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
 
-  @Test("editor metrics use the Raycast Notes body scale")
-  func raycastNotesBodyScale() {
-    #expect(EditorMetrics.fontSize == 20)
-    #expect(EditorMetrics.lineHeight == 41)
+  @Test("editor metrics use David's stepped-up body scale on Raycast chrome")
+  func editorBodyScale() {
+    // 22/45 is the deliberate step up from the measured Raycast 20/41
+    // ("make the font somewhat bigger", 2026-08-10) at the same
+    // leading-to-glyph ratio; the chrome metrics stay Raycast-exact.
+    #expect(EditorMetrics.fontSize == 22)
+    #expect(EditorMetrics.lineHeight == 45)
     #expect(EditorMetrics.panelWidth == 670)
     #expect(EditorMetrics.surfaceCornerRadius == 26)
     #expect(EditorMetrics.topBarHeight == 60)
     #expect(EditorMetrics.bottomBarHeight == 56)
   }
 
-  @Test("empty notes open at the Raycast Notes empty-window height and grow per line")
+  @Test("empty notes open one line tall and grow per line")
   func emptyNotesOpenCompact() {
     let openHeight = EditorMetrics.panelHeight(forLines: 1, maxLines: 12)
     let totalRestingHeight =
       openHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
     #expect(EditorMetrics.roomyVisibleLinesFloor == 1)
-    // The live Raycast Notes empty window measures 670x177pt.
-    #expect(totalRestingHeight == 177)
+    // Chrome (60+56) + inset (20) + one 45pt line: the Raycast empty
+    // window's 177 shape scaled by the 22pt body's taller line.
+    #expect(totalRestingHeight == 181)
     #expect(
       EditorMetrics.panelHeight(forLines: 2, maxLines: 12)
         == openHeight + EditorMetrics.lineHeight

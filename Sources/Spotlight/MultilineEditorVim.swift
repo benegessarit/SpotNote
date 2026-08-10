@@ -233,6 +233,7 @@ extension PlaceholderTextView {
 
   private func executeTextMutatingVimAction(_ action: VimAction) -> Bool {
     if executeDeletionVimAction(action) { return true }
+    if executeCapsFamilyVimAction(action) { return true }
     switch action {
     case .pasteAfter(let count): executeVimPasteAfter(count: count)
     case .undo(let count):
@@ -252,6 +253,21 @@ extension PlaceholderTextView {
     return true
   }
 
+  /// The caps/tilde single-key editing family (P, J, ~, r) -- see
+  /// `MultilineEditorVimEdit.swift` and the paste twin for the bodies.
+  private func executeCapsFamilyVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .pasteBefore(let count): executeVimPasteBefore(count: count)
+    case .joinLines(let count): executeJoinLines(count: count)
+    case .toggleCase(let count): executeToggleCase(count: count)
+    case .replaceChar(let replacement, let count):
+      executeReplaceChar(replacement, count: count)
+    default:
+      return false
+    }
+    return true
+  }
+
   private func executeDeletionVimAction(_ action: VimAction) -> Bool {
     switch action {
     case .applyOperator(let op, let target): applyVimOperator(op, to: target)
@@ -260,6 +276,7 @@ extension PlaceholderTextView {
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .changeBulletBody: changeCurrentBulletBodyForVim()
     case .deleteChar(let count): executeDeleteChar(count)
+    case .deleteCharBefore(let count): executeDeleteCharBefore(count: count)
     default:
       return false
     }

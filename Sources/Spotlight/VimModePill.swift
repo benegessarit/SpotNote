@@ -61,12 +61,15 @@ struct ModeGlyphShape: Shape {
 }
 
 /// nvim-style mode badge in the Raycast T-button slot (trailing corner of
-/// the bottom bar, 38pt ring probed from the live app): a circled letter
-/// that MORPHS between N / I / V as the mode changes -- N's left stem
-/// swings up into I's top serif, the diagonal straightens into the stem,
-/// the right stem swings down into the bottom serif. Letterforms use the
-/// icon set's stroke weight. Overlaid on the bottom bar, so it never
-/// contributes measured height; dims when the panel resigns key.
+/// the bottom bar, 38pt slot probed from the live app): a keycap-chip
+/// letter that MORPHS between N / I / V as the mode changes -- N's left
+/// stem swings up into I's top serif, the diagonal straightens into the
+/// stem, the right stem swings down into the bottom serif. Chrome matches
+/// the actions-menu kbd chips (hollow rounded rect, hairline ring) and
+/// the letter keeps the icon set's 1.5pt round-cap stroke, per David's
+/// "fit the style/stroke of the icons" (2026-08-10). Overlaid on the
+/// bottom bar, so it never contributes measured height; dims when the
+/// panel resigns key.
 struct VimModePill: View {
   @ObservedObject var controller: VimController
   let isKey: Bool
@@ -92,16 +95,18 @@ struct VimModePill: View {
 
   var body: some View {
     ZStack {
-      // Ring-only like the Raycast T button: the bar's own surface shows
-      // through (a wash would read muddy over the gradient), a whisper of
-      // white lift separates it from the surface, and the mode color
-      // lives in the ring + letter.
-      Circle()
-        .fill(Color.white.opacity(0.04))
-        .overlay(Circle().strokeBorder(tint.opacity(0.55), lineWidth: 1))
+      // A keycap, not a traffic light: the badge borrows the actions-menu
+      // kbd chip chrome (hollow rounded rect, 1pt hairline ring, no fill)
+      // so it reads as one family with the icons and shortcut chips; the
+      // mode letter keeps the icon set's stroke weight (1.5pt round
+      // caps). Color stays the only mode signal -- ring at a low tier
+      // like the chips' fg-20 ring, letter at full tint.
+      RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+        .frame(width: 26, height: 26)
       ModeGlyphShape(vector: AnimatableVector12(values: glyph))
-        .stroke(tint, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-        .frame(width: 18, height: 18)
+        .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        .frame(width: 13, height: 13)
     }
     .frame(width: 38, height: 38)
     .opacity(isKey ? 1 : 0.45)

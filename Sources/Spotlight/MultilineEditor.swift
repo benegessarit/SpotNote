@@ -503,6 +503,12 @@ struct MultilineEditor: NSViewRepresentable {
     let fixed = FixedLineHeightLayoutManager()
     fixed.fixedLineHeight = EditorMetrics.lineHeight
     fixed.editorFont = font
+    // The editor is on TextKit 1 by construction (this swap + CodeStyler
+    // both drive NSLayoutManager), where noncontiguous layout is OFF by
+    // default -- without it a long note lays out fully on every edit and
+    // the scroll stutters. TextKit 2 gets viewport layout for free;
+    // TextKit 1 has to opt in.
+    fixed.allowsNonContiguousLayout = true
     if let existing = storage.layoutManagers.first {
       storage.removeLayoutManager(existing)
     }

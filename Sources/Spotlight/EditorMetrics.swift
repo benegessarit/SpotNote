@@ -4,10 +4,11 @@ import CoreGraphics
 enum EditorMetrics {
   /// Line height used by both the panel-sizing code and the editor's
   /// paragraph style, so rendered text and the panel cap agree exactly.
-  /// 41pt is the measured Raycast Notes line pitch (their ~28pt line box
-  /// plus per-paragraph spacing); SpotNote applies it uniformly because
-  /// the editor draws every logical line as one fixed-height fragment.
-  static let lineHeight: CGFloat = 41
+  /// 41pt was the measured Raycast Notes pitch at the 20pt body; the
+  /// 22pt body (David: "make the font somewhat bigger", 2026-08-10)
+  /// scales it proportionally (41 x 22/20 = 45) so the leading-to-glyph
+  /// ratio he approved is preserved.
+  static let lineHeight: CGFloat = 45
   /// Padding above the first text line (below the top bar). Raycast Notes
   /// has this gap only at the top: the last line sits directly on the
   /// bottom bar (measured empty window 177pt = 60 + 20 + 41 + 0 + 56).
@@ -38,9 +39,10 @@ enum EditorMetrics {
   /// numbers are hidden. Keeps text comfortably off the card edge without
   /// reintroducing a checkbox gutter.
   static let textLeadingGap: CGFloat = 37
-  /// Font size used for the editor text (Raycast Notes body scale,
-  /// measured from live glyph cap heights: ~29px caps at 2x = 20pt).
-  static let fontSize: CGFloat = 20
+  /// Font size used for the editor text. 20pt was the measured Raycast
+  /// Notes body scale (~29px caps at 2x); 22pt is David's deliberate
+  /// step up from parity ("make the font somewhat bigger", 2026-08-10).
+  static let fontSize: CGFloat = 22
   /// Vim-normal-mode block cursor width. This intentionally reads like a
   /// real block cursor instead of AppKit's default one-pixel insertion bar.
   static let normalModeCursorWidth: CGFloat = 13

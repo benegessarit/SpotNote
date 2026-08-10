@@ -195,23 +195,22 @@ struct RaycastActionsModal: View {
   @ViewBuilder
   private func keycaps(_ keys: [String]) -> some View {
     if !keys.isEmpty {
-      HStack(spacing: 3) {
+      // Raycast's kbd chips are HOLLOW: their stylesheet gives
+      // `[data-variant=default]` a transparent background under a 1px
+      // inset ring of fg-20, glyph in fg-60 -- the live chip interior
+      // probes exactly the sheet color, and our earlier white-0.05
+      // "physical key" fill is what read different. Radius ~4.5pt and a
+      // 2.5pt gap (5px at 2x between chip outlines).
+      HStack(spacing: 2.5) {
         ForEach(keys, id: \.self) { key in
           Text(key)
             .font(RaycastFont.medium(13))
-            .foregroundStyle(RaycastModalPalette.secondaryText)
+            .foregroundStyle(RaycastModalPalette.secondaryInk)
             .frame(minWidth: 22)
             .frame(height: 22)
             .background(
-              // Physical-key look: a subtle interior fill a step lighter
-              // than the sheet under the brighter border (live chip
-              // corners probe ~(40,40,50)).
-              RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                  RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                )
+              RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                .strokeBorder(RaycastModalPalette.borderInk, lineWidth: 1)
             )
         }
       }

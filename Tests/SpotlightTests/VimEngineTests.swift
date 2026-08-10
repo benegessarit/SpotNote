@@ -787,4 +787,77 @@ struct VimEngineTests {
     #expect(engine.handle(key: "z", hasModifiers: false) == .none)
     #expect(engine.mode == .visualLine)
   }
+
+  // MARK: - Caps/tilde editing family (C, Y, P, J, X, ~, r)
+
+  @Test("C changes to end of line and enters insert")
+  func capCChangesToLineEnd() {
+    let engine = VimEngine()
+    let action = engine.handle(key: "C", hasModifiers: false)
+    #expect(action == .applyOperator(.change, .motion(.lineEnd)))
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("Y yanks to end of line (nvim default), staying normal")
+  func capYYanksToLineEnd() {
+    let engine = VimEngine()
+    let action = engine.handle(key: "Y", hasModifiers: false)
+    #expect(action == .applyOperator(.yank, .motion(.lineEnd)))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("P pastes before with a count")
+  func capPPastesBefore() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "P", hasModifiers: false) == .pasteBefore(count: 3))
+  }
+
+  @Test("J joins lines with a count")
+  func capJJoins() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "J", hasModifiers: false) == .joinLines(count: 1))
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "J", hasModifiers: false) == .joinLines(count: 3))
+  }
+
+  @Test("X deletes before the caret with a count")
+  func capXDeletesBack() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    #expect(engine.handle(key: "X", hasModifiers: false) == .deleteCharBefore(count: 2))
+  }
+
+  @Test("tilde toggles case with a count")
+  func tildeTogglesCase() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "4", hasModifiers: false)
+    #expect(engine.handle(key: "~", hasModifiers: false) == .toggleCase(count: 4))
+  }
+
+  @Test("r captures exactly one char and replaces with the count")
+  func replaceCharCaptures() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    #expect(engine.handle(key: "r", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "z", hasModifiers: false) == .replaceChar("z", count: 2))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("r treats a digit as the literal replacement, not a count")
+  func replaceCharDigitIsLiteral() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "r", hasModifiers: false)
+    #expect(engine.handle(key: "3", hasModifiers: false) == .replaceChar("3", count: 2))
+  }
+
+  @Test("r aborts on Escape without consuming the next key")
+  func replaceCharEscapeAborts() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "r", hasModifiers: false)
+    #expect(engine.handle(key: "\u{1B}", hasModifiers: false) == .none)
+    // The next key acts normally again.
+    #expect(engine.handle(key: "x", hasModifiers: false) == .deleteChar(count: 1))
+  }
 }

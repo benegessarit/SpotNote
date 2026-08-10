@@ -67,8 +67,12 @@ struct RaycastModalOverhang: NSViewRepresentable {
       )
       if let child {
         (child.contentView as? NSHostingView<RaycastModalOverhangRoot>)?.rootView = root
-        position(child, over: anchor)
-        child.invalidateShadow()
+        let framedMoved = position(child, over: anchor)
+        // invalidateShadow is a WindowServer round-trip; per-update calls
+        // (every keystroke/hover re-runs updateNSView) stutter scrolling
+        // inside the sheet. The shadow shape only changes when the panel
+        // frame does.
+        if framedMoved { child.invalidateShadow() }
         return
       }
       present(root, over: anchor)
@@ -112,7 +116,8 @@ struct RaycastModalOverhang: NSViewRepresentable {
       }
     }
 
-    private func position(_ panel: NSPanel, over anchor: NSWindow) {
+    @discardableResult
+    private func position(_ panel: NSPanel, over anchor: NSWindow) -> Bool {
       let width = RaycastModalPalette.width + RaycastModalOverhang.margin * 2
       let sheetTopY = anchor.frame.maxY - RaycastModalPalette.topOffset
       var frame = NSRect(
@@ -128,7 +133,9 @@ struct RaycastModalOverhang: NSViewRepresentable {
       if let screen = anchor.screen {
         frame.origin.y = max(frame.origin.y, screen.visibleFrame.minY - RaycastModalOverhang.margin)
       }
+      guard frame != panel.frame else { return false }
       panel.setFrame(frame, display: true)
+      return true
     }
 
     private func dismiss(returnKeyTo anchor: NSWindow?) {

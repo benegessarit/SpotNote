@@ -90,7 +90,11 @@ require_grep "hugs the right edge" "Tests/SpotlightTests/SpotlightWindowControll
 require_grep "bottom-right corner" "AGENTS.md"
 require_grep "leadingInset: CGFloat = 0" "Sources/Spotlight/EditorMetrics.swift"
 require_grep "textLeadingGap: CGFloat = 37" "Sources/Spotlight/EditorMetrics.swift"
-require_grep "fontSize: CGFloat = 20" "Sources/Spotlight/EditorMetrics.swift"
+# 22pt body + 45pt pitch: David's deliberate step up from the measured
+# 20/41 Raycast parity ("make the font somewhat bigger", 2026-08-10) --
+# the 41x22/20 ratio keeps his approved leading.
+require_grep "fontSize: CGFloat = 22" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "lineHeight: CGFloat = 45" "Sources/Spotlight/EditorMetrics.swift"
 # Editor body is the nvim mono face (David 2026-08-10 "switch to mono
 # grid and use the same mono font as my nvim"); chrome stays Inter.
 require_grep "LilexNFM-Regular" "Sources/Spotlight/SpotNoteFont.swift"
@@ -141,7 +145,7 @@ require_grep "metadataText" "Sources/Spotlight/RaycastModals.swift"
 require_grep "rowPitch: CGFloat = 70" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "maxHeight: 320" "Sources/Spotlight/RaycastModals.swift"
 # Round 10 (2026-08-10 side-by-side captures, both modals in ONE frame):
-# hairlines are a SINGLE pixel at 2x (0.5pt white-0.08) and the browse
+# hairlines are a SINGLE pixel at 2x (0.5pt of fg-10 ink) and the browse
 # modal draws one under its search field too (the round-4 "no divider"
 # read was a coarse-scan miss); the search zone is 47pt (caret centers
 # 47px at 2x); row highlights inset 9.5pt (728px wide in the 766px
@@ -158,6 +162,36 @@ require_grep "rowHeight: CGFloat = 42" "Sources/Spotlight/RaycastModals.swift"
 require_grep "headerHeight: CGFloat = 38.5" "Sources/Spotlight/RaycastModals.swift"
 require_grep "sectionGapHeight: CGFloat = 26.5" "Sources/Spotlight/RaycastActionsModal.swift"
 reject_grep "rowSpacing" "Sources/Spotlight/RaycastModals.swift"
+# Round 11 (2026-08-10, Raycast's own shipped stylesheet as ground truth:
+# frontend/*.css in the Raycast Beta bundle). The modal ink system is ONE
+# foreground (#CFD6F1) at opacity tiers -- fg-20 borders (menu border ==
+# keycap ring, --shadow-panel-border), fg-60 secondary, fg-10 hairlines;
+# kbd chips are HOLLOW (transparent bg, 1px inset ring); the menu corner
+# radius circle-fits 33px at 2x; pin/trash render on the SELECTED browse
+# row (their JS: e.isSelected) with the multiline accessories gap; the
+# browse list scrolls animated on keyboard moves only (hover re-scroll
+# fought trackpad flicks); invalidateShadow only fires on a frame change.
+require_grep "borderInk = primaryText.opacity(0.2)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "hairlineInk = primaryText.opacity(0.10)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "borderWidth: CGFloat = 1" "Sources/Spotlight/RaycastModals.swift"
+require_grep "cornerRadius: CGFloat = 16.5" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "white.opacity(0.05)" "Sources/Spotlight/RaycastActionsModal.swift"
+reject_grep "white.opacity(0.16)" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "controller.selectedIndex == index, isDeletable" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "hoveredIndex" "Sources/Spotlight/RaycastModals.swift"
+require_grep "pendingKeyboardScroll" "Sources/Spotlight/RaycastModals.swift"
+require_grep "if framedMoved { child.invalidateShadow() }" "Sources/Spotlight/RaycastModalWindow.swift"
+require_grep "allowsNonContiguousLayout = true" "Sources/Spotlight/MultilineEditor.swift"
+# Caps/tilde vim family (C/Y/P/J/X/~/r, David 2026-08-10 "C doesn't
+# work"): C=c$ entering insert, Y=y$ (nvim default), P before-paste,
+# J join, ~ toggle-case, r literal replace (digits are literal after r).
+require_grep "case \"C\":" "Sources/Spotlight/VimEngine.swift"
+require_grep "case joinLines(count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "case replaceChar(String, count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "handlePendingReplace" "Sources/Spotlight/VimEngineNormalPending.swift"
+require_grep "executeVimPasteBefore" "Sources/Spotlight/MultilineEditorVimPaste.swift"
+require_grep "r treats a digit as the literal replacement" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep "J joins the next line up with a single space" "Tests/SpotlightTests/MultilineEditorVimCapsFamilyTests.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
