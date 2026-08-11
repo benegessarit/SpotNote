@@ -226,7 +226,16 @@ reject_grep "withAlphaComponent(0.82)" "Sources/Spotlight/MultilineEditorVimVisu
 require_grep "vimVisualBandColor" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "flashYankHighlight" "Sources/Spotlight/MultilineEditorVimOperator.swift"
 require_grep "codeStylerLeftAttributes" "Sources/Spotlight/CodeStyler.swift"
-require_grep "yy flashes the yanked line with the Visual band" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+# Yank flash redesign (David 2026-08-11 "think like a top animation /
+# micro interaction designer"): scan-lift-dissolve -- a yank is an
+# EVENT wearing the cursor's rosewater identity (never the Visual
+# band), pure curves in YankFlashCurve, ghost capped for huge spans.
+require_grep "enum YankFlashCurve" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "drawYankGhost" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "yankGlowColor" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "ghostCharacterCap" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "yy arms the scan-lift-dissolve flash over the yanked line" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "rosewater identity, not the Visual band" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 require_grep "code styler skips the full clear while the note has no backticks" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 # Visual band depth (David 2026-08-11 "still not really visible"): the
 # nvim RELATIONSHIP (flat surface->text lift) at his stronger 11%/15%,

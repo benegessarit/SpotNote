@@ -632,10 +632,10 @@ final class PlaceholderTextView: NSTextView {
   /// `CodeStyler.apply` can skip its full-document temporary-attribute
   /// clear (which invalidates the whole layout on every keystroke).
   var codeStylerLeftAttributes = true
-  /// Yank flash state (nvim vim.hl.on_yank parity; see
+  /// Yank flash state ("scan, lift, dissolve" -- see
   /// MultilineEditorVimYankFlash.swift).
   var yankFlashRange: NSRange?
-  var yankFlashAlpha: CGFloat = 0
+  var yankFlashFrame: YankFlashFrame?
   var yankFlashGeneration = 0
   /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
@@ -1921,6 +1921,7 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
+    drawYankGhost(in: dirtyRect)
     drawVisualBlockCursor(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
     drawWordHints(in: dirtyRect)

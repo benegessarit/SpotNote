@@ -46,12 +46,56 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(band == native)
   }
 
-  @Test("yy flashes the yanked line with the Visual band")
+  @Test("yy arms the scan-lift-dissolve flash over the yanked line")
   func yankLinesFlashes() {
     let textView = armedFlash("alpha\nbeta", caret: 2)
     textView.executeVimAction(.yankLine(count: 1))
     #expect(textView.yankFlashRange == NSRange(location: 0, length: 6))
-    #expect(textView.yankFlashAlpha == 1)
+    #expect(textView.yankFlashFrame != nil)
+  }
+
+  @Test("yank flash curve: scan completes, glow holds then dissolves, ghost lifts")
+  func yankFlashCurveShape() throws {
+    let armed = try #require(YankFlashCurve.sample(at: 0))
+    #expect(armed.sweep == 0)
+    #expect(armed.glow == 0)
+    #expect(armed.ghostAlpha == 0)
+    let scanned = try #require(YankFlashCurve.sample(at: YankFlashCurve.sweepDuration))
+    #expect(scanned.sweep > 0.999)
+    #expect(scanned.glow > 0.999)
+    let held = try #require(YankFlashCurve.sample(at: YankFlashCurve.holdUntil))
+    #expect(held.glow > 0.999)
+    #expect(held.ghostRise > 0)
+    #expect(held.ghostAlpha > 0)
+    let dissolving = try #require(YankFlashCurve.sample(at: 0.3))
+    #expect(dissolving.glow < held.glow)
+    #expect(dissolving.ghostRise > held.ghostRise)
+    #expect(dissolving.ghostAlpha < held.ghostAlpha)
+    #expect(YankFlashCurve.sample(at: YankFlashCurve.duration) == nil)
+  }
+
+  @Test("the yank glow wears the cursor's rosewater identity, not the Visual band")
+  func yankGlowIsCursorIdentity() throws {
+    let textView = armedFlash("alpha", caret: 0)
+    let rosewater = NSColor(red: 0.96, green: 0.88, blue: 0.86, alpha: 1)
+    textView.editorVimBlockCursorColor = rosewater
+    textView.editorVisualSelectionColor = NSColor.systemBlue
+    let glow = textView.yankGlowColor(intensity: 1)
+    #expect(glow.withAlphaComponent(1) == rosewater)
+    #expect(abs(glow.alphaComponent - YankFlashCurve.peakGlowAlpha) < 0.001)
+  }
+
+  @Test("the ghost lift skips pathological spans; the glow still plays")
+  func ghostCapSkipsHugeYanks() {
+    let big = String(repeating: "ab\n", count: 600)
+    let textView = armedFlash(big, caret: 0)
+    textView.flashYankHighlight(over: NSRange(location: 0, length: (big as NSString).length))
+    #expect(textView.yankFlashRange != nil)
+    #expect(textView.yankGhostEligible == false)
+
+    let small = armedFlash("alpha\nbeta", caret: 0)
+    small.flashYankHighlight(over: NSRange(location: 0, length: 6))
+    #expect(small.yankGhostEligible == true)
   }
 
   @Test("operator yank flashes its span; delete does not flash")
