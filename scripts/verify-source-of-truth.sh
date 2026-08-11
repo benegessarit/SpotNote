@@ -108,9 +108,13 @@ require_grep "the gutter is zero-width whenever line-flash hints are not showing
 reject_grep "showLineNumbers" "Sources/Spotlight/ThemePreferences.swift"
 # Raycast leaves the editor undimmed with a menu open (probed 2026-08-09).
 reject_grep "RaycastModalPalette.backdrop" "Sources/Spotlight/SpotlightRootView.swift"
-# Sheet translucency is MEASURED (2026-08-09 swatch-lab): .popover under
-# the 0.45 ink matches Raycast's ~21% backdrop bleed; .menu at 0.90
-# matched the composite color but transmitted ~0 (visibly flat).
+# Sheet translucency (round 12): the live sheet is the SYSTEM GLASS
+# material (their [macos] stylesheet: -apple-system-glass-material on
+# .popover__webPopover, ~48% measured transmission) -- bare, no tint
+# overlay on the glass path. The popover+0.45 sandwich survives only as
+# the pre-macOS-26 fallback.
+require_grep "SpotNoteGlassBackdrop(cornerRadius: RaycastModalPalette.cornerRadius)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "NSGlassEffectView" "Sources/Spotlight/SpotNoteVisualEffectView.swift"
 require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
 # Menu polish round 2 (probed 2026-08-09 same-scale captures): the pill +
 # is drawn at 2pt, not the heavier-stroke raster. (The round-2 "gaps are
@@ -158,7 +162,7 @@ require_grep "RaycastModalHairline()" "Sources/Spotlight/RaycastActionsModal.swi
 require_grep "frame(height: 0.5)" "Sources/Spotlight/RaycastModals.swift"
 require_grep "frame(height: 47)" "Sources/Spotlight/RaycastModals.swift"
 require_grep "rowInset: CGFloat = 9.5" "Sources/Spotlight/RaycastModals.swift"
-require_grep "rowHeight: CGFloat = 42" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowHeight: CGFloat = 43" "Sources/Spotlight/RaycastModals.swift"
 require_grep "headerHeight: CGFloat = 38.5" "Sources/Spotlight/RaycastModals.swift"
 require_grep "sectionGapHeight: CGFloat = 26.5" "Sources/Spotlight/RaycastActionsModal.swift"
 reject_grep "rowSpacing" "Sources/Spotlight/RaycastModals.swift"
@@ -173,15 +177,29 @@ reject_grep "rowSpacing" "Sources/Spotlight/RaycastModals.swift"
 # fought trackpad flicks); invalidateShadow only fires on a frame change.
 require_grep "borderInk = primaryText.opacity(0.2)" "Sources/Spotlight/RaycastModals.swift"
 require_grep "hairlineInk = primaryText.opacity(0.10)" "Sources/Spotlight/RaycastModals.swift"
-require_grep "borderWidth: CGFloat = 1" "Sources/Spotlight/RaycastModals.swift"
 require_grep "cornerRadius: CGFloat = 16.5" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "white.opacity(0.05)" "Sources/Spotlight/RaycastActionsModal.swift"
 reject_grep "white.opacity(0.16)" "Sources/Spotlight/RaycastActionsModal.swift"
 require_grep "controller.selectedIndex == index, isDeletable" "Sources/Spotlight/RaycastModals.swift"
 reject_grep "hoveredIndex" "Sources/Spotlight/RaycastModals.swift"
 require_grep "pendingKeyboardScroll" "Sources/Spotlight/RaycastModals.swift"
-require_grep "if framedMoved { child.invalidateShadow() }" "Sources/Spotlight/RaycastModalWindow.swift"
 require_grep "allowsNonContiguousLayout = true" "Sources/Spotlight/MultilineEditor.swift"
+# Round 12 (2026-08-10 same-frame captures + the shipped stylesheet):
+# the sheet border is 0.75pt fg-20 (the live edge is one strong + one
+# falloff pixel at 2x; 1pt drew two full-strength and read heavy); the
+# modal panel draws NO window-server shadow (its hard contact rim was a
+# near-black ring the live menu lacks -- do not re-enable hasShadow);
+# the selected row is the translucent selection-5 fill, disabled rows
+# sit at their [data-disabled] 30%; browse pin/trash ride a 20pt gap +
+# 6pt trailing; actions row icons draw 34px of ink at 2x (19.5pt frames
+# on the 0.875-ink rasters).
+require_grep "borderWidth: CGFloat = 0.75" "Sources/Spotlight/RaycastModals.swift"
+require_grep "hasShadow = false" "Sources/Spotlight/RaycastModalWindow.swift"
+reject_grep "invalidateShadow" "Sources/Spotlight/RaycastModalWindow.swift"
+require_grep "selectedRow = primaryText.opacity(0.05)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "disabledOpacity: CGFloat = 0.3" "Sources/Spotlight/RaycastModals.swift"
+require_grep "HStack(spacing: 20) {" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "frame: 17.5" "Sources/Spotlight/SpotlightRootView.swift"
 # Caps/tilde vim family (C/Y/P/J/X/~/r, David 2026-08-10 "C doesn't
 # work"): C=c$ entering insert, Y=y$ (nvim default), P before-paste,
 # J join, ~ toggle-case, r literal replace (digits are literal after r).

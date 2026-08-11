@@ -148,11 +148,12 @@ struct RaycastActionsModal: View {
         keycaps(action.keys)
       }
       .opacity(action.isEnabled ? 1 : RaycastModalPalette.disabledOpacity)
-      // 9.5/8.5pt compensate the 9.5pt rowInset: icon and chip ink keep
-      // their screen positions while the highlight rect narrows to the
-      // live 728px (2026-08-10).
+      // 9.5pt leading compensates the 9.5pt rowInset (icon ink keeps its
+      // screen position); trailing 10pt rests the chip ring 39px from
+      // the sheet edge at 2x like the live menu (round-12 capture --
+      // the old 8.5 sat it at 36).
       .padding(.leading, 9.5)
-      .padding(.trailing, 8.5)
+      .padding(.trailing, 10)
       .frame(height: RaycastModalPalette.rowHeight)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
@@ -188,7 +189,7 @@ struct RaycastActionsModal: View {
         .resizable()
         .frame(width: frame, height: frame)
     case .stackedCards:
-      RaycastStackedCardsIcon(scale: 0.77)
+      RaycastStackedCardsIcon(scale: 0.845)
     }
   }
 

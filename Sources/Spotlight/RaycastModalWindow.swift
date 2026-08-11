@@ -67,12 +67,10 @@ struct RaycastModalOverhang: NSViewRepresentable {
       )
       if let child {
         (child.contentView as? NSHostingView<RaycastModalOverhangRoot>)?.rootView = root
-        let framedMoved = position(child, over: anchor)
-        // invalidateShadow is a WindowServer round-trip; per-update calls
-        // (every keystroke/hover re-runs updateNSView) stutter scrolling
-        // inside the sheet. The shadow shape only changes when the panel
-        // frame does.
-        if framedMoved { child.invalidateShadow() }
+        // Shadowless panel (see present) -- no shadow invalidation on
+        // frame changes; the old per-update calls were a WindowServer
+        // round-trip that stuttered in-sheet scrolling.
+        position(child, over: anchor)
         return
       }
       present(root, over: anchor)
@@ -87,10 +85,13 @@ struct RaycastModalOverhang: NSViewRepresentable {
       )
       panel.isOpaque = false
       panel.backgroundColor = .clear
-      // Window-server shadow, shaped by the sheet's opaque region -- the
-      // sheet background is a behind-window material, so a SwiftUI
-      // .shadow can't draw it.
-      panel.hasShadow = true
+      // NO window-server shadow: its hard contact rim drew a 1-2px
+      // near-black ring hugging the sheet border (round-12 edge profile:
+      // (4,4,6)/(11,11,12) just outside our stroke) that the live menu
+      // does not have -- Raycast's popover transitions backdrop ->
+      // border -> sheet directly; its own CSS shadow (10-20% black,
+      // soft) is invisible against the dark desk.
+      panel.hasShadow = false
       // The overhang root is its OWN hosting tree: the HUD's
       // `.colorScheme(.dark)` does not reach it, and the sheet material
       // must stay dark in system light mode.
@@ -116,8 +117,7 @@ struct RaycastModalOverhang: NSViewRepresentable {
       }
     }
 
-    @discardableResult
-    private func position(_ panel: NSPanel, over anchor: NSWindow) -> Bool {
+    private func position(_ panel: NSPanel, over anchor: NSWindow) {
       let width = RaycastModalPalette.width + RaycastModalOverhang.margin * 2
       let sheetTopY = anchor.frame.maxY - RaycastModalPalette.topOffset
       var frame = NSRect(
@@ -133,9 +133,8 @@ struct RaycastModalOverhang: NSViewRepresentable {
       if let screen = anchor.screen {
         frame.origin.y = max(frame.origin.y, screen.visibleFrame.minY - RaycastModalOverhang.margin)
       }
-      guard frame != panel.frame else { return false }
+      guard frame != panel.frame else { return }
       panel.setFrame(frame, display: true)
-      return true
     }
 
     private func dismiss(returnKeyTo anchor: NSWindow?) {

@@ -297,9 +297,13 @@ extension SpotlightRootView {
       RaycastAction(
         id: "new-note",
         title: "New Note",
-        icon: .raster(resource: "RaycastPlus", frame: 18),
+        icon: .raster(resource: "RaycastPlus", frame: 19.5),
         keys: keycaps(for: .newNote),
         section: 0,
+        // Frames re-pinned round 12: the live rows' icon ink runs 34px
+        // at 2x (ours drew 31 at 17.5pt frames) -- 19.5pt with the
+        // 0.875-ink rasters lands 34.1; the Plus and TextSearch carry
+        // their own ink ratios.
         // Raycast dims New Note while the current note is empty -- the
         // new note would be an identical blank.
         isEnabled: !session.currentText.isEmpty,
@@ -308,7 +312,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "duplicate-note",
         title: "Duplicate Note",
-        icon: .raster(resource: "RaycastDuplicate", frame: 17.5),
+        icon: .raster(resource: "RaycastDuplicate", frame: 19.5),
         keys: keycaps(for: .duplicateNote),
         section: 0,
         // Raycast dims Duplicate on an empty note -- nothing to copy.
@@ -318,7 +322,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "pin-note",
         title: currentPinned ? "Unpin Note" : "Pin Note",
-        icon: .raster(resource: "RaycastTack", frame: 17.5),
+        icon: .raster(resource: "RaycastTack", frame: 19.5),
         keys: keycaps(for: .togglePin),
         section: 0,
         // Vault-backed notes live outside the store and cannot pin.
@@ -339,7 +343,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "go-back",
         title: "Go Back",
-        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 17.5),
+        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 19.5),
         keys: keycaps(for: .goBack),
         section: 0,
         isEnabled: session.canGoBack,
@@ -348,7 +352,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "go-forward",
         title: "Go Forward",
-        icon: .raster(resource: "RaycastArrowRightCircle", frame: 17.5),
+        icon: .raster(resource: "RaycastArrowRightCircle", frame: 19.5),
         keys: keycaps(for: .goForward),
         section: 0,
         isEnabled: session.canGoForward,
@@ -360,7 +364,7 @@ extension SpotlightRootView {
         // Raycast's Find glyph is text lines + magnifier; not in the
         // public @raycast/icons set, so the SVG (in Resources, beside
         // its raster) is composed from David's capture geometry.
-        icon: .raster(resource: "RaycastTextSearch", frame: 19),
+        icon: .raster(resource: "RaycastTextSearch", frame: 20),
         keys: keycaps(for: .findInNote),
         section: 1,
         // Inapplicable on an empty note: dims like the live menu's
@@ -371,7 +375,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "copy-note",
         title: "Copy Note",
-        icon: .raster(resource: "RaycastCopyClipboard", frame: 17.5),
+        icon: .raster(resource: "RaycastCopyClipboard", frame: 19.5),
         keys: keycaps(for: .copyContent),
         section: 1,
         isEnabled: !session.currentText.isEmpty,
@@ -383,7 +387,7 @@ extension SpotlightRootView {
       RaycastAction(
         id: "change-theme",
         title: "Change Theme",
-        icon: .raster(resource: "RaycastSwatch", frame: 17.5),
+        icon: .raster(resource: "RaycastSwatch", frame: 19.5),
         keys: [],
         section: 2,
         perform: { themePickerShown = true }

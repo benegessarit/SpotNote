@@ -20,24 +20,23 @@ enum RaycastFont {
 /// Pixel-sampled from the live Raycast Beta Notes modals: the sheet is
 /// DARKER than the note surface, with a soft hover row and muted metadata.
 enum RaycastModalPalette {
-  /// The sheet is a translucent MATERIAL, not opaque paint: the live
-  /// Raycast sheet transmits ~21% of the blurred backdrop (a blue chat
-  /// row behind it lifts B by 43/200 of the raw delta) and DARKENS red
-  /// (tR ~ -0.19, a desaturating material). Swatch-lab sweeps of
-  /// (material x tint) against uniform blue/dark backdrops (2026-08-09)
-  /// matched that signature with `.popover` at 0.45. A 0.90 tint (the
-  /// first attempt) matched composite but killed the bleed (t ~ 0.02) --
-  /// do not raise the tint to chase flat color. Ink corrected 2026-08-10
-  /// from David's SAME-DESK side-by-side: our composite ran (+6,+5,+7)
-  /// brighter than the live sheet ((37,38,49) vs (31,33,42)); dividing
-  /// by the 0.45 tint puts the delta in the ink, keeping transmission.
+  /// PRE-macOS-26 fallback ink only. The live sheet is the SYSTEM GLASS
+  /// material (see SpotNoteGlassBackdrop): round-12 same-frame captures
+  /// measure it transmitting ~48% of the backdrop per channel (B 27/56,
+  /// G 16/33) -- the 2026-08-09 swatch-lab ~21% read predates Raycast's
+  /// glass adoption and is stale. `.popover` + this 0.45 tint only
+  /// reaches t ~ 0.2; no tint over `.popover` can reach 0.48, so the
+  /// glass path carries parity and this pair only serves older systems.
   static let sheet = Color(red: 0x10 / 255, green: 0x12 / 255, blue: 0x19 / 255)
   static let sheetTintOpacity: CGFloat = 0.45
-  /// Selected/hovered row: the live hovered rows probe (40,40,52) in the
-  /// actions menu and (38,38,50) in browse (2026-08-10 native captures --
-  /// a ±2 noise band, so the center #272733 serves both; the original
-  /// #2B2B38 read (43,43,56), ~+4 hot and a step too blue).
-  static let selectedRow = Color(red: 0x27 / 255, green: 0x27 / 255, blue: 0x33 / 255)
+  /// Selected/hovered row: their stylesheet fills it TRANSLUCENT --
+  /// `--list-item-hover-background-color: var(--selection-5)`, and with
+  /// the theme's selection at the primary fg, 5% of #CFD6F1 over the
+  /// probed sheet reproduces the live composites exactly ((40,40,52)
+  /// actions, (38,38,50) browse: delta (9,7,10) = 0.05 x (fg - sheet)).
+  /// The old opaque #272733 matched those probes too but blocks the
+  /// glass bleed inside the highlight.
+  static let selectedRow = primaryText.opacity(0.05)
   static let primaryText = Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255)
   static let secondaryText = Color(red: 0x8E / 255, green: 0x93 / 255, blue: 0xA9 / 255)
   /// Browse metadata line runs BRIGHTER than the chip/secondary tone:
@@ -58,15 +57,21 @@ enum RaycastModalPalette {
   static let hairlineInk = primaryText.opacity(0.10)
   static let secondaryInk = primaryText.opacity(0.6)
   /// The menu border is the SAME fg-20 token as the keycap outline
-  /// (`--shadow-panel-border: inset 0 0 0 1px var(--fg-20)`), rendered
-  /// ~2px at 2x -- our previous 0.5pt opaque #4A4660 read half as heavy.
+  /// (`--shadow-panel-border: inset 0 0 0 1px var(--fg-20)`). The live
+  /// edge profile at 2x is ONE strong pixel (~+42 over backdrop) plus
+  /// one falloff pixel (~+22) -- about 1.5 device px of ink; our 1pt
+  /// stroke drew two full-strength pixels (~+75 each) and read heavy
+  /// (round 12). 0.75pt antialiases to their exact profile.
   static let border = borderInk
-  static let borderWidth: CGFloat = 1
+  static let borderWidth: CGFloat = 0.75
   /// Blue "Current" dot in the notes rows (#64A1F1, probed).
   static let currentDot = Color(red: 0x64 / 255, green: 0xA1 / 255, blue: 0xF1 / 255)
-  /// Disabled actions dim to ~40% (live disabled icon probes (82,85,101)
-  /// against enabled (207,214,241)).
-  static let disabledOpacity: CGFloat = 0.4
+  /// Disabled actions dim to 30% -- their stylesheet's
+  /// `[data-disabled]{opacity:.3}`. The composite confirms it: 0.3 x fg
+  /// + 0.7 x sheet = (82,87,105) against the live probe (82,85,101);
+  /// the earlier 0.4 divided ink by fg alone and ignored the sheet
+  /// showing through the translucent glyph.
+  static let disabledOpacity: CGFloat = 0.3
 
   /// Sheet outer width: 767px at 2x in David's live captures.
   static let width: CGFloat = 383
@@ -83,10 +88,12 @@ enum RaycastModalPalette {
   /// drew them 14px too wide. Row CONTENT keeps its screen position via
   /// compensated label pads (the live icon/title ink did not move).
   static let rowInset: CGFloat = 9.5
-  /// Actions rows are 42pt TOUCHING: the live selected rect is 84px tall
-  /// at 2x -- one full pitch, no inter-row gap (the old 38pt + 4pt
-  /// spacing put the same pitch but a visibly shorter highlight).
-  static let rowHeight: CGFloat = 42
+  /// Actions rows are 43pt TOUCHING: the live menu's icon centers sit on
+  /// an 86.0px pitch at 2x (five consecutive deltas, round-12 same-frame
+  /// capture) -- the round-10 "84px" was the highlight rect read a hair
+  /// short, and the 1pt-per-row deficit is part of what read as "their
+  /// menu is bigger".
+  static let rowHeight: CGFloat = 43
   static let rowCornerRadius: CGFloat = 6
 }
 
@@ -115,21 +122,7 @@ struct RaycastModalSheet<Content: View>: View {
   var body: some View {
     content
       .frame(width: RaycastModalPalette.width)
-      .background(
-        // Raycast-parity translucency: `.popover` blur under a 0.45 tint
-        // (measured match -- see RaycastModalPalette.sheet). The sheet's
-        // drop shadow is the CHILD WINDOW's own (window-server,
-        // shape-accurate) -- a SwiftUI .shadow of an NSViewRepresentable
-        // background does not render reliably.
-        SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)
-          .clipShape(
-            RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
-              .fill(RaycastModalPalette.sheet.opacity(RaycastModalPalette.sheetTintOpacity))
-          )
-      )
+      .background(backdrop)
       .overlay(
         RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
           .strokeBorder(
@@ -137,6 +130,28 @@ struct RaycastModalSheet<Content: View>: View {
             lineWidth: RaycastModalPalette.borderWidth
           )
       )
+  }
+
+  /// The live sheet is the system glass material -- bare, no tint: their
+  /// macOS stylesheet puts `-apple-system-glass-material` on the popover
+  /// and paints no ink over it (the gradient stack in the sibling rule
+  /// is the non-macOS fallback), which is how it transmits the measured
+  /// ~48% of backdrop. Any overlay here would cut that transmission --
+  /// resist re-adding one; fix color deltas in the glass config or ink
+  /// tiers instead. Pre-26 systems keep the popover+tint approximation.
+  @ViewBuilder private var backdrop: some View {
+    if #available(macOS 26.0, *) {
+      SpotNoteGlassBackdrop(cornerRadius: RaycastModalPalette.cornerRadius)
+    } else {
+      SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)
+        .clipShape(
+          RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
+            .fill(RaycastModalPalette.sheet.opacity(RaycastModalPalette.sheetTintOpacity))
+        )
+    }
   }
 }
 
@@ -152,13 +167,13 @@ struct RaycastModalSearchField: View {
 
   var body: some View {
     ZStack(alignment: .leading) {
-      // Raycast draws the placeholder to the right of the resting caret
-      // rather than under it, in a dimmer tone than section headers.
+      // The live placeholder ink starts AT the caret rest (x-off 40px at
+      // 2x = the 20pt field pad exactly, round-12 capture) -- the old
+      // 3pt lead pushed ours ~6px right of theirs.
       if text.isEmpty {
         Text(placeholder)
           .font(RaycastFont.regular(16))
           .foregroundStyle(RaycastModalPalette.searchPlaceholder)
-          .padding(.leading, 3)
           .allowsHitTesting(false)
       }
       field
@@ -323,14 +338,16 @@ struct RaycastNotesModal: View {
         // rows render accessories under `e.isSelected` -- shipped
         // notes-window JS), so keyboard highlight reveals them too; the
         // pointer path still works because hover writes the same
-        // selection. The pair sits on their multiline accessories gap
-        // (space-12 at the notes render scale = 17pt box-to-box; our
-        // 10pt read cramped). Vault-backed notes show neither.
+        // selection. Round-12 same-frame capture: their glyph-ink gap is
+        // 48px at 2x (ours at 17pt spacing drew 42) and the trash ink
+        // rests 51px from the sheet edge (ours 39) -- hence spacing 20
+        // and the extra 6pt trailing. Vault-backed notes show neither.
         if controller.selectedIndex == index, isDeletable(result.chat) {
-          HStack(spacing: 17) {
+          HStack(spacing: 20) {
             pinButton(result)
             deleteButton(result)
           }
+          .padding(.trailing, 6)
         }
       }
       // 8.5pt compensates the 9.5pt rowInset: title ink stays 39px from
