@@ -114,14 +114,16 @@ struct RaycastModalHairline: View {
 /// positioned near the top of the note like Raycast's modals.
 struct RaycastModalSheet<Content: View>: View {
   let content: Content
+  let width: CGFloat
 
-  init(@ViewBuilder content: () -> Content) {
+  init(width: CGFloat = RaycastModalPalette.width, @ViewBuilder content: () -> Content) {
+    self.width = width
     self.content = content()
   }
 
   var body: some View {
     content
-      .frame(width: RaycastModalPalette.width)
+      .frame(width: width)
       .background(backdrop)
       .overlay(
         RoundedRectangle(cornerRadius: RaycastModalPalette.cornerRadius, style: .continuous)
@@ -155,14 +157,17 @@ struct RaycastModalSheet<Content: View>: View {
   }
 }
 
-/// Raycast-style search field row shown at the top of the notes,
-/// actions, and themes modals.
+/// Raycast-style search field row shown at the top of the notes
+/// and actions modals.
 struct RaycastModalSearchField: View {
   let placeholder: String
   @Binding var text: String
   var onSubmit: () -> Void
   var onEscape: () -> Void
   var onMove: (Int) -> Void
+  /// → hook for submenu-opening rows; return false to keep the arrow a
+  /// normal caret move (the default for modals without submenus).
+  var onRight: () -> Bool = { false }
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -207,6 +212,9 @@ struct RaycastModalSearchField: View {
       .onKeyPress(.downArrow) {
         onMove(+1)
         return .handled
+      }
+      .onKeyPress(.rightArrow) {
+        onRight() ? .handled : .ignored
       }
       .onKeyPress(.init("w"), phases: .down) { press in
         guard press.modifiers.contains(.control) else { return .ignored }

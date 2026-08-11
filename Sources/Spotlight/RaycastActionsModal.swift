@@ -1,38 +1,20 @@
 import AppKit
 import SwiftUI
 
-/// Row glyph in the actions modal: an exact @raycast/icons raster (frame
-/// tuned per asset so visible glyphs match the probed ~12.5pt), or the
-/// custom fanned-cards note-switcher.
-enum RaycastActionIcon {
-  case raster(resource: String, frame: CGFloat)
-  case stackedCards
-}
-
-/// One entry in the Raycast-style actions modal.
-struct RaycastAction: Identifiable {
-  let id: String
-  let title: String
-  let icon: RaycastActionIcon
-  /// Display keycaps, e.g. ["⌘", "N"]. Empty = no shortcut shown.
-  let keys: [String]
-  /// Spacing group; a wide pure-whitespace gap renders between groups.
-  let section: Int
-  /// Inapplicable actions stay listed but dim and can't be selected,
-  /// like the live menu's greyed rows.
-  var isEnabled: Bool = true
-  let perform: () -> Void
-}
-
-/// The Raycast Notes actions modal (the ⌘ pill button): searchable list of
-/// real SpotNote actions with their keycap shortcuts.
+/// The Raycast Notes actions modal (the ⌘ pill button): searchable list
+/// of SpotNote commands (the `SpotNoteCommand` registry) with their
+/// keycap shortcuts.
 struct RaycastActionsModal: View {
-  let actions: [RaycastAction]
+  let actions: [SpotNoteCommand]
   let onClose: () -> Void
   @State private var query = ""
   @State private var selectedIndex = 0
+  /// The command whose flyout submenu is open, and its lazily built
+  /// model; the submenu rides a second child panel anchored to the row.
+  @State private var openSubmenuID: String?
+  @State private var openSubmenu: SpotNoteSubmenu?
 
-  private var filtered: [RaycastAction] {
+  private var filtered: [SpotNoteCommand] {
     let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
     guard !needle.isEmpty else { return actions }
     return actions.filter { $0.title.lowercased().contains(needle) }
@@ -46,7 +28,8 @@ struct RaycastActionsModal: View {
           text: $query,
           onSubmit: { commit() },
           onEscape: onClose,
-          onMove: { move($0) }
+          onMove: { move($0) },
+          onRight: { openSelectedSubmenu() }
         )
         searchDivider
         list
@@ -127,7 +110,7 @@ struct RaycastActionsModal: View {
       .overlay(RaycastModalHairline())
   }
 
-  private func row(_ action: RaycastAction, index: Int) -> some View {
+  private func row(_ action: SpotNoteCommand, index: Int) -> some View {
     let isSelected = index == selectedIndex && action.isEnabled
     return Button {
       guard action.isEnabled else { return }
@@ -171,6 +154,48 @@ struct RaycastActionsModal: View {
         selectedIndex = index
       }
     }
+    // The invoking row anchors its flyout: the presenter reads this
+    // background view's frame so the submenu header lands on the row.
+    .background { submenuAnchor(for: action) }
+  }
+
+  @ViewBuilder
+  private func submenuAnchor(for action: SpotNoteCommand) -> some View {
+    if action.id == openSubmenuID, let model = openSubmenu {
+      RaycastSubmenuOverhang(
+        model: model,
+        onCommit: { command in
+          closeSubmenu()
+          onClose()
+          command.perform()
+        },
+        onClose: { closeSubmenu() },
+        onDismissAll: {
+          closeSubmenu()
+          onClose()
+        }
+      )
+    }
+  }
+
+  private func closeSubmenu() {
+    openSubmenu = nil
+    openSubmenuID = nil
+  }
+
+  /// → on a row with a submenu opens it (only while the query is empty
+  /// -- with text in the field the arrow stays a caret move); Enter
+  /// opens it regardless via `commit`.
+  private func openSelectedSubmenu() -> Bool {
+    guard query.isEmpty else { return false }
+    let rows = filtered
+    guard rows.indices.contains(selectedIndex),
+      let provider = rows[selectedIndex].submenu,
+      rows[selectedIndex].isEnabled
+    else { return false }
+    openSubmenuID = rows[selectedIndex].id
+    openSubmenu = provider()
+    return true
   }
 
   /// Rasters preloaded once; actions rebuild on every body evaluation.
@@ -190,6 +215,8 @@ struct RaycastActionsModal: View {
         .frame(width: frame, height: frame)
     case .stackedCards:
       RaycastStackedCardsIcon(scale: 0.845)
+    case .swatch(let color):
+      RaycastSwatchDot(color: color)
     }
   }
 
@@ -239,6 +266,11 @@ struct RaycastActionsModal: View {
     guard rows.indices.contains(selectedIndex) else { return }
     let action = rows[selectedIndex]
     guard action.isEnabled else { return }
+    if let provider = action.submenu {
+      openSubmenuID = action.id
+      openSubmenu = provider()
+      return
+    }
     onClose()
     action.perform()
   }

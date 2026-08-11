@@ -71,7 +71,6 @@ struct SpotlightRootView: View {
   }
 
   @State private var actionsModalShown = false
-  @State private var themePickerShown = false
   /// Pointer-over-window state driving the hover-revealed traffic
   /// lights. A modal child window intercepts tracking events, so the
   /// lights also stay lit while any modal is up (like the live app).
@@ -107,9 +106,6 @@ struct SpotlightRootView: View {
         if !isVisible { focusTrigger.pulse() }
       }
       .onChange(of: actionsModalShown) { _, isShown in
-        if !isShown { focusTrigger.pulse() }
-      }
-      .onChange(of: themePickerShown) { _, isShown in
         if !isShown { focusTrigger.pulse() }
       }
       .onAppear {
@@ -246,7 +242,7 @@ struct SpotlightRootView: View {
 
 extension SpotlightRootView {
   private var anyModalShown: Bool {
-    fuzzy.isVisible || actionsModalShown || themePickerShown
+    fuzzy.isVisible || actionsModalShown
   }
 
   /// Transparent tap-catch over the note while a modal shows -- Raycast
@@ -288,19 +284,17 @@ extension SpotlightRootView {
           }
         }
       )
-    } else if actionsModalShown {
-      RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
     } else {
-      RaycastThemesModal(preferences: preferences, onClose: { themePickerShown = false })
+      RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
     }
   }
 
-  private var modalActions: [RaycastAction] {
+  private var modalActions: [SpotNoteCommand] {
     // Raycast's live row order: note actions, then find/copy, then chrome.
     let currentChat = session.chats.first(where: { $0.id == session.currentID })
     let currentPinned = currentChat?.isPinned ?? false
     return [
-      RaycastAction(
+      SpotNoteCommand(
         id: "new-note",
         title: "New Note",
         icon: .raster(resource: "RaycastPlus", frame: 19.5),
@@ -315,7 +309,7 @@ extension SpotlightRootView {
         isEnabled: !session.currentText.isEmpty,
         perform: { newNote() }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "duplicate-note",
         title: "Duplicate Note",
         icon: .raster(resource: "RaycastDuplicate", frame: 19.5),
@@ -325,7 +319,7 @@ extension SpotlightRootView {
         isEnabled: !session.currentText.isEmpty,
         perform: { Task { @MainActor in await session.duplicateCurrent() } }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "pin-note",
         title: currentPinned ? "Unpin Note" : "Pin Note",
         icon: .raster(resource: "RaycastTack", frame: 19.5),
@@ -338,7 +332,7 @@ extension SpotlightRootView {
           Task { @MainActor in await session.togglePin(chat) }
         }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "browse-notes",
         title: "Browse Notes",
         icon: .stackedCards,
@@ -346,7 +340,7 @@ extension SpotlightRootView {
         section: 0,
         perform: { fuzzy.toggle(corpus: session.chats) }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "go-back",
         title: "Go Back",
         icon: .raster(resource: "RaycastArrowLeftCircle", frame: 19.5),
@@ -355,7 +349,7 @@ extension SpotlightRootView {
         isEnabled: session.canGoBack,
         perform: { Task { @MainActor in await session.goBack() } }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "go-forward",
         title: "Go Forward",
         icon: .raster(resource: "RaycastArrowRightCircle", frame: 19.5),
@@ -364,7 +358,7 @@ extension SpotlightRootView {
         isEnabled: session.canGoForward,
         perform: { Task { @MainActor in await session.goForward() } }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "find-in-note",
         title: "Find in Note",
         // Raycast's Find glyph is text lines + magnifier; not in the
@@ -378,7 +372,7 @@ extension SpotlightRootView {
         isEnabled: !session.currentText.isEmpty,
         perform: { find.toggle(text: session.currentText) }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "copy-note",
         title: "Copy Note",
         icon: .raster(resource: "RaycastCopyClipboard", frame: 19.5),
@@ -390,13 +384,13 @@ extension SpotlightRootView {
           NSPasteboard.general.setString(session.currentText, forType: .string)
         }
       ),
-      RaycastAction(
+      SpotNoteCommand(
         id: "change-theme",
         title: "Change Theme",
         icon: .raster(resource: "RaycastSwatch", frame: 19.5),
         keys: [],
         section: 2,
-        perform: { themePickerShown = true }
+        submenu: { SpotNoteCommands.themeSubmenu(preferences: preferences) }
       )
     ]
   }
@@ -413,12 +407,9 @@ extension SpotlightRootView {
   private func dismissModals() {
     if fuzzy.isVisible { fuzzy.close() }
     actionsModalShown = false
-    themePickerShown = false
   }
 
-  /// Esc closes an open modal before it can close the HUD, so a stray
-  /// escape in the themes modal (which has no focused field of its own)
-  /// never dismisses the whole panel.
+  /// Esc closes an open modal before it can close the HUD.
   private func handleEscape() {
     if anyModalShown {
       dismissModals()

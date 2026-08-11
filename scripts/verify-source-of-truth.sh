@@ -248,6 +248,49 @@ require_grep "<M-" "Sources/Spotlight/MultilineEditorVimKeys.swift"
 require_grep "executeMoveLines" "Sources/Spotlight/MultilineEditorVimEdit.swift"
 require_grep "M-j swaps the caret line with the line below" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 require_grep "visual line M-j moves the selected block and keeps the selection" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+# `/` flash-search (2026-08-11, port of David's flash.lua modes.search):
+# fully VIEW-owned -- never routed through the ⌘F FindController; typed
+# chars that could extend the query beat labels (extension set excluded
+# from the label alphabet, single-char labels only, overflow -> nearest);
+# label-jump commits with bands off (his jump nohlsearch), Enter with
+# bands on; n/N re-light; * searches the caret word; edits clear; the
+# bolt capsule renders the prompt (it was typed BLIND before); dim bands
+# sit one step under the Visual band.
+require_file "Sources/Spotlight/VimSearch.swift"
+require_file "Sources/Spotlight/MultilineEditorVimSearch.swift"
+require_file "Sources/Spotlight/VimPromptCapsule.swift"
+require_grep "matchCap = 500" "Sources/Spotlight/VimSearch.swift"
+require_grep "survivingKeys" "Sources/Spotlight/VimSearch.swift"
+require_grep "theme.mode == .dark ? 0.07 : 0.10" "Sources/Spotlight/CodeStyler.swift"
+require_grep "case .search, .flash, .lineFlash, .wordHint:" "Sources/Spotlight/VimController.swift"
+require_grep "searchClearHandler" "Sources/Spotlight/SpotlightWindowVim.swift"
+require_grep "VimPromptCapsule(controller: vimController" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "a non-extending label character jumps, commits for n/N, and darkens bands" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+require_grep "label alphabet excludes every character that could extend the query" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+require_grep "labels stay single-character on overflow" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+reject_grep "applySearchOutcome" "Sources/Spotlight/VimController.swift"
+reject_grep "findStepHandler" "Sources/Spotlight/VimController.swift"
+# Command registry + Raycast flyout submenu (2026-08-11, pixel-probed
+# from David's Raycast AI "Change Model…" capture + their shipped
+# popover stylesheet): rows/sections are DATA (SpotNoteCommand), the
+# submenu rides a SECOND stacked child panel with the shared
+# ModalFocusPolicy deciding every resign (key inside the family never
+# dismisses), and Change Theme is the first consumer -- the standalone
+# themes modal is retired.
+require_file "Sources/Spotlight/SpotNoteCommand.swift"
+require_file "Sources/Spotlight/RaycastSubmenu.swift"
+require_file "Sources/Spotlight/RaycastSubmenuWindow.swift"
+require_grep "width: CGFloat = 419" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "chipGap: CGFloat = 22.5" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "sectionBreakHeight: CGFloat = 48.75" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "ModalFocusPolicy" "Sources/Spotlight/SpotlightWindow.swift"
+require_grep "ownedWindows" "Sources/Spotlight/RaycastModalWindow.swift"
+require_grep "themeSubmenu" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "key moving to its submenu is not a dismissal" "Tests/SpotlightTests/ModalFocusPolicyTests.swift"
+require_grep "filtering narrows items and drops emptied sections" "Tests/SpotlightTests/SpotNoteCommandTests.swift"
+[[ ! -e "$ROOT/Sources/Spotlight/RaycastThemesModal.swift" ]] || fail "retired themes modal source still exists"
+reject_grep "themePickerShown" "Sources/Spotlight/SpotlightRootView.swift"
+reject_grep "activeChildWindow" "Sources/Spotlight/RaycastModalWindow.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"

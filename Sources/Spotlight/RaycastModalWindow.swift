@@ -8,6 +8,55 @@ final class RaycastModalChildPanel: NSPanel {
   override var canBecomeMain: Bool { false }
 }
 
+/// Pure decision table for the modal window family's key changes,
+/// extracted so the resign contract is testable without a key loop.
+/// Two independent dismissal layers consult it: the HUD controller's
+/// focus-loss handler and each child panel's own resign observer --
+/// with a submenu stacked on the actions panel, BOTH must agree that
+/// key moving inside the family is not focus loss.
+enum ModalFocusPolicy {
+  /// The HUD panel family resigned key: real focus loss (dim/close per
+  /// preference) only when key left every window we own.
+  static func isPanelFocusLoss(
+    newKey: NSWindow?,
+    panel: NSWindow?,
+    isOwned: (NSWindow?) -> Bool
+  ) -> Bool {
+    guard let newKey else { return true }
+    if newKey === panel { return false }
+    return !isOwned(newKey)
+  }
+
+  /// A modal child panel resigned key: the modal dismisses unless key
+  /// moved to another family window (its own submenu, or back to the
+  /// parent panel that will re-present).
+  static func childShouldDismiss(newKey: NSWindow?, isOwned: (NSWindow?) -> Bool) -> Bool {
+    guard let newKey else { return true }
+    return !isOwned(newKey)
+  }
+
+  /// The submenu panel resigned key.
+  enum SubmenuReaction {
+    /// Key moved deeper into the family (another owned window): stay.
+    case keep
+    /// Key returned to the parent modal panel: close just the submenu.
+    case closeSubmenu
+    /// Key left the family: the whole modal stack dismisses.
+    case dismissAll
+  }
+
+  static func submenuKeyLoss(
+    newKey: NSWindow?,
+    parentPanel: NSWindow?,
+    isOwned: (NSWindow?) -> Bool
+  ) -> SubmenuReaction {
+    guard let newKey else { return .dismissAll }
+    if newKey === parentPanel { return .closeSubmenu }
+    if isOwned(newKey) { return .keep }
+    return .dismissAll
+  }
+}
+
 /// Presents the floating Raycast modal in a CHILD WINDOW that overhangs
 /// the HUD, exactly like the live app: the sheet top sits
 /// `RaycastModalPalette.topOffset` below the window top and the sheet
@@ -25,10 +74,17 @@ struct RaycastModalOverhang: NSViewRepresentable {
   static let margin: CGFloat = 40
   static let height: CGFloat = 560
 
-  /// The presented child window, if any -- the window controller's
-  /// resign-key handler consults this so the modal taking key never
-  /// dims or closes the HUD.
-  @MainActor static private(set) weak var activeChildWindow: NSWindow?
+  /// Every live window the modal family owns (the actions/browse child
+  /// panel plus any stacked submenu panel). The HUD's resign-key handler
+  /// and each panel's own resign observer consult membership, so key
+  /// moving BETWEEN family windows never dims or closes anything. A weak
+  /// table: a dying panel drops out on its own.
+  @MainActor static let ownedWindows = NSHashTable<NSWindow>.weakObjects()
+
+  @MainActor static func isOwned(_ window: NSWindow?) -> Bool {
+    guard let window else { return false }
+    return ownedWindows.contains(window)
+  }
 
   func makeNSView(context: Context) -> NSView { NSView() }
 
@@ -105,15 +161,29 @@ struct RaycastModalOverhang: NSViewRepresentable {
       position(panel, over: anchor)
       panel.makeKey()
       child = panel
-      RaycastModalOverhang.activeChildWindow = panel
+      RaycastModalOverhang.ownedWindows.add(panel)
       // Losing key while presented = the user clicked outside the menu
-      // (back into the note, or away entirely): dismiss, like Raycast.
+      // (back into the note, or away entirely): dismiss, like Raycast --
+      // UNLESS key moved to a stacked family window (the submenu panel).
+      // The transfer may still be in flight when the notification fires,
+      // so the decision waits one runloop tick.
       resignObserver = NotificationCenter.default.addObserver(
         forName: NSWindow.didResignKeyNotification,
         object: panel,
         queue: .main
       ) { [weak self] _ in
-        MainActor.assumeIsolated { self?.onDismissTap() }
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated {
+            guard let self, self.child != nil else { return }
+            guard
+              ModalFocusPolicy.childShouldDismiss(
+                newKey: NSApp.keyWindow,
+                isOwned: RaycastModalOverhang.isOwned
+              )
+            else { return }
+            self.onDismissTap()
+          }
+        }
       }
     }
 
@@ -146,9 +216,7 @@ struct RaycastModalOverhang: NSViewRepresentable {
       child.parent?.removeChildWindow(child)
       child.orderOut(nil)
       self.child = nil
-      if RaycastModalOverhang.activeChildWindow === child {
-        RaycastModalOverhang.activeChildWindow = nil
-      }
+      RaycastModalOverhang.ownedWindows.remove(child)
       // Return key to the note -- but never steal it back when the user
       // switched to another app while the menu was open.
       if let anchor, anchor.isVisible, NSApp.isActive {

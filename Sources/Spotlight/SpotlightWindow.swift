@@ -582,11 +582,17 @@ public final class SpotlightWindowController {
   }
 
   /// Shared focus-loss reaction for the panel family resigning key: key
-  /// landing on any of our own windows is not focus loss; anything else
-  /// dims or closes per preference.
+  /// landing on any of our own windows (the panel, a modal child panel,
+  /// or a stacked submenu panel) is not focus loss; anything else dims
+  /// or closes per preference.
   private func handlePanelFocusLoss() {
-    let ownWindows: [NSWindow?] = [panel, RaycastModalOverhang.activeChildWindow]
-    if let key = NSApp.keyWindow, ownWindows.contains(where: { $0 === key }) { return }
+    guard
+      ModalFocusPolicy.isPanelFocusLoss(
+        newKey: NSApp.keyWindow,
+        panel: panel,
+        isOwned: RaycastModalOverhang.isOwned
+      )
+    else { return }
     keyState.isKey = false
     if preferences.dimOnFocusLoss {
       panel?.animator().alphaValue = CGFloat(preferences.unfocusedOpacity)
