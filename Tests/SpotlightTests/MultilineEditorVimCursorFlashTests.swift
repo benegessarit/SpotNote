@@ -74,6 +74,63 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.yankFlashRange == nil)
   }
 
+  @Test("M-j swaps the caret line with the line below, caret riding along")
+  func moveLineDownSwaps() {
+    let textView = armedFlash("alpha\nbeta\ngamma", caret: 2)
+    textView.executeVimAction(.moveLinesDown(count: 1))
+    #expect(textView.string == "beta\nalpha\ngamma")
+    // Caret stays on "alpha" (now line 2), column preserved.
+    #expect(textView.selectedRange == NSRange(location: 7, length: 0))
+  }
+
+  @Test("M-k moves the tail line up even without a trailing newline")
+  func moveTailLineUp() {
+    let textView = armedFlash("alpha\nbeta", caret: 8)
+    textView.executeVimAction(.moveLinesUp(count: 1))
+    #expect(textView.string == "beta\nalpha")
+    #expect(textView.selectedRange == NSRange(location: 2, length: 0))
+  }
+
+  @Test("line moves clamp silently at the buffer edges")
+  func moveLinesClampsAtEdges() {
+    let top = armedFlash("alpha\nbeta", caret: 0)
+    top.executeVimAction(.moveLinesUp(count: 1))
+    #expect(top.string == "alpha\nbeta")
+
+    let bottom = armedFlash("alpha\nbeta", caret: 7)
+    bottom.executeVimAction(.moveLinesDown(count: 3))
+    #expect(bottom.string == "alpha\nbeta")
+  }
+
+  @Test("a count moves the line several steps, stopping at the edge")
+  func moveLinesHonorsCount() {
+    let textView = armedFlash("alpha\nbeta\ngamma", caret: 0)
+    textView.executeVimAction(.moveLinesDown(count: 5))
+    #expect(textView.string == "beta\ngamma\nalpha")
+  }
+
+  @Test("visual line M-j moves the selected block and keeps the selection")
+  func visualLineBlockMoves() {
+    let textView = armedFlash("alpha\nbeta\ngamma\n", caret: 0)
+    textView.keyDown(with: keyEvent(characters: "V", ignoring: "V", keyCode: 9, modifiers: [.shift]))
+    textView.keyDown(with: keyEvent(characters: "j", ignoring: "j", keyCode: 38, modifiers: []))
+    #expect(textView.selectedRange == NSRange(location: 0, length: 11))
+    textView.executeVimAction(.moveLinesDown(count: 1))
+    #expect(textView.string == "gamma\nalpha\nbeta\n")
+    // Selection still covers the alpha/beta block, mode still visual line.
+    #expect(textView.selectedRange == NSRange(location: 6, length: 11))
+    #expect(textView.vimEngine?.mode == .visualLine)
+  }
+
+  @Test("option-j reaches the engine as the mini.move token")
+  func optionKeyBecomesMetaToken() {
+    let textView = armedFlash("alpha\nbeta", caret: 0)
+    textView.keyDown(
+      with: keyEvent(characters: "\u{2206}", ignoring: "j", keyCode: 38, modifiers: [.option])
+    )
+    #expect(textView.string == "beta\nalpha")
+  }
+
   @Test("code styler skips the full clear while the note has no backticks")
   func codeStylerSkipsPlainNotes() {
     let textView = armedFlash("plain text with words", caret: 0)

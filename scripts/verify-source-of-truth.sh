@@ -228,6 +228,17 @@ require_grep "flashYankHighlight" "Sources/Spotlight/MultilineEditorVimOperator.
 require_grep "codeStylerLeftAttributes" "Sources/Spotlight/CodeStyler.swift"
 require_grep "yy flashes the yanked line with the Visual band" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 require_grep "code styler skips the full clear while the note has no backticks" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+# Visual band depth (David 2026-08-11 "still not really visible"): the
+# nvim RELATIONSHIP (flat surface->text lift) at his stronger 11%/15%,
+# not the probed-nvim 5%/9%. Line moves are his mini.move <M-j>/<M-k>
+# (Option chords become nvim-style tokens), silent edge clamping,
+# selection + anchors ride the block.
+require_grep "theme.mode == .dark ? 0.11 : 0.15" "Sources/Spotlight/CodeStyler.swift"
+require_grep "case moveLinesDown(count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "<M-" "Sources/Spotlight/MultilineEditorVimKeys.swift"
+require_grep "executeMoveLines" "Sources/Spotlight/MultilineEditorVimEdit.swift"
+require_grep "M-j swaps the caret line with the line below" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "visual line M-j moves the selected block and keeps the selection" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"

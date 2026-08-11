@@ -53,7 +53,9 @@ extension PlaceholderTextView {
       return true
     }
     let key = vimKey(for: event, mods: mods, chars: chars)
-    let hasModifiers = !mods.subtracting(.shift).isEmpty
+    // Option is a vim-visible modifier (the `<M-…>` tokens); the engine
+    // still bails on command/control chords.
+    let hasModifiers = !mods.subtracting([.shift, .option]).isEmpty
     let action = engine.handle(key: key, hasModifiers: hasModifiers)
     if isInsert, action == .none { return false }
     executeVimAction(action)
@@ -262,6 +264,8 @@ extension PlaceholderTextView {
     case .toggleCase(let count): executeToggleCase(count: count)
     case .replaceChar(let replacement, let count):
       executeReplaceChar(replacement, count: count)
+    case .moveLinesDown(let count): executeMoveLines(down: true, count: count)
+    case .moveLinesUp(let count): executeMoveLines(down: false, count: count)
     default:
       return false
     }
@@ -408,13 +412,6 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
-  private func executeDeleteChar(_ count: Int) {
-    let nsString = string as NSString
-    let cursor = selectedRange.location
-    let end = min(cursor + count, nsString.length)
-    guard end > cursor else { return }
-    insertText("", replacementRange: NSRange(location: cursor, length: end - cursor))
-  }
 }
 
 /// Pure-Swift core of the substitute command -- split out so it can be

@@ -91,6 +91,15 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
+  /// `x`: delete up to count characters at/after the caret.
+  func executeDeleteChar(_ count: Int) {
+    let nsString = string as NSString
+    let cursor = selectedRange.location
+    let end = min(cursor + count, nsString.length)
+    guard end > cursor else { return }
+    insertText("", replacementRange: NSRange(location: cursor, length: end - cursor))
+  }
+
   /// `X`: delete up to count characters before the caret, never past the
   /// line start.
   func executeDeleteCharBefore(count: Int) {
@@ -101,5 +110,87 @@ extension PlaceholderTextView {
     guard cursor > start else { return }
     insertText("", replacementRange: NSRange(location: start, length: cursor - start))
     needsDisplay = true
+  }
+
+  /// `<M-j>`/`<M-k>` (his mini.move): slide the caret's line -- or the
+  /// line block covering the visual selection -- down/up `count` steps,
+  /// clamping silently at the buffer edges. Caret (and in visual mode
+  /// the whole selection plus its anchors) rides along, offsets inside
+  /// the block preserved, so repeats keep working on the same lines.
+  func executeMoveLines(down: Bool, count: Int) {
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let selection = selectedRange
+    var block = nsString.lineRange(for: selection)
+    let startOfBlock = block.location
+    let caretOffset = selection.location - startOfBlock
+    let selectionLength = selection.length
+    let anchors = [visualAnchor, visualCaret, visualLineAnchor, visualLineCaret]
+      .map { $0.map { $0 - startOfBlock } }
+    var moved = false
+    for _ in 0..<max(1, count) {
+      guard down ? moveBlockDownOnce(&block) : moveBlockUpOnce(&block) else { break }
+      moved = true
+    }
+    guard moved else { return }
+    let limit = (string as NSString).length
+    let newStart = min(block.location + caretOffset, limit)
+    setSelectedRange(NSRange(location: newStart, length: min(selectionLength, limit - newStart)))
+    visualAnchor = anchors[0].map { min(block.location + $0, limit) }
+    visualCaret = anchors[1].map { min(block.location + $0, limit) }
+    visualLineAnchor = anchors[2].map { min(block.location + $0, limit) }
+    visualLineCaret = anchors[3].map { min(block.location + $0, limit) }
+    scrollRangeToVisible(selectedRange)
+    needsDisplay = true
+  }
+
+  /// One down-step: the line below the block hops over it. The block
+  /// always ends in a newline here (a line exists below); when the
+  /// hopping line is the document tail without one, it donates the
+  /// block's newline instead (text length is conserved).
+  private func moveBlockDownOnce(_ block: inout NSRange) -> Bool {
+    let nsString = string as NSString
+    let nextStart = NSMaxRange(block)
+    guard nextStart < nsString.length else { return false }
+    let next = nsString.lineRange(for: NSRange(location: nextStart, length: 0))
+    var nextText = nsString.substring(with: next)
+    var blockText = nsString.substring(with: block)
+    var newLength = block.length
+    if !nextText.hasSuffix("\n") {
+      nextText += "\n"
+      blockText = String(blockText.dropLast())
+      newLength -= 1
+    }
+    let span = NSRange(location: block.location, length: block.length + next.length)
+    guard replaceForLineMove(span, with: nextText + blockText) else { return false }
+    block = NSRange(location: block.location + (nextText as NSString).length, length: newLength)
+    return true
+  }
+
+  /// One up-step, mirror of the down-step: the line above hops below the
+  /// block; a tail block without a newline borrows the hopping line's.
+  private func moveBlockUpOnce(_ block: inout NSRange) -> Bool {
+    let nsString = string as NSString
+    guard block.location > 0 else { return false }
+    let prev = nsString.lineRange(for: NSRange(location: block.location - 1, length: 0))
+    var blockText = nsString.substring(with: block)
+    var prevText = nsString.substring(with: prev)
+    var newLength = block.length
+    if !blockText.hasSuffix("\n") {
+      blockText += "\n"
+      prevText = String(prevText.dropLast())
+      newLength += 1
+    }
+    let span = NSRange(location: prev.location, length: prev.length + block.length)
+    guard replaceForLineMove(span, with: blockText + prevText) else { return false }
+    block = NSRange(location: prev.location, length: newLength)
+    return true
+  }
+
+  private func replaceForLineMove(_ span: NSRange, with replacement: String) -> Bool {
+    guard shouldChangeText(in: span, replacementString: replacement) else { return false }
+    replaceCharacters(in: span, with: replacement)
+    didChangeText()
+    return true
   }
 }

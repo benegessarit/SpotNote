@@ -41,7 +41,12 @@ enum CodeStyler {
   @MainActor
   static func applyVisualSelectionColor(to textView: NSTextView, theme: Theme) {
     let base = NSColor(theme.background)
-    let fraction: CGFloat = theme.mode == .dark ? 0.05 : 0.09
+    // Deliberately STRONGER than nvim's probed 5%/9%: on SpotNote's
+    // surfaces the nvim-exact blend read as invisible (David 2026-08-11,
+    // "still not really visible") -- the RELATIONSHIP (flat surface->text
+    // lift, no accent blue, foreground untouched) stays nvim, the depth
+    // is his taste.
+    let fraction: CGFloat = theme.mode == .dark ? 0.11 : 0.15
     let visualBg = base.blended(withFraction: fraction, of: NSColor(theme.text)) ?? base
     textView.selectedTextAttributes = [.backgroundColor: visualBg]
     // The view paints visual-mode selection (and the yank flash) itself:

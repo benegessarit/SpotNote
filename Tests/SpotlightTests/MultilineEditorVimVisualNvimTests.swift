@@ -108,7 +108,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.visualBlockCursorRect() == nil)
   }
 
-  @Test("the selection color is the nvim 5% background-to-text lift, not accent blue")
+  @Test("the selection color is the flat background-to-text lift, not accent blue")
   func selectionColorIsNvimVisual() throws {
     let textView = makeVimMotionTextView(text: "alpha")
     let bg = try #require(
@@ -118,11 +118,17 @@ extension MultilineEditorVimLogicalLineMotionTests {
     let theme = ThemeCatalog.obsidian
     let base = try #require(NSColor(theme.background).usingColorSpace(.deviceRGB))
     let text = try #require(NSColor(theme.text).usingColorSpace(.deviceRGB))
-    let expectedRed = base.redComponent + 0.05 * (text.redComponent - base.redComponent)
-    // 0.03 tolerance: blended() works in a calibrated space and the
-    // deviceRGB readback shifts a hair.
-    #expect(abs(bg.redComponent - expectedRed) < 0.03)
-    // The lift is subtle: nowhere near the system accent's saturation.
-    #expect(abs(bg.blueComponent - base.blueComponent) < 0.1)
+    // 11% on dark: nvim's RELATIONSHIP (surface->text blend, no accent
+    // hue) at David's stronger depth ("still not really visible" at the
+    // probed 5%, 2026-08-11).
+    let expectedRed = base.redComponent + 0.11 * (text.redComponent - base.redComponent)
+    // 0.05 tolerance: blended() works in a calibrated space and the
+    // deviceRGB readback drift grows with the fraction -- still far
+    // tighter than the ~0.09 gap back to the 5% blend.
+    #expect(abs(bg.redComponent - expectedRed) < 0.05)
+    // Still a neutral lift: blue moves by the same fraction toward the
+    // text ink, nowhere near the system accent's saturation.
+    let expectedBlue = base.blueComponent + 0.11 * (text.blueComponent - base.blueComponent)
+    #expect(abs(bg.blueComponent - expectedBlue) < 0.05)
   }
 }

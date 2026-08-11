@@ -52,6 +52,12 @@ enum VimAction: Equatable, Sendable {
   /// `r<char>` -- replace count chars with the typed char, caret on the
   /// last replacement; aborts when the line runs out (vim).
   case replaceChar(String, count: Int)
+  /// `<M-j>`/`<M-k>` -- David's mini.move maps: slide the caret's line
+  /// (normal) or the selected line block (visual, selection kept) down/up
+  /// count steps, clamping SILENTLY at the buffer edges (his config
+  /// retired the `:move` maps precisely because they errored at the top).
+  case moveLinesDown(count: Int)
+  case moveLinesUp(count: Int)
   case openLineBelow
   case openLineAbove
   case undo(count: Int)
@@ -224,6 +230,15 @@ final class VimEngine {
     case "J": return .joinLines(count: count)
     case "~": return .toggleCase(count: count)
     case "u": return .undo(count: count)
+    default: return moveLinesAction(for: key, count: count)
+    }
+  }
+
+  /// Shared by normal and visual mode: his mini.move `<M-j>`/`<M-k>`.
+  private func moveLinesAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "<M-j>": return .moveLinesDown(count: count)
+    case "<M-k>": return .moveLinesUp(count: count)
     default: return nil
     }
   }
@@ -353,6 +368,7 @@ extension VimEngine {
     if let motion = motionForKey(key, count: count) {
       return extendAction(motion, wise: wise)
     }
+    if let action = moveLinesAction(for: key, count: count) { return action }
     return visualCommand(for: key, wise: wise)
   }
 
