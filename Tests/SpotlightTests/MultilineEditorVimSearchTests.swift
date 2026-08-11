@@ -285,7 +285,9 @@ extension MultilineEditorVimLogicalLineMotionTests {
 
   @Test("Ctrl-W and Ctrl-U edit the : command buffer, never the note")
   func commandChordsEditBufferNotNote() {
-    let (textView, controller) = armedSearch("alpha beta gamma", caret: 0)
+    // Mid-note caret: a fall-through Ctrl-W would visibly delete
+    // "alpha " here, so the note-unchanged asserts are non-vacuous.
+    let (textView, controller) = armedSearch("alpha beta gamma", caret: 6)
     type(textView, ":")
     type(textView, "s")
     type(textView, "e")
