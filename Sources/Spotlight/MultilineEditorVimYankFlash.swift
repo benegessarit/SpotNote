@@ -171,10 +171,14 @@ extension PlaceholderTextView {
   }
 
   /// Any edit invalidates the flashed span (nvim's extmark just moves;
-  /// a stale NSRange would band the wrong text).
+  /// a stale NSRange would band the wrong text). Same for search bands.
   override func didChangeText() {
     super.didChangeText()
     clearYankFlash()
+    if !vimSearchMatches.isEmpty || vimSearchCommitted {
+      clearVimSearch()
+      vimController?.clearSearchStatus()
+    }
   }
 
   /// The event color: the block cursor's rosewater identity, never the
@@ -193,6 +197,7 @@ extension PlaceholderTextView {
 
   override func drawBackground(in rect: NSRect) {
     super.drawBackground(in: rect)
+    drawVimSearchBands(in: rect)
     drawYankGlow(in: rect)
   }
 

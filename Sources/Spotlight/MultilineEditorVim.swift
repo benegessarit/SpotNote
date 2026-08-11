@@ -20,6 +20,9 @@ extension PlaceholderTextView {
     controller.normalizeHandler = { [weak self] in
       self?.normalizeDocumentForVim() ?? false
     }
+    controller.searchClearHandler = { [weak self] in
+      self?.dismissVimSearchHighlight()
+    }
   }
 
   /// Per-keystroke vim dispatch. Extracted from `keyDown` so the main
@@ -74,6 +77,8 @@ extension PlaceholderTextView {
       return handleFlashPromptKey(event: event, controller: controller, mods: mods)
     case .wordHint:
       return handleWordHintPromptKey(event: event, controller: controller, mods: mods)
+    case .search:
+      return handleSearchPromptKey(event: event, controller: controller, mods: mods)
     default:
       break
     }

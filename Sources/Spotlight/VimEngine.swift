@@ -72,6 +72,9 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
+  /// `*`: search the word under the caret, landing on the next
+  /// occurrence (nvim default).
+  case searchWordUnderCaret
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
   case enterWordHint
@@ -274,6 +277,7 @@ final class VimEngine {
     case "/": return .enterSearch
     case "n": return .findNext
     case "N": return .findPrevious
+    case "*": return .searchWordUnderCaret
     default: return .none
     }
   }

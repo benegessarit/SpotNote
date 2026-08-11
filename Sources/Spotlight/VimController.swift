@@ -32,11 +32,6 @@ final class VimController: ObservableObject {
     var buffer: String
   }
 
-  struct SearchOutcome: Equatable {
-    let current: Int
-    let total: Int
-  }
-
   @Published var mode: VimMode = .normal
   @Published var prompt: Prompt?
   @Published var message: Message?
@@ -57,15 +52,9 @@ final class VimController: ObservableObject {
   /// and the close-HUD path.
   var commandRunner: ((VimCommand) -> Message?)?
 
-  /// Search handler installed by the window controller. Returns the
-  /// resulting current/total match counts (or `nil` for no matches) so
-  /// the bottom bar can render a vim-native indicator instead of
-  /// opening the find bar.
-  var searchHandler: ((String) -> SearchOutcome?)?
-
-  /// Step handler for normal-mode `n` / `N`. Same return semantics as
-  /// `searchHandler`.
-  var findStepHandler: ((Int) -> SearchOutcome?)?
+  /// `:noh` reaches the view-owned vim search lane through this handler
+  /// (installed by the live text view alongside the others).
+  var searchClearHandler: (() -> Void)?
   /// One-character Flash-style jump handler installed by the live text view.
   /// Returns `true` when the caret moved.
   var flashHandler: ((VimFlashRequest) -> Bool)?
@@ -123,14 +112,9 @@ final class VimController: ObservableObject {
       let trimmed = buffer.trimmingCharacters(in: .whitespaces)
       guard !trimmed.isEmpty else { return true }
       runCommand(trimmed)
-    case .search:
-      let trimmed = buffer.trimmingCharacters(in: .whitespaces)
-      if trimmed.isEmpty {
-        searchStatus = nil
-      } else {
-        applySearchOutcome(searchHandler?(buffer))
-      }
-    case .flash, .lineFlash, .wordHint:
+    case .search, .flash, .lineFlash, .wordHint:
+      // These prompt kinds are fully handled by the view-side key
+      // routers; the generic submit path never fires for them.
       return true
     }
     return true
@@ -150,17 +134,15 @@ final class VimController: ObservableObject {
     }
   }
 
-  func findStep(_ delta: Int) {
-    applySearchOutcome(findStepHandler?(delta))
-  }
-
   func clearSearchStatus() {
     searchStatus = nil
   }
 
-  private func applySearchOutcome(_ outcome: SearchOutcome?) {
-    if let outcome, outcome.total > 0 {
-      searchStatus = "\(outcome.current)/\(outcome.total)"
+  /// Live counter from the vim search lane ("3/12", "3/500+",
+  /// "no matches").
+  func setSearchStatus(current: Int, total: Int, capped: Bool) {
+    if total > 0 {
+      searchStatus = "\(current)/\(total)\(capped ? "+" : "")"
     } else {
       searchStatus = "no matches"
     }

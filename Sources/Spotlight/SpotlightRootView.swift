@@ -149,6 +149,12 @@ struct SpotlightRootView: View {
               .padding(.trailing, 10)
           }
         }
+        .overlay(alignment: .leading) {
+          if preferences.vimMode {
+            VimPromptCapsule(controller: vimController, isKey: keyState.isKey || anyModalShown)
+              .padding(.leading, 10)
+          }
+        }
     }
   }
 

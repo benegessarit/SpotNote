@@ -637,6 +637,20 @@ final class PlaceholderTextView: NSTextView {
   var yankFlashRange: NSRange?
   var yankFlashFrame: YankFlashFrame?
   var yankFlashGeneration = 0
+  /// Vim `/` flash-search state -- fully view-owned, never touches the
+  /// ⌘F FindController (see MultilineEditorVimSearch.swift).
+  var vimSearchQuery = ""
+  var vimSearchMatches: [NSRange] = []
+  var vimSearchCurrent: Int?
+  var vimSearchLabelPlans: [VimSearchLabelPlan] = []
+  var vimSearchCommitted = false
+  var vimSearchBandsVisible = false
+  var vimSearchCapped = false
+  var vimSearchOriginCaret: Int?
+  var vimSearchHiddenRanges: [NSRange] = []
+  /// Dim band under every search match; the current match wears the
+  /// Visual band. Set by CodeStyler.applyVisualSelectionColor.
+  var editorSearchDimBandColor: NSColor?
   /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,
@@ -1925,6 +1939,7 @@ final class PlaceholderTextView: NSTextView {
     drawVisualBlockCursor(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
     drawWordHints(in: dirtyRect)
+    drawVimSearchLabels(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [

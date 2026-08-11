@@ -1,42 +1,14 @@
 import AppKit
 
 extension SpotlightWindowController {
-  /// Wires the controller's command-runner / search-handler / find-step
-  /// closures so the `:`-prompt and normal-mode `n`/`N`/`/` keystrokes
-  /// can reach the session, find controller, theme catalog, preferences,
-  /// and the close-HUD path.
+  /// Wires the controller's command-runner closure so the `:`-prompt
+  /// can reach the session, find controller, theme catalog,
+  /// preferences, and the close-HUD path. (`/` search and `n`/`N` are
+  /// fully view-owned -- MultilineEditorVimSearch.swift.)
   func installVimCommandRunner() {
     vimController.commandRunner = { [weak self] command in
       self?.runVimCommand(command)
     }
-    vimController.searchHandler = { [weak self] query in
-      self?.runVimSearch(query)
-    }
-    vimController.findStepHandler = { [weak self] delta in
-      self?.stepVimSearch(delta)
-    }
-  }
-
-  private func runVimSearch(_ query: String) -> VimController.SearchOutcome? {
-    let trimmed = query.trimmingCharacters(in: .whitespaces)
-    guard !trimmed.isEmpty else { return nil }
-    findController.query = trimmed
-    findController.search(in: session.currentText)
-    return searchOutcome()
-  }
-
-  private func stepVimSearch(_ delta: Int) -> VimController.SearchOutcome? {
-    if delta >= 0 { findController.next() } else { findController.previous() }
-    return searchOutcome()
-  }
-
-  private func searchOutcome() -> VimController.SearchOutcome? {
-    let total = findController.matches.count
-    guard total > 0 else { return nil }
-    return VimController.SearchOutcome(
-      current: findController.currentIndex + 1,
-      total: total
-    )
   }
 
   private func runVimCommand(_ command: VimCommand) -> VimController.Message? {
@@ -120,10 +92,8 @@ extension SpotlightWindowController {
   private func runClearHighlight() {
     if findController.isVisible {
       findController.close()
-    } else {
-      findController.query = ""
-      findController.search(in: session.currentText)
     }
+    vimController.searchClearHandler?()
     vimController.clearSearchStatus()
   }
 }

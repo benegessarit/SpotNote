@@ -53,6 +53,11 @@ enum CodeStyler {
     // AppKit swaps in the light unemphasized gray whenever the view is
     // not first responder, which is exactly the band David flagged.
     (textView as? PlaceholderTextView)?.editorVisualSelectionColor = visualBg
+    // Search bands: non-current matches sit one step BELOW the Visual
+    // band so the current match reads as "the" match.
+    let dimFraction: CGFloat = theme.mode == .dark ? 0.07 : 0.10
+    (textView as? PlaceholderTextView)?.editorSearchDimBandColor =
+      base.blended(withFraction: dimFraction, of: NSColor(theme.text)) ?? base
   }
 
   @MainActor

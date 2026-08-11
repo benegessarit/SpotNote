@@ -56,7 +56,9 @@ enum VimActionDispatcher {
   ) -> Bool {
     switch action {
     case .enterCommand: view.vimController?.enterPrompt(.command)
-    case .enterSearch: view.vimController?.enterPrompt(.search)
+    case .enterSearch:
+      view.vimController?.enterPrompt(.search)
+      view.beginVimSearchSession()
     case .enterFlash(let direction, let count, let scope):
       view.enterFlashPrompt(direction: direction, count: count, scope: scope)
     case .enterLineFlash(let count):
@@ -64,8 +66,9 @@ enum VimActionDispatcher {
       view.refreshLineFlashHints()
     case .enterWordHint:
       view.enterWordHintPrompt()
-    case .findNext: view.vimController?.findStep(1)
-    case .findPrevious: view.vimController?.findStep(-1)
+    case .findNext: view.executeVimFindStep(1)
+    case .findPrevious: view.executeVimFindStep(-1)
+    case .searchWordUnderCaret: view.executeVimSearchWordUnderCaret()
     default: return false
     }
     return true
