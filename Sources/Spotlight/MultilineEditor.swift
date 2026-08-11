@@ -724,7 +724,10 @@ final class PlaceholderTextView: NSTextView {
         vimEngine = nil
         clearFlashHints()
         // With vim off there is no :noh or n to clear a committed
-        // search -- stranded bands would persist until an edit.
+        // search -- stranded bands would persist until an edit -- and
+        // an open prompt would keep eating keys with no surface to
+        // render it (the root view drops the cmdline with vim off).
+        vimController?.cancelPrompt()
         clearVimSearch()
         vimController?.clearSearchStatus()
       }
@@ -737,24 +740,25 @@ final class PlaceholderTextView: NSTextView {
     stabilizeTypingAttributes()
     let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
     let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-    if mods == .command, chars == "z", revertLastRenderedTokenIfPossible() {
+    // The prompt owns its keys while it is open: the token revert and
+    // the editor's own word deletes are real text edits that would fire
+    // mid-`/`/`:` (the incsearch caret can rest anywhere) and wipe the
+    // live search state.
+    let promptClosed = vimController?.prompt == nil
+    if mods == .command, chars == "z", promptClosed, revertLastRenderedTokenIfPossible() {
       return
     }
-    // The prompt owns backspace while it is open: the token revert is
-    // a real text edit that would fire mid-`/` (the incsearch caret can
-    // rest at a rendered token's end) and wipe the live search state.
-    let promptClosed = vimController?.prompt == nil
     if mods.isEmpty, event.keyCode == 51, promptClosed, revertLastRenderedTokenIfPossible() {
       return
     }
     if let controller = vimController, controller.prompt != nil {
       if handlePromptKey(event: event, controller: controller, mods: mods) { return }
     }
-    if mods == .control, chars == "w" {
+    if mods == .control, chars == "w", promptClosed {
       deleteWordBackward(self)
       return
     }
-    if mods == .control, chars == "u" {
+    if mods == .control, chars == "u", promptClosed {
       deleteToBeginningOfLine(self)
       return
     }

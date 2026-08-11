@@ -65,54 +65,6 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// Routes one keystroke into the active `:` / `/` prompt. Returns
-  /// `true` when the event was consumed.
-  func handlePromptKey(
-    event: NSEvent,
-    controller: VimController,
-    mods: NSEvent.ModifierFlags
-  ) -> Bool {
-    switch controller.prompt?.kind {
-    case .flash, .lineFlash:
-      return handleFlashPromptKey(event: event, controller: controller, mods: mods)
-    case .wordHint:
-      return handleWordHintPromptKey(event: event, controller: controller, mods: mods)
-    case .search:
-      return handleSearchPromptKey(event: event, controller: controller, mods: mods)
-    default:
-      break
-    }
-    if event.keyCode == 53 {
-      controller.cancelPrompt()
-      needsDisplay = true
-      return true
-    }
-    if event.keyCode == 36 || event.keyCode == 76 {
-      controller.submitPrompt()
-      needsDisplay = true
-      return true
-    }
-    if event.keyCode == 51 {
-      controller.backspacePrompt()
-      return true
-    }
-    let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
-    guard let typed = event.characters, !typed.isEmpty else { return true }
-    let filtered = Self.filterPromptInput(typed)
-    guard !filtered.isEmpty else { return true }
-    controller.appendToPrompt(filtered)
-    return true
-  }
-
-  private static func filterPromptInput(_ raw: String) -> String {
-    raw.filter { ch in
-      ch.unicodeScalars.allSatisfy { scalar in
-        !scalar.properties.isDefaultIgnorableCodePoint && scalar.value >= 0x20
-      }
-    }
-  }
-
   /// `<n>G` / `:<n>` -- moves the caret to the start of the n-th line
   /// (1-based). Returns `false` when the line doesn't exist.
   @discardableResult

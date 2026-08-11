@@ -165,26 +165,19 @@ extension PlaceholderTextView {
     return true
   }
 
-  /// Control chords edit the QUERY, never the note: Ctrl-W drops the
-  /// last word, Ctrl-U clears the line (vim's cmdline pair), anything
-  /// else is swallowed -- falling through would reach the editor's own
-  /// Ctrl-W word delete at the incsearch-moved caret, a destructive
-  /// edit at a position the user never chose.
+  /// Control chords edit the QUERY, never the note (the shared
+  /// `promptBufferEdit` rule) -- the search kind additionally recomputes
+  /// the live matches after the edit.
   private func handleSearchPromptControlChord(
     event: NSEvent,
     controller: VimController
   ) -> Bool {
     let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-    switch chars {
-    case "w":
-      replaceSearchPrompt(
-        with: SearchTextEditing.deleteWordBackward(controller.prompt?.buffer ?? ""),
-        controller: controller
-      )
-    case "u":
-      replaceSearchPrompt(with: "", controller: controller)
-    default:
-      break
+    if let edited = VimController.promptBufferEdit(
+      controlChord: chars,
+      buffer: controller.prompt?.buffer ?? ""
+    ) {
+      replaceSearchPrompt(with: edited, controller: controller)
     }
     return true
   }

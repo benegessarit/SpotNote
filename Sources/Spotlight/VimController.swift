@@ -99,6 +99,19 @@ final class VimController: ObservableObject {
     prompt = current
   }
 
+  /// vim's cmdline chord edits (c_CTRL-W / c_CTRL-U), one rule for
+  /// every prompt kind: the new buffer for the chord, or nil when the
+  /// chord only swallows. Callers must consume the event either way --
+  /// falling through would reach the editor's own word delete at a
+  /// caret the user never chose.
+  static func promptBufferEdit(controlChord chars: String, buffer: String) -> String? {
+    switch chars {
+    case "w": return SearchTextEditing.deleteWordBackward(buffer)
+    case "u": return ""
+    default: return nil
+    }
+  }
+
   func backspacePrompt() {
     guard var current = prompt else { return }
     if current.buffer.isEmpty {

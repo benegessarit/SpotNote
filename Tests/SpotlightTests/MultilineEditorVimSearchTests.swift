@@ -283,6 +283,63 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.string == "alpha beta gamma")
   }
 
+  @Test("Ctrl-W and Ctrl-U edit the : command buffer, never the note")
+  func commandChordsEditBufferNotNote() {
+    let (textView, controller) = armedSearch("alpha beta gamma", caret: 0)
+    type(textView, ":")
+    type(textView, "s")
+    type(textView, "e")
+    #expect(controller.prompt?.buffer == "se")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{17}", ignoring: "w", keyCode: 13, modifiers: .control)
+    )
+    #expect(controller.prompt?.buffer.isEmpty == true)
+    #expect(controller.prompt != nil)
+    #expect(textView.string == "alpha beta gamma")
+    type(textView, "w")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{15}", ignoring: "u", keyCode: 32, modifiers: .control)
+    )
+    #expect(controller.prompt?.buffer.isEmpty == true)
+    #expect(textView.string == "alpha beta gamma")
+  }
+
+  @Test("arrow keys are ignored by the : command buffer")
+  func commandPromptIgnoresArrowKeys() {
+    let (textView, controller) = armedSearch("alpha", caret: 0)
+    type(textView, ":")
+    type(textView, "w")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{F701}", ignoring: "\u{F701}", keyCode: 125)
+    )
+    #expect(controller.prompt?.buffer == "w")
+  }
+
+  @Test("cmd-Z token revert is skipped while a prompt is open")
+  func commandZRevertSkippedDuringPrompt() {
+    let (textView, controller) = armedSearch("", caret: 0)
+    textView.insertText("@today", replacementRange: NSRange(location: 0, length: 0))
+    #expect(textView.normalizeSpecialTokens())
+    let rendered = textView.string
+    type(textView, "/")
+    textView.keyDown(
+      with: keyEvent(characters: "z", ignoring: "z", keyCode: 6, modifiers: .command)
+    )
+    #expect(controller.prompt != nil)
+    #expect(textView.string == rendered)
+  }
+
+  @Test("disabling vim mode cancels an open prompt")
+  func vimDisableCancelsOpenPrompt() {
+    let (textView, controller) = armedSearch("alpha beta", caret: 0)
+    type(textView, "/")
+    type(textView, "b")
+    #expect(controller.prompt != nil)
+    textView.vimModeEnabled = false
+    #expect(controller.prompt == nil)
+    #expect(textView.vimSearchMatches.isEmpty)
+  }
+
   @Test("arrow keys are ignored by the query buffer")
   func arrowKeysIgnored() {
     let (textView, controller) = armedSearch("alpha beta", caret: 0)

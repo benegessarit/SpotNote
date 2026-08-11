@@ -266,6 +266,10 @@ require_grep "survivingKeys" "Sources/Spotlight/VimSearch.swift"
 require_grep "theme.mode == .dark ? 0.07 : 0.10" "Sources/Spotlight/CodeStyler.swift"
 require_grep "case .search, .flash, .lineFlash, .wordHint:" "Sources/Spotlight/VimController.swift"
 require_grep "searchClearHandler" "Sources/Spotlight/SpotlightWindowVim.swift"
+# The teardown FUNCTION is test-pinned; this pins its WIRING at the
+# note-swap site (deleting the call resurrects the stale-offset crash
+# while tests stay green -- review P2-C, 2026-08-11).
+require_grep "endVimSearchForTextSwap" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "VimAwareBottomBar(" "Sources/Spotlight/SpotlightRootView.swift"
 require_grep "padding(.leading, EditorMetrics.textLeadingGap)" "Sources/Spotlight/VimCmdline.swift"
 reject_grep "VimPromptCapsule" "Sources/Spotlight/SpotlightRootView.swift"
