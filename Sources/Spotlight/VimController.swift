@@ -90,6 +90,15 @@ final class VimController: ObservableObject {
     prompt = current
   }
 
+  /// Wholesale buffer replacement for cmdline-style edits (Ctrl-W word
+  /// delete, Ctrl-U clear) that appendToPrompt/backspacePrompt can't
+  /// express. Keeps the prompt OPEN even when the buffer empties.
+  func replacePromptBuffer(_ buffer: String) {
+    guard var current = prompt else { return }
+    current.buffer = buffer
+    prompt = current
+  }
+
   func backspacePrompt() {
     guard var current = prompt else { return }
     if current.buffer.isEmpty {

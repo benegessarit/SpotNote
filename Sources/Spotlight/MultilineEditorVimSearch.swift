@@ -1,5 +1,12 @@
 import AppKit
 
+/// A committed search parked while a new `/` prompt runs, restored on
+/// Escape (nvim keeps the previous pattern).
+struct VimSearchStash {
+  let query: String
+  let bandsVisible: Bool
+}
+
 /// Vim `/` flash-search -- the view-side lane. The port of David's
 /// flash.nvim search integration: type `/`, matches band-highlight live
 /// (no backdrop dim -- his `modes.search.highlight.backdrop = false`),
@@ -21,23 +28,53 @@ extension PlaceholderTextView {
   // MARK: - Session lifecycle
 
   /// Called when `/` opens the prompt: remember where the caret was so
-  /// Escape can go home.
+  /// Escape can go home, and park any committed search so an aborted
+  /// prompt does not destroy it (nvim keeps the previous pattern).
   func beginVimSearchSession() {
+    let stash =
+      vimSearchCommitted && !vimSearchQuery.isEmpty
+      ? VimSearchStash(query: vimSearchQuery, bandsVisible: vimSearchBandsVisible)
+      : nil
     clearVimSearch()
+    vimSearchStash = stash
     vimSearchOriginCaret = selectedRange.location
   }
 
-  /// Escape: nvim restores the pre-search position and shows nothing.
+  /// Escape: nvim restores the pre-search position and the previous
+  /// committed pattern (n/N still work after an aborted `/`).
   func cancelVimSearchSession() {
     let origin = vimSearchOriginCaret
+    let stash = vimSearchStash
     clearVimSearch()
     if let origin {
       let clamped = min(origin, (string as NSString).length)
       setSelectedRange(NSRange(location: clamped, length: 0))
       scrollRangeToVisible(selectedRange)
     }
-    vimController?.clearSearchStatus()
+    if let stash {
+      restoreVimSearch(from: stash)
+    } else {
+      vimController?.clearSearchStatus()
+    }
     needsDisplay = true
+  }
+
+  private func restoreVimSearch(from stash: VimSearchStash) {
+    vimSearchQuery = stash.query
+    let result = VimSearchCore.matches(of: stash.query, in: string)
+    vimSearchMatches = result.ranges
+    vimSearchCapped = result.capped
+    vimSearchCurrent = VimSearchCore.currentIndex(
+      matches: result.ranges,
+      caret: selectedRange.location
+    )
+    vimSearchCommitted = !result.ranges.isEmpty
+    vimSearchBandsVisible = stash.bandsVisible && vimSearchCommitted
+    if vimSearchBandsVisible, let controller = vimController {
+      publishVimSearchStatus(controller: controller)
+    } else {
+      vimController?.clearSearchStatus()
+    }
   }
 
   /// Enter: commit -- bands persist (hlsearch), labels drop, `n`/`N`
@@ -48,6 +85,7 @@ extension PlaceholderTextView {
     vimSearchLabelPlans = []
     removeVimSearchHiddenRanges()
     vimSearchOriginCaret = nil
+    vimSearchStash = nil
     needsDisplay = true
   }
 
@@ -61,7 +99,19 @@ extension PlaceholderTextView {
     vimSearchBandsVisible = false
     vimSearchCapped = false
     vimSearchOriginCaret = nil
+    vimSearchStash = nil
     needsDisplay = true
+  }
+
+  /// A programmatic note swap (`textView.string = ...`) never fires
+  /// didChangeText: tear the whole session down against the OLD text --
+  /// stale offsets would crash `n`, band drawing, and the hidden-range
+  /// removal once the shorter note lands.
+  func endVimSearchForTextSwap() {
+    if searchPromptActive {
+      vimController?.cancelPrompt()
+    }
+    clearVimSearch()
   }
 
   /// `:noh` -- keep the committed query (n/N re-light it, like nvim)
@@ -105,11 +155,43 @@ extension PlaceholderTextView {
       }
       return true
     }
+    if mods.contains(.control) {
+      return handleSearchPromptControlChord(event: event, controller: controller)
+    }
     let nonShift = mods.subtracting(.shift)
     guard nonShift.isEmpty else { return false }
     guard let typed = event.characters, !typed.isEmpty else { return true }
     consumeSearchPromptCharacters(typed, controller: controller)
     return true
+  }
+
+  /// Control chords edit the QUERY, never the note: Ctrl-W drops the
+  /// last word, Ctrl-U clears the line (vim's cmdline pair), anything
+  /// else is swallowed -- falling through would reach the editor's own
+  /// Ctrl-W word delete at the incsearch-moved caret, a destructive
+  /// edit at a position the user never chose.
+  private func handleSearchPromptControlChord(
+    event: NSEvent,
+    controller: VimController
+  ) -> Bool {
+    let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+    switch chars {
+    case "w":
+      replaceSearchPrompt(
+        with: SearchTextEditing.deleteWordBackward(controller.prompt?.buffer ?? ""),
+        controller: controller
+      )
+    case "u":
+      replaceSearchPrompt(with: "", controller: controller)
+    default:
+      break
+    }
+    return true
+  }
+
+  private func replaceSearchPrompt(with buffer: String, controller: VimController) {
+    controller.replacePromptBuffer(buffer)
+    recomputeVimSearch(query: buffer, controller: controller)
   }
 
   /// Extend-vs-label resolution for printable input. A single typed
@@ -118,7 +200,12 @@ extension PlaceholderTextView {
   /// disjoint, so this order never shadows an extension).
   private func consumeSearchPromptCharacters(_ typed: String, controller: VimController) {
     let filtered = typed.filter { ch in
-      ch.unicodeScalars.allSatisfy { !$0.properties.isDefaultIgnorableCodePoint && $0.value >= 0x20 }
+      ch.unicodeScalars.allSatisfy {
+        // Arrows and friends arrive as U+F700-F8FF function-key
+        // codepoints, which would append invisibly to the query.
+        !$0.properties.isDefaultIgnorableCodePoint && $0.value >= 0x20
+          && !(0xF700...0xF8FF).contains($0.value)
+      }
     }
     guard !filtered.isEmpty else { return }
     if filtered.count == 1, let ch = filtered.first, let jump = vimSearchLabelTarget(for: ch) {
@@ -162,6 +249,13 @@ extension PlaceholderTextView {
     if query.isEmpty {
       vimSearchLabelPlans = []
       controller.clearSearchStatus()
+    } else if result.capped {
+      // Beyond the cap the extension set is computed from a PARTIAL
+      // match list, so a "surviving" key could still extend an unseen
+      // match -- labels would break the unambiguity invariant. Bands
+      // only; narrow the query to get labels back.
+      vimSearchLabelPlans = []
+      publishVimSearchStatus(controller: controller)
     } else {
       let keys = VimSearchCore.survivingKeys(matches: result.ranges, text: string)
       vimSearchLabelPlans = VimSearchCore.labelPlan(

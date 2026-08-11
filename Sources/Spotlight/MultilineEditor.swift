@@ -131,6 +131,12 @@ struct MultilineEditor: NSViewRepresentable {
     guard let textView = scroll.documentView as? PlaceholderTextView else { return }
     context.coordinator.parent = self
     if textView.string != text {
+      // The programmatic string swap never fires didChangeText, so the
+      // search session must tear down FIRST: stale match offsets into
+      // the old (possibly longer) note would crash n / band drawing,
+      // and the hidden-glyph ranges must be removed against the OLD
+      // layout before it goes away.
+      textView.endVimSearchForTextSwap()
       textView.string = text
       refreshAttributes(on: textView)
       textView.vimController?.clearSearchStatus()
@@ -648,6 +654,10 @@ final class PlaceholderTextView: NSTextView {
   var vimSearchCapped = false
   var vimSearchOriginCaret: Int?
   var vimSearchHiddenRanges: [NSRange] = []
+  /// The committed search stashed while a new `/` prompt is open, so
+  /// Escape restores it -- nvim keeps the previous pattern (n/N still
+  /// work after an aborted search).
+  var vimSearchStash: VimSearchStash?
   /// Dim band under every search match; the current match wears the
   /// Visual band. Set by CodeStyler.applyVisualSelectionColor.
   var editorSearchDimBandColor: NSColor?
@@ -713,6 +723,10 @@ final class PlaceholderTextView: NSTextView {
       } else {
         vimEngine = nil
         clearFlashHints()
+        // With vim off there is no :noh or n to clear a committed
+        // search -- stranded bands would persist until an edit.
+        clearVimSearch()
+        vimController?.clearSearchStatus()
       }
       notifyVimModeChanged()
       needsDisplay = true
@@ -726,7 +740,11 @@ final class PlaceholderTextView: NSTextView {
     if mods == .command, chars == "z", revertLastRenderedTokenIfPossible() {
       return
     }
-    if mods.isEmpty, event.keyCode == 51, revertLastRenderedTokenIfPossible() {
+    // The prompt owns backspace while it is open: the token revert is
+    // a real text edit that would fire mid-`/` (the incsearch caret can
+    // rest at a rendered token's end) and wipe the live search state.
+    let promptClosed = vimController?.prompt == nil
+    if mods.isEmpty, event.keyCode == 51, promptClosed, revertLastRenderedTokenIfPossible() {
       return
     }
     if let controller = vimController, controller.prompt != nil {

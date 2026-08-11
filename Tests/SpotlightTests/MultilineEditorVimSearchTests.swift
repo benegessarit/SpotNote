@@ -213,6 +213,131 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(controller.prompt == nil)
   }
 
+  @Test("a programmatic note swap tears the whole search session down")
+  func noteSwapClearsSearch() {
+    let (textView, controller) = armedSearch("alpha beta gamma alpha beta", caret: 0)
+    type(textView, "/")
+    type(textView, "a")
+    type(textView, "\r", keyCode: 36)
+    #expect(textView.vimSearchCommitted == true)
+    // The updateNSView note-switch order: teardown, then the swap.
+    textView.endVimSearchForTextSwap()
+    textView.string = "x"
+    #expect(textView.vimSearchMatches.isEmpty)
+    #expect(textView.vimSearchCommitted == false)
+    #expect(textView.vimSearchHiddenRanges.isEmpty)
+    // n after the swap reports instead of stepping stale offsets.
+    type(textView, "n")
+    #expect(controller.message?.kind == .error)
+  }
+
+  @Test("a note swap mid-prompt cancels the prompt with the session")
+  func noteSwapCancelsOpenPrompt() {
+    let (textView, controller) = armedSearch("alpha beta gamma", caret: 0)
+    type(textView, "/")
+    type(textView, "t")
+    #expect(!textView.vimSearchHiddenRanges.isEmpty)
+    textView.endVimSearchForTextSwap()
+    textView.string = "x"
+    #expect(controller.prompt == nil)
+    #expect(textView.vimSearchHiddenRanges.isEmpty)
+    #expect(textView.vimSearchMatches.isEmpty)
+  }
+
+  @Test("backspace during the prompt never fires the rendered-token revert")
+  func backspaceInPromptSkipsTokenRevert() {
+    let (textView, controller) = armedSearch("", caret: 0)
+    // Render a token the bare-backspace revert would otherwise target
+    // (menu-action insert; the coordinator's textDidChange normalize
+    // step is invoked directly -- no delegate in the fixture).
+    textView.insertText("@today", replacementRange: NSRange(location: 0, length: 0))
+    #expect(textView.normalizeSpecialTokens())
+    let rendered = textView.string
+    #expect(!rendered.contains("@today"))
+    type(textView, "/")
+    type(textView, "\u{08}", keyCode: 51)
+    // The prompt owned the backspace: closed, and the token stayed
+    // rendered (no text edit happened).
+    #expect(controller.prompt == nil)
+    #expect(textView.string == rendered)
+  }
+
+  @Test("Ctrl-W and Ctrl-U edit the query, never the note")
+  func controlChordsEditQueryNotNote() {
+    let (textView, controller) = armedSearch("alpha beta gamma", caret: 0)
+    type(textView, "/")
+    type(textView, "b")
+    type(textView, "e")
+    #expect(controller.prompt?.buffer == "be")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{17}", ignoring: "w", keyCode: 13, modifiers: .control)
+    )
+    #expect(controller.prompt?.buffer.isEmpty == true)
+    #expect(textView.string == "alpha beta gamma")
+    type(textView, "g")
+    #expect(controller.prompt?.buffer == "g")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{15}", ignoring: "u", keyCode: 32, modifiers: .control)
+    )
+    #expect(controller.prompt?.buffer.isEmpty == true)
+    #expect(textView.string == "alpha beta gamma")
+  }
+
+  @Test("arrow keys are ignored by the query buffer")
+  func arrowKeysIgnored() {
+    let (textView, controller) = armedSearch("alpha beta", caret: 0)
+    type(textView, "/")
+    type(textView, "b")
+    textView.keyDown(
+      with: keyEvent(characters: "\u{F701}", ignoring: "\u{F701}", keyCode: 125)
+    )
+    #expect(controller.prompt?.buffer == "b")
+    #expect(textView.vimSearchMatches.count == 1)
+  }
+
+  @Test("an aborted / keeps the previous committed search for n")
+  func escapeKeepsPreviousCommittedSearch() {
+    let (textView, controller) = armedSearch("alpha beta alpha", caret: 0)
+    type(textView, "/")
+    type(textView, "b")
+    type(textView, "\r", keyCode: 36)
+    #expect(textView.vimSearchQuery == "b")
+    type(textView, "/")
+    #expect(textView.vimSearchCommitted == false)
+    type(textView, "\u{1B}", keyCode: 53)
+    #expect(textView.vimSearchQuery == "b")
+    #expect(textView.vimSearchCommitted == true)
+    type(textView, "n")
+    #expect(controller.searchStatus == "1/1")
+  }
+
+  @Test("a capped result set draws bands only, never labels")
+  func cappedResultsHaveNoLabels() {
+    let big = String(repeating: "ab ", count: VimSearchCore.matchCap + 50)
+    // The controller must stay bound past the last keystroke: the view
+    // holds it weakly (AGENTS.md test footgun).
+    let (textView, controller) = armedSearch(big, caret: 0)
+    type(textView, "/")
+    type(textView, "a")
+    #expect(textView.vimSearchCapped == true)
+    #expect(textView.vimSearchLabelPlans.isEmpty)
+    #expect(textView.vimSearchMatches.count == VimSearchCore.matchCap)
+    #expect(controller.searchStatus?.contains("+") == true)
+  }
+
+  @Test("disabling vim mode clears a committed search")
+  func vimDisableClearsSearch() {
+    let (textView, controller) = armedSearch("alpha beta", caret: 0)
+    type(textView, "/")
+    type(textView, "b")
+    type(textView, "\r", keyCode: 36)
+    #expect(!textView.vimSearchMatches.isEmpty)
+    textView.vimModeEnabled = false
+    #expect(textView.vimSearchMatches.isEmpty)
+    #expect(textView.vimSearchBandsVisible == false)
+    #expect(controller.searchStatus == nil)
+  }
+
   // MARK: - Capsule surface
 
   @Test("the capsule renders search and command prompts, nothing else")

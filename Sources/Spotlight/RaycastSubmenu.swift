@@ -34,14 +34,15 @@ enum RaycastSubmenuMetrics {
   /// accessory gap; the rendered pill carries its own margin.
   static let chipGap: CGFloat = 22.5
   /// Section break, row-bottom to next-row-top (97.5px): 10.5pt gap,
-  /// the fade rule, 18pt to the caption's cap, caption, 8.25pt to rows.
+  /// the fade rule, 18pt to the caption's cap, caption, 8pt to rows.
   static let sectionBreakHeight: CGFloat = 48.75
   static let sectionGapAboveRule: CGFloat = 10.5
   static let sectionTextBottomPad: CGFloat = 8
-  /// A titled FIRST section has no separator: caption zone only. Not in
-  /// the capture (its first group is untitled) -- composed from the
-  /// probed rule-to-text/text-to-rows spacing.
-  static let firstSectionTitleHeight: CGFloat = 38.75
+  /// A titled FIRST section has no separator: the full break minus the
+  /// gap-above-rule and the rule itself (48.75 - 10.5 - 0.5). Not in
+  /// the capture (its first group is untitled) -- re-probe when a
+  /// capture with a titled first section exists.
+  static let firstSectionTitleHeight: CGFloat = 37.75
   /// Untitled mid-list break: the actions modal's probed group gap.
   static let untitledBreakHeight: CGFloat = 26.5
   static let searchHeight: CGFloat = 53.5
@@ -269,6 +270,8 @@ struct RaycastSubmenu: View {
     }
   }
 
+  /// Hairline + field sum to exactly `searchHeight`, so the static
+  /// sheet-height math stays honest.
   private var searchZone: some View {
     VStack(spacing: 0) {
       RaycastModalHairline()
@@ -369,7 +372,7 @@ private struct RaycastSubmenuSearchField: View {
     }
     .padding(.leading, 20)
     .padding(.trailing, 15.75)
-    .frame(height: RaycastSubmenuMetrics.searchHeight)
+    .frame(height: RaycastSubmenuMetrics.searchHeight - 0.5)
     .onAppear { focused = true }
   }
 
