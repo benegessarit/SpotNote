@@ -377,6 +377,7 @@ extension PlaceholderTextView {
       vimPasteboard.setString(text, forType: .string)
     }
     exitVisualLineSelection(restoreCaretTo: range.location)
+    flashYankHighlight(over: range)
   }
 
   /// `d` / `c` in visual line mode -- deletes the selection and either

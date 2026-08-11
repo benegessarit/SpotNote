@@ -177,6 +177,7 @@ extension PlaceholderTextView {
       vimPasteboard.setString(text, forType: .string)
     }
     exitVisualSelection(restoreCaretTo: visualCaret ?? range.location)
+    flashYankHighlight(over: range)
   }
 
   private func deleteVisualSelection(switchingToInsert: Bool) {
@@ -235,7 +236,9 @@ extension PlaceholderTextView {
 
   func drawVisualBlockCursor(in dirtyRect: NSRect) {
     guard let rect = visualBlockCursorRect(), rect.intersects(dirtyRect) else { return }
-    (editorCursorColor ?? Self.normalModeCursorColor).withAlphaComponent(0.82).setFill()
-    rect.fill()
+    let caret = visualCaret ?? visualLineCaret
+    let length = (string as NSString).length
+    let covered = caret.map { min(max(0, $0), max(0, length - 1)) }
+    fillVimBlockCursor(rect, coveringCharAt: covered)
   }
 }

@@ -210,6 +210,24 @@ require_grep "handlePendingReplace" "Sources/Spotlight/VimEngineNormalPending.sw
 require_grep "executeVimPasteBefore" "Sources/Spotlight/MultilineEditorVimPaste.swift"
 require_grep "r treats a digit as the literal replacement" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "J joins the next line up with a single space" "Tests/SpotlightTests/MultilineEditorVimCapsFamilyTests.swift"
+# Vim theme/feel round (David 2026-08-10: "cursor color isn't appropriate
+# ... visual select ... yank micro-interaction ... responsiveness"): the
+# block cursor is his nvim's rosewater chrome with the covered glyph
+# flipped to the surface (theme-switch.lua: Cursor bg=cursor fg=base) --
+# never the caret red or heading accent; the visual band substitutes in
+# the LAYOUT MANAGER's fill pass, the one place that holds when AppKit
+# swaps in the non-key unemphasized gray; yanks flash the Visual band on
+# nvim's 300ms clock (vim.hl.on_yank higroup=Visual); typing skips the
+# full-document styler clear while a note holds no backticks.
+require_grep "vimBlockCursor" "Sources/Spotlight/Theme.swift"
+require_grep "fillVimBlockCursor" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+reject_grep "withAlphaComponent(0.82)" "Sources/Spotlight/MultilineEditor.swift"
+reject_grep "withAlphaComponent(0.82)" "Sources/Spotlight/MultilineEditorVimVisual.swift"
+require_grep "vimVisualBandColor" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "flashYankHighlight" "Sources/Spotlight/MultilineEditorVimOperator.swift"
+require_grep "codeStylerLeftAttributes" "Sources/Spotlight/CodeStyler.swift"
+require_grep "yy flashes the yanked line with the Visual band" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "code styler skips the full clear while the note has no backticks" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
 reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
 reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
 reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"

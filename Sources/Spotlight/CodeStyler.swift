@@ -44,6 +44,10 @@ enum CodeStyler {
     let fraction: CGFloat = theme.mode == .dark ? 0.05 : 0.09
     let visualBg = base.blended(withFraction: fraction, of: NSColor(theme.text)) ?? base
     textView.selectedTextAttributes = [.backgroundColor: visualBg]
+    // The view paints visual-mode selection (and the yank flash) itself:
+    // AppKit swaps in the light unemphasized gray whenever the view is
+    // not first responder, which is exactly the band David flagged.
+    (textView as? PlaceholderTextView)?.editorVisualSelectionColor = visualBg
   }
 
   @MainActor
@@ -51,6 +55,15 @@ enum CodeStyler {
     applyVisualSelectionColor(to: textView, theme: theme)
     guard let layoutManager = textView.layoutManager else { return }
     let nsText = textView.string as NSString
+    // Typing hot path: this runs on EVERY text change, and the
+    // full-document temporary-attribute clear below invalidates the
+    // whole layout each time. All styling here keys on backticks, so a
+    // note without one -- after a pass that left no attributes -- has
+    // nothing to clear and nothing to add.
+    let hasBackticks = nsText.range(of: "`").location != NSNotFound
+    let placeholderView = textView as? PlaceholderTextView
+    if !hasBackticks, placeholderView?.codeStylerLeftAttributes == false { return }
+    placeholderView?.codeStylerLeftAttributes = hasBackticks
     let fullRange = NSRange(location: 0, length: nsText.length)
     layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
     layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)

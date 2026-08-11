@@ -49,6 +49,21 @@ public struct Theme: Equatable, Identifiable, Sendable {
 
   /// Resolved cursor color: the explicit `cursor` when set, else the heading accent.
   var resolvedCursor: Color { cursor ?? headingText }
+
+  /// nvim-parity vim BLOCK cursor (normal/visual modes): the catppuccin
+  /// ROSEWATER role his own nvim chrome uses for every block cursor
+  /// (config/theme-switch.lua apply_chrome + Ghostty cursor-color
+  /// #f5e0dc) with the covered glyph flipped to the surface color
+  /// (nvim: Cursor bg=cursor fg=base). Deliberately NOT `cursor` or the
+  /// heading accent: `cursor` is the INSERT caret's Raycast-parity role
+  /// (raycast-dark's is the probed caret red), and reusing it drew the
+  /// red block David rejected (2026-08-10). Mocha rosewater #F5E0DC on
+  /// dark themes, latte rosewater #DC8A78 on light.
+  var vimBlockCursor: Color {
+    mode == .dark
+      ? Color(red: 0xF5 / 255, green: 0xE0 / 255, blue: 0xDC / 255)
+      : Color(red: 0xDC / 255, green: 0x8A / 255, blue: 0x78 / 255)
+  }
 }
 
 /// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine/Ayu skins.

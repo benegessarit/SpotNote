@@ -442,6 +442,8 @@ struct MultilineEditor: NSViewRepresentable {
     let cursorColor = NSColor(theme.resolvedCursor)
     textView.insertionPointColor = cursorColor
     textView.editorCursorColor = cursorColor
+    textView.editorVimBlockCursorColor = NSColor(theme.vimBlockCursor)
+    textView.editorSurfaceColor = NSColor(theme.background)
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
@@ -616,6 +618,25 @@ final class PlaceholderTextView: NSTextView {
   /// Active theme's cursor color; falls back to `normalModeCursorColor` when the
   /// style pass hasn't run yet.
   var editorCursorColor: NSColor?
+  /// Active theme's vim BLOCK cursor (normal/visual) -- nvim-parity
+  /// rosewater-family chrome, never the accent (Theme.vimBlockCursor).
+  var editorVimBlockCursorColor: NSColor?
+  /// Active theme's surface color; the glyph under a block cursor flips
+  /// to it (nvim: Cursor fg=base reverse video).
+  var editorSurfaceColor: NSColor?
+  /// nvim-Visual selection band (5%/9% surface->text blend); owned by
+  /// `CodeStyler.applyVisualSelectionColor`, painted by the view itself
+  /// in visual mode so the non-key gray substitution never shows.
+  var editorVisualSelectionColor: NSColor?
+  /// Typing hot path: false while the note holds no code styling, so
+  /// `CodeStyler.apply` can skip its full-document temporary-attribute
+  /// clear (which invalidates the whole layout on every keystroke).
+  var codeStylerLeftAttributes = true
+  /// Yank flash state (nvim vim.hl.on_yank parity; see
+  /// MultilineEditorVimYankFlash.swift).
+  var yankFlashRange: NSRange?
+  var yankFlashAlpha: CGFloat = 0
+  var yankFlashGeneration = 0
   /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,
@@ -1930,8 +1951,7 @@ final class PlaceholderTextView: NSTextView {
       let blockRect = normalModeCursorDisplayRect(for: rect, turnedOn: flag)
       if flag {
         lastInsertionPointDisplayRect = blockRect
-        (editorCursorColor ?? Self.normalModeCursorColor).withAlphaComponent(0.82).setFill()
-        blockRect.fill()
+        fillVimBlockCursor(blockRect, coveringCharAt: selectedRange.location)
       } else {
         invalidateInsertionPointRect(blockRect)
       }
@@ -2304,6 +2324,36 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
   /// when position 0 falls back to a different font metric than the
   /// editor font.
   var editorFont: NSFont = SpotNoteFont.editor()
+
+  /// Vim visual band: AppKit substitutes the light unemphasized gray
+  /// for `selectedTextAttributes` whenever the view is not first
+  /// responder -- the band David flagged as "not appropriate". The
+  /// selection highlight is painted HERE (the layout manager background
+  /// pass), so this is the one place a substitution holds in every key
+  /// state; nvim's Visual blend replaces whatever color arrives while
+  /// visual mode owns the selection.
+  override func fillBackgroundRectArray(
+    _ rectArray: UnsafePointer<NSRect>,
+    count rectCount: Int,
+    forCharacterRange charRange: NSRange,
+    color: NSColor
+  ) {
+    super.fillBackgroundRectArray(
+      rectArray,
+      count: rectCount,
+      forCharacterRange: charRange,
+      color: vimVisualBandColor(for: charRange) ?? color
+    )
+  }
+
+  private func vimVisualBandColor(for charRange: NSRange) -> NSColor? {
+    guard let view = firstTextView as? PlaceholderTextView,
+      view.vimVisualBandActive,
+      let visual = view.editorVisualSelectionColor,
+      NSIntersectionRange(charRange, view.selectedRange).length > 0
+    else { return nil }
+    return visual
+  }
 
   override func setLineFragmentRect(
     _ fragmentRect: NSRect,

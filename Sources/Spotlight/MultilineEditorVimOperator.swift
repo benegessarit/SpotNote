@@ -30,6 +30,7 @@ extension PlaceholderTextView {
       range.length += nsString.lineRange(for: NSRange(location: nextStart, length: 0)).length
     }
     yankToVimPasteboard(nsString.substring(with: range), linewise: true)
+    flashYankHighlight(over: range)
   }
 
   private func applyOperator(_ op: VimOperator, overMotion motion: Motion) {
@@ -112,6 +113,7 @@ extension PlaceholderTextView {
     switch op {
     case .yank:
       setSelectedRange(NSRange(location: span.location, length: 0))
+      flashYankHighlight(over: span)
     case .delete:
       deleteSpan(span, linewise: linewise)
     case .change:
