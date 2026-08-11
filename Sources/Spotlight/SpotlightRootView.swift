@@ -138,19 +138,16 @@ struct SpotlightRootView: View {
       }
       editorCard
         .transaction { $0.animation = nil }
-      RaycastBottomBar(characterCount: session.currentText.count)
-        .overlay(alignment: .trailing) {
-          if preferences.vimMode {
-            VimModePill(controller: vimController, isKey: keyState.isKey || anyModalShown)
-              .padding(.trailing, 10)
-          }
-        }
-        .overlay(alignment: .leading) {
-          if preferences.vimMode {
-            VimPromptCapsule(controller: vimController, isKey: keyState.isKey || anyModalShown)
-              .padding(.leading, 10)
-          }
-        }
+      if preferences.vimMode {
+        VimAwareBottomBar(
+          controller: vimController,
+          characterCount: session.currentText.count,
+          theme: theme,
+          isKey: keyState.isKey || anyModalShown
+        )
+      } else {
+        RaycastBottomBar(characterCount: session.currentText.count)
+      }
     }
   }
 

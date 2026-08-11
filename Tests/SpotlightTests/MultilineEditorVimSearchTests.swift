@@ -338,13 +338,13 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(controller.searchStatus == nil)
   }
 
-  // MARK: - Capsule surface
+  // MARK: - Cmdline surface
 
-  @Test("the capsule renders search and command prompts, nothing else")
-  func capsuleGlyphRouting() {
-    #expect(VimPromptCapsule.glyph(for: .search) == "bolt.fill")
-    #expect(VimPromptCapsule.glyph(for: .command) == "chevron.right")
-    #expect(VimPromptCapsule.glyph(for: .wordHint) == nil)
+  @Test("the cmdline renders search and command prompts, nothing else")
+  func cmdlineSigilRouting() {
+    #expect(VimCmdline.sigil(for: .search) == "bolt.fill")
+    #expect(VimCmdline.sigil(for: .command) == "chevron.right")
+    #expect(VimCmdline.sigil(for: .wordHint) == nil)
   }
 
   @Test("search status formats live counts, the cap, and no-matches")

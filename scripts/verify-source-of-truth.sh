@@ -254,17 +254,22 @@ require_grep "visual line M-j moves the selected block and keeps the selection" 
 # from the label alphabet, single-char labels only, overflow -> nearest);
 # label-jump commits with bands off (his jump nohlsearch), Enter with
 # bands on; n/N re-light; * searches the caret word; edits clear; the
-# bolt capsule renders the prompt (it was typed BLIND before); dim bands
-# sit one step under the Visual band.
+# cmdline renders the prompt editor-aligned at editor size (typed BLIND
+# before); the mode badge wears the Raycast T-circle treatment; dim
+# bands sit one step under the Visual band.
 require_file "Sources/Spotlight/VimSearch.swift"
 require_file "Sources/Spotlight/MultilineEditorVimSearch.swift"
-require_file "Sources/Spotlight/VimPromptCapsule.swift"
+require_file "Sources/Spotlight/VimCmdline.swift"
+require_file "Sources/Spotlight/VimModeBadge.swift"
 require_grep "matchCap = 500" "Sources/Spotlight/VimSearch.swift"
 require_grep "survivingKeys" "Sources/Spotlight/VimSearch.swift"
 require_grep "theme.mode == .dark ? 0.07 : 0.10" "Sources/Spotlight/CodeStyler.swift"
 require_grep "case .search, .flash, .lineFlash, .wordHint:" "Sources/Spotlight/VimController.swift"
 require_grep "searchClearHandler" "Sources/Spotlight/SpotlightWindowVim.swift"
-require_grep "VimPromptCapsule(controller: vimController" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "VimAwareBottomBar(" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "padding(.leading, EditorMetrics.textLeadingGap)" "Sources/Spotlight/VimCmdline.swift"
+reject_grep "VimPromptCapsule" "Sources/Spotlight/SpotlightRootView.swift"
+reject_grep "VimModePill" "Sources/Spotlight/SpotlightRootView.swift"
 require_grep "a non-extending label character jumps, commits for n/N, and darkens bands" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
 require_grep "label alphabet excludes every character that could extend the query" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
 require_grep "labels stay single-character on overflow" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
