@@ -193,6 +193,14 @@ public final class ShortcutStore: ObservableObject {
     bindings[action] ?? action.defaultShortcut
   }
 
+  /// The stored binding only -- nil when the action is unbound (every
+  /// default candidate was user-owned at load). Surfaces that must not
+  /// advertise a chord `match(key:modifiers:)` will never resolve use
+  /// this; `binding(for:)` keeps the display-default fallback.
+  public func assignedBinding(for action: ShortcutAction) -> Shortcut? {
+    bindings[action]
+  }
+
   @discardableResult
   public func setBinding(_ shortcut: Shortcut, for action: ShortcutAction) -> SetResult {
     guard !shortcut.modifiers.isEmpty else { return .missingModifier }
@@ -239,18 +247,25 @@ public final class ShortcutStore: ObservableObject {
     for action in ShortcutAction.allCases {
       if let shortcut = loaded[action] {
         result[action] = shortcut
-      } else {
-        result[action] = firstAvailableCandidate(for: action, avoiding: alreadyOwned.union(result.values))
+      } else if let candidate = firstAvailableCandidate(
+        for: action,
+        avoiding: alreadyOwned.union(result.values)
+      ) {
+        result[action] = candidate
       }
     }
     return result
   }
 
+  /// The first default candidate no other action owns, or nil when every
+  /// candidate is taken -- the action then loads UNBOUND rather than
+  /// double-booking a chord `setBinding` itself refuses (a duplicate
+  /// value would make `match(key:modifiers:)` nondeterministic).
   private static func firstAvailableCandidate(
     for action: ShortcutAction,
     avoiding used: Set<Shortcut>
-  ) -> Shortcut {
-    action.defaultShortcutCandidates.first { !used.contains($0) } ?? action.defaultShortcut
+  ) -> Shortcut? {
+    action.defaultShortcutCandidates.first { !used.contains($0) }
   }
 
   private func persist() {

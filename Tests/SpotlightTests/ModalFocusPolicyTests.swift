@@ -78,3 +78,61 @@ struct ModalFocusPolicyTests {
     #expect(!RaycastModalOverhang.isOwned(member))
   }
 }
+
+/// ⌘K Raycast parity: while a modal shows, its CHILD panel is key, so
+/// chords bypass the main panel's key-equivalent table entirely. The
+/// panel consults an installed handler, and the pure policy decides --
+/// same shape as `ModalFocusPolicy`, testable without a key loop.
+@MainActor
+struct ModalKeyEquivalentTests {
+  private func cmdKEvent() -> NSEvent? {
+    NSEvent.keyEvent(
+      with: .keyDown,
+      location: .zero,
+      modifierFlags: [.command],
+      timestamp: 0,
+      windowNumber: 0,
+      context: nil,
+      characters: "k",
+      charactersIgnoringModifiers: "k",
+      isARepeat: false,
+      keyCode: 40
+    )
+  }
+
+  @Test("only the actions-menu chord acts: switch over browse, toggle over actions")
+  func policyReactions() {
+    #expect(
+      ModalKeyEquivalentPolicy.reaction(action: .openActions, fuzzyVisible: true)
+        == .switchToActions
+    )
+    #expect(
+      ModalKeyEquivalentPolicy.reaction(action: .openActions, fuzzyVisible: false)
+        == .toggleActions
+    )
+    #expect(ModalKeyEquivalentPolicy.reaction(action: .newNote, fuzzyVisible: false) == .ignore)
+    #expect(ModalKeyEquivalentPolicy.reaction(action: nil, fuzzyVisible: true) == .ignore)
+  }
+
+  @Test("the child panel consults its key-equivalent handler before super")
+  func childPanelConsultsHandler() throws {
+    let panel = RaycastModalChildPanel(
+      contentRect: .zero,
+      styleMask: [.borderless, .nonactivatingPanel],
+      backing: .buffered,
+      defer: true
+    )
+    panel.isReleasedWhenClosed = false
+    let event = try #require(cmdKEvent())
+    var seen: [String] = []
+    panel.onKeyEquivalent = { chord in
+      seen.append(chord.charactersIgnoringModifiers ?? "")
+      return true
+    }
+    #expect(panel.performKeyEquivalent(with: event))
+    #expect(seen == ["k"])
+
+    panel.onKeyEquivalent = { _ in false }
+    #expect(!panel.performKeyEquivalent(with: event), "unhandled chords stay inert")
+  }
+}

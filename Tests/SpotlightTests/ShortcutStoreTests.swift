@@ -184,6 +184,44 @@ struct ShortcutStoreTests {
     #expect(stored["fuzzyFindAll"] == nil)
   }
 
+  @Test("backfill leaves a new action unbound when a user remap owns its only default")
+  func backfillExhaustionLeavesActionUnbound() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where action != .openActions {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    // The pre-upgrade user legally moved Find in Note onto ⌘K -- the
+    // single default candidate of the new openActions action.
+    oldMap[ShortcutAction.findInNote.rawValue] = Shortcut(key: "k", modifiers: [.command])
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    let store = ShortcutStore(defaults: defaults, storageKey: key)
+
+    #expect(store.assignedBinding(for: .openActions) == nil)
+    #expect(store.match(key: "k", modifiers: [.command]) == .findInNote)
+    let storedData = try #require(defaults.data(forKey: key))
+    let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
+    #expect(stored[ShortcutAction.openActions.rawValue] == nil)
+    #expect(Set(stored.values).count == stored.count, "no chord is double-booked")
+  }
+
+  @Test("default chords are pairwise unique so a fresh load never conflicts")
+  func defaultChordsArePairwiseUnique() {
+    let all = ShortcutAction.allCases.map(\.defaultShortcut)
+    #expect(Set(all).count == all.count)
+  }
+
+  @Test("settings pane lists every action whose binding has a live consumer")
+  func settingsPaneCoversAllConsumedActions() {
+    let listed = Set(ShortcutsPane.groups.flatMap(\.actions))
+    // appendToLastNote's binding has no live consumer (the global-hotkey
+    // lane registers only toggleHotkey), so it earns no settings row.
+    let expected = Set(ShortcutAction.allCases).subtracting([.appendToLastNote])
+    #expect(listed == expected)
+  }
+
   @Test("resetAll restores every action to its default")
   func resetAllRestoresDefaults() {
     let store = ShortcutStore(defaults: makeDefaults())

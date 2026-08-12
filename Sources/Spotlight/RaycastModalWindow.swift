@@ -4,8 +4,38 @@ import SwiftUI
 /// Borderless child panel for the floating modals; must be able to take
 /// key so the modal search field can type.
 final class RaycastModalChildPanel: NSPanel {
+  /// Chords land HERE while a modal shows (this panel is key), never in
+  /// the main panel's key-equivalent table. The presenter wires the
+  /// HUD's handler so the actions-menu chord can toggle; unhandled
+  /// chords keep today's inert behavior via super.
+  var onKeyEquivalent: ((NSEvent) -> Bool)?
+
   override var canBecomeKey: Bool { true }
   override var canBecomeMain: Bool { false }
+
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    if let onKeyEquivalent, onKeyEquivalent(event) { return true }
+    return super.performKeyEquivalent(with: event)
+  }
+}
+
+/// Pure decision for chords arriving at a modal child panel, beside
+/// `ModalFocusPolicy` for the same reason: testable without a key loop.
+/// Only the actions-menu chord acts (Raycast's ⌘K toggles its menu);
+/// every other chord stays inert, matching pre-⌘K behavior.
+enum ModalKeyEquivalentPolicy {
+  enum Reaction: Equatable {
+    /// The browse modal is up: ⌘K replaces it with the actions menu.
+    case switchToActions
+    /// The actions menu is up: ⌘K closes it (the Raycast toggle).
+    case toggleActions
+    case ignore
+  }
+
+  static func reaction(action: ShortcutAction?, fuzzyVisible: Bool) -> Reaction {
+    guard action == .openActions else { return .ignore }
+    return fuzzyVisible ? .switchToActions : .toggleActions
+  }
 }
 
 /// Pure decision table for the modal window family's key changes,
@@ -67,6 +97,9 @@ struct RaycastModalOverhang: NSViewRepresentable {
   /// The modal sheet to present, or nil to dismiss.
   let content: AnyView?
   let onDismissTap: () -> Void
+  /// Key-equivalent handler installed on the child panel (see
+  /// `RaycastModalChildPanel.onKeyEquivalent`).
+  let onKeyEquivalent: (NSEvent) -> Bool
 
   /// Transparent margin around the sheet; taps here dismiss, like the
   /// parent window's tap-catch. (The drop shadow is the window server's
@@ -92,13 +125,19 @@ struct RaycastModalOverhang: NSViewRepresentable {
     let coordinator = context.coordinator
     let content = content
     let onDismissTap = onDismissTap
+    let onKeyEquivalent = onKeyEquivalent
     DispatchQueue.main.async {
-      coordinator.update(content: content, anchor: view.window, onDismissTap: onDismissTap)
+      coordinator.update(
+        content: content,
+        anchor: view.window,
+        onDismissTap: onDismissTap,
+        onKeyEquivalent: onKeyEquivalent
+      )
     }
   }
 
   static func dismantleNSView(_ view: NSView, coordinator: Coordinator) {
-    coordinator.update(content: nil, anchor: nil, onDismissTap: {})
+    coordinator.update(content: nil, anchor: nil, onDismissTap: {}, onKeyEquivalent: { _ in false })
   }
 
   func makeCoordinator() -> Coordinator { Coordinator() }
@@ -106,10 +145,18 @@ struct RaycastModalOverhang: NSViewRepresentable {
   @MainActor final class Coordinator {
     private var child: RaycastModalChildPanel?
     private var onDismissTap: () -> Void = {}
+    private var onKeyEquivalent: (NSEvent) -> Bool = { _ in false }
     private var resignObserver: NSObjectProtocol?
 
-    func update(content: AnyView?, anchor: NSWindow?, onDismissTap: @escaping () -> Void) {
+    func update(
+      content: AnyView?,
+      anchor: NSWindow?,
+      onDismissTap: @escaping () -> Void,
+      onKeyEquivalent: @escaping (NSEvent) -> Bool
+    ) {
       self.onDismissTap = onDismissTap
+      self.onKeyEquivalent = onKeyEquivalent
+      child?.onKeyEquivalent = onKeyEquivalent
       guard let content else {
         dismiss(returnKeyTo: anchor)
         return
@@ -148,6 +195,7 @@ struct RaycastModalOverhang: NSViewRepresentable {
       // border -> sheet directly; its own CSS shadow (10-20% black,
       // soft) is invisible against the dark desk.
       panel.hasShadow = false
+      panel.onKeyEquivalent = onKeyEquivalent
       // The overhang root is its OWN hosting tree: the HUD's
       // `.colorScheme(.dark)` does not reach it, and the sheet material
       // must stay dark in system light mode.

@@ -93,7 +93,8 @@ struct SpotlightRootView: View {
       .background(
         RaycastModalOverhang(
           content: anyModalShown ? AnyView(activeModal) : nil,
-          onDismissTap: { dismissModals() }
+          onDismissTap: { dismissModals() },
+          onKeyEquivalent: { handleModalKeyEquivalent($0) }
         )
       )
       .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
@@ -400,9 +401,10 @@ extension SpotlightRootView {
   }
 
   /// Keycap strings for the action's live (user-remappable) binding, e.g.
-  /// ["⌘", "F"].
+  /// ["⌘", "F"]. An unbound action gets no chip -- showing the default
+  /// would advertise a chord that never fires.
   private func keycaps(for action: ShortcutAction) -> [String] {
-    let binding = shortcuts.binding(for: action)
+    guard let binding = shortcuts.assignedBinding(for: action) else { return [] }
     var caps = binding.modifiers.displayString.map(String.init)
     caps.append(Shortcut.displayKey(binding.key))
     return caps
@@ -411,6 +413,31 @@ extension SpotlightRootView {
   private func dismissModals() {
     if fuzzy.isVisible { fuzzy.close() }
     actionsModalShown = false
+  }
+
+  /// Chords pressed while a modal shows land on the key CHILD panel,
+  /// never on the main panel's key-equivalent table -- resolve against
+  /// the same bindings and let the policy decide (Raycast parity: ⌘K
+  /// toggles the actions menu closed; over the browse modal it switches
+  /// to the actions menu).
+  private func handleModalKeyEquivalent(_ event: NSEvent) -> Bool {
+    let mask: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+    let mods = ShortcutModifierSet(event.modifierFlags.intersection(mask))
+    let key = Shortcut.normalize(event.charactersIgnoringModifiers ?? "")
+    switch ModalKeyEquivalentPolicy.reaction(
+      action: shortcuts.match(key: key, modifiers: mods),
+      fuzzyVisible: fuzzy.isVisible
+    ) {
+    case .switchToActions:
+      fuzzy.close()
+      actionsModalShown = true
+      return true
+    case .toggleActions:
+      actionsModalShown.toggle()
+      return true
+    case .ignore:
+      return false
+    }
   }
 
   /// Esc closes an open modal before it can close the HUD.

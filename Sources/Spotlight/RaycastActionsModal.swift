@@ -35,9 +35,22 @@ struct RaycastActionsModal: View {
         list
       }
     }
-    .onChange(of: query) { _, _ in
-      selectedIndex = filtered.firstIndex(where: \.isEnabled) ?? 0
+    .onAppear {
+      selectedIndex = Self.firstEnabledIndex(in: filtered)
     }
+    .onChange(of: query) { _, _ in
+      selectedIndex = Self.firstEnabledIndex(in: filtered)
+    }
+  }
+
+  /// First row the selection can rest on. Disabled rows never take the
+  /// highlight (commit/submenu guard on `isEnabled`), so opening over a
+  /// leading run of disabled rows -- an empty note dims New Note and
+  /// Duplicate -- must seat the selection on the first enabled row or
+  /// Enter/→ are dead until the user presses ↓. All-disabled keeps 0 as
+  /// an inert resting place.
+  static func firstEnabledIndex(in rows: [SpotNoteCommand]) -> Int {
+    rows.firstIndex(where: \.isEnabled) ?? 0
   }
 
   private var list: some View {

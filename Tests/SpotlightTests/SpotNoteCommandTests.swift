@@ -102,3 +102,28 @@ struct SpotNoteCommandTests {
     )
   }
 }
+
+/// Opening selection for the actions modal: an empty note dims the
+/// leading rows (New Note, Duplicate), and a selection resting on a
+/// disabled row leaves Enter/→ dead until the user presses ↓.
+@MainActor
+struct RaycastActionsModalSelectionTests {
+  @Test("opening selection seats on the first enabled row past a disabled run")
+  func firstEnabledIndexSkipsLeadingDisabledRows() {
+    let rows = [
+      SpotNoteCommand(id: "a", title: "A", icon: .stackedCards, isEnabled: false),
+      SpotNoteCommand(id: "b", title: "B", icon: .stackedCards, isEnabled: false),
+      SpotNoteCommand(id: "c", title: "C", icon: .stackedCards)
+    ]
+    #expect(RaycastActionsModal.firstEnabledIndex(in: rows) == 2)
+  }
+
+  @Test("opening selection rests inert at zero when no row is enabled")
+  func firstEnabledIndexAllDisabled() {
+    let rows = [
+      SpotNoteCommand(id: "a", title: "A", icon: .stackedCards, isEnabled: false)
+    ]
+    #expect(RaycastActionsModal.firstEnabledIndex(in: rows) == 0)
+    #expect(RaycastActionsModal.firstEnabledIndex(in: []) == 0)
+  }
+}
