@@ -194,9 +194,9 @@ public final class ShortcutStore: ObservableObject {
   }
 
   /// The stored binding only -- nil when the action is unbound (every
-  /// default candidate was user-owned at load). Surfaces that must not
-  /// advertise a chord `match(key:modifiers:)` will never resolve use
-  /// this; `binding(for:)` keeps the display-default fallback.
+  /// default candidate was user-owned at load). Display surfaces use
+  /// this so they never advertise a chord that `match(key:modifiers:)`
+  /// cannot resolve; `binding(for:)` keeps the display-default fallback.
   public func assignedBinding(for action: ShortcutAction) -> Shortcut? {
     bindings[action]
   }

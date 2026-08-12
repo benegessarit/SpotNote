@@ -43,20 +43,26 @@ extension PlaceholderTextView {
   /// Escape: nvim restores the pre-search position and the previous
   /// committed pattern (n/N still work after an aborted `/`).
   func cancelVimSearchSession() {
-    let origin = vimSearchOriginCaret
     let stash = vimSearchStash
+    restoreVimSearchOriginCaret()
     clearVimSearch()
-    if let origin {
-      let clamped = min(origin, (string as NSString).length)
-      setSelectedRange(NSRange(location: clamped, length: 0))
-      scrollRangeToVisible(selectedRange)
-    }
     if let stash {
       restoreVimSearch(from: stash)
     } else {
       vimController?.clearSearchStatus()
     }
     needsDisplay = true
+  }
+
+  /// Put the caret back where `/` opened. incsearch may have parked it
+  /// on a since-erased query's match, so every path that acts "from the
+  /// cursor" (Escape restore, the empty-⏎ repeat) must go home first --
+  /// vim's cursor never actually moved.
+  private func restoreVimSearchOriginCaret() {
+    guard let origin = vimSearchOriginCaret else { return }
+    let clamped = min(origin, (string as NSString).length)
+    setSelectedRange(NSRange(location: clamped, length: 0))
+    scrollRangeToVisible(selectedRange)
   }
 
   private func restoreVimSearch(from stash: VimSearchStash) {
@@ -176,6 +182,7 @@ extension PlaceholderTextView {
     let buffer = controller.prompt?.buffer ?? ""
     controller.cancelPrompt()
     if buffer.isEmpty {
+      restoreVimSearchOriginCaret()
       guard let stash = vimSearchStash else {
         clearVimSearch()
         controller.clearSearchStatus()

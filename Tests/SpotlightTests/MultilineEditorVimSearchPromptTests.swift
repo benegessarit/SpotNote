@@ -26,6 +26,9 @@ extension MultilineEditorVimLogicalLineMotionTests {
   func optionChordSwallowedInSearchPrompt() {
     let (textView, controller) = armedSearch("alpha\nbeta", caret: 0)
     type(textView, "/")
+    type(textView, "b")
+    type(textView, "\r", keyCode: 36)
+    type(textView, "/")
     type(textView, "a")
     // ⌥J is mini.move's line swap when it reaches the vim engine.
     textView.keyDown(
@@ -34,6 +37,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(textView.string == "alpha\nbeta")
     #expect(controller.prompt?.buffer == "a")
     #expect(!textView.vimSearchMatches.isEmpty)
+    // The parked previous search survived the swallowed chord.
+    #expect(textView.vimSearchStash != nil)
   }
 
   @Test("option chords are swallowed by the : prompt, never edit the note")
@@ -154,6 +159,27 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(controller.message?.kind == .error)
     type(textView, "n")
     #expect(controller.searchStatus == "1/1")
+  }
+
+  @Test("empty Enter repeats from where / opened, not the incsearch-drifted caret")
+  func emptyEnterRepeatsFromPromptOrigin() {
+    let (textView, controller) = armedSearch("aa x b aa", caret: 0)
+    type(textView, "/")
+    type(textView, "a")
+    type(textView, "a")
+    type(textView, "\r", keyCode: 36)
+    type(textView, "n")
+    #expect(textView.selectedRange.location == 7)
+    type(textView, "/")
+    type(textView, "b")
+    // incsearch parks the caret on the dead query's match at 5...
+    #expect(textView.selectedRange.location == 5)
+    type(textView, "\u{08}", keyCode: 51)
+    type(textView, "\r", keyCode: 36)
+    // ...but vim's cursor never moved: the repeat steps from 7 and
+    // wraps to the top. A drift-anchored repeat would land on 7 again.
+    #expect(textView.selectedRange.location == 0)
+    #expect(controller.searchStatus == "1/2")
   }
 
   @Test("Enter on an empty / with no previous search reports instead of committing")
