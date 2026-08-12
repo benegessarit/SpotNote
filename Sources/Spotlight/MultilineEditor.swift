@@ -320,6 +320,11 @@ struct MultilineEditor: NSViewRepresentable {
     func textViewDidChangeSelection(_ notification: Notification) {
       guard let textView = notification.object as? PlaceholderTextView else { return }
       parent.refreshSuggestion(on: textView)
+      // Caret moved onto/off a pasted link: restyle once so the conceal
+      // opens (or re-collapses) -- nvim's cursor-line conceal reveal.
+      if textView.linkRevealStateChanged() {
+        parent.applyCodeStyling(on: textView)
+      }
     }
 
     func textDidChange(_ notification: Notification) {
@@ -354,6 +359,9 @@ struct MultilineEditor: NSViewRepresentable {
       // Stop showing "2/5" once the user starts editing -- match indices
       // are about to be wrong anyway.
       textView.vimController?.clearSearchStatus()
+      // Editing under an open preview card: the anchored link may have
+      // moved or vanished, so drop the card rather than track it.
+      textView.linkPreview.dismiss()
       if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
         ruler.updateRequiredThickness()
         ruler.needsDisplay = true
@@ -455,6 +463,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.typingAttributes = textAttributes
     textView.editorTextAttributes = textAttributes
     textView.editorHeadingTextColor = NSColor(theme.text)
+    textView.editorTheme = theme
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
       ruler.editorFont = font
     }
@@ -661,6 +670,15 @@ final class PlaceholderTextView: NSTextView {
   /// Dim band under every search match; the current match wears the
   /// Visual band. Set by CodeStyler.applyVisualSelectionColor.
   var editorSearchDimBandColor: NSColor?
+  /// Pasted-link conceal + hover preview state (LinkDetection,
+  /// CodeStylerLinks, MultilineEditorLinkHover). `linkSpans` is refreshed
+  /// by every CodeStylerLinks pass; `linkRevealCache` tracks which span
+  /// the caret last touched so restyles run per transition, not per move.
+  var linkSpans: [LinkSpan] = []
+  var linkRevealCache: NSRange?
+  var linkTrackingArea: NSTrackingArea?
+  var editorTheme: Theme?
+  let linkPreview = LinkPreviewController()
   /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,

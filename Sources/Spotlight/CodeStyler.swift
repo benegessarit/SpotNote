@@ -67,16 +67,17 @@ enum CodeStyler {
     let nsText = textView.string as NSString
     // Typing hot path: this runs on EVERY text change, and the
     // full-document temporary-attribute clear below invalidates the
-    // whole layout each time. All styling here keys on backticks, so a
-    // note without one -- after a pass that left no attributes -- has
-    // nothing to clear and nothing to add.
+    // whole layout each time. All styling here keys on backticks or a
+    // pasted URL scheme, so a note without either -- after a pass that
+    // left no attributes -- has nothing to clear and nothing to add.
     let hasBackticks = nsText.range(of: "`").location != NSNotFound
+    let hasLinks = nsText.range(of: "://").location != NSNotFound
     let placeholderView = textView as? PlaceholderTextView
-    if !hasBackticks, placeholderView?.codeStylerLeftAttributes == false { return }
-    placeholderView?.codeStylerLeftAttributes = hasBackticks
+    if !hasBackticks, !hasLinks, placeholderView?.codeStylerLeftAttributes == false { return }
+    placeholderView?.codeStylerLeftAttributes = hasBackticks || hasLinks
     let fullRange = NSRange(location: 0, length: nsText.length)
-    layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
-    layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+    clearTransientAttributes(layoutManager, fullRange: fullRange)
+    placeholderView?.linkSpans = []
     guard fullRange.length > 0 else { return }
     let palette = palette(for: theme)
     let processed = styleTriples(
@@ -97,6 +98,15 @@ enum CodeStyler {
       fullRange: fullRange,
       layoutManager: layoutManager,
       palette: palette,
+      processed: processed
+    )
+    // MUST stay last: conceal rides storage fonts, and the heading pass
+    // above re-imposes the base font each restyle (that reset IS the
+    // un-conceal path -- see CodeStylerLinks).
+    CodeStylerLinks.apply(
+      in: nsText,
+      textView: textView,
+      style: CodeStylerLinks.Style(accent: NSColor(theme.headingText)),
       processed: processed
     )
   }
@@ -299,5 +309,19 @@ enum CodeStyler {
       number: NSColor(red: 0.04, green: 0.52, blue: 0.35, alpha: 1.0),
       comment: NSColor(white: 0.45, alpha: 1.0)
     )
+  }
+}
+
+extension CodeStyler {
+  /// Full-document clear of every temporary attribute a styling pass may
+  /// have left (code tints, backgrounds, link underlines).
+  static func clearTransientAttributes(
+    _ layoutManager: NSLayoutManager,
+    fullRange: NSRange
+  ) {
+    layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.underlineStyle, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.underlineColor, forCharacterRange: fullRange)
   }
 }
