@@ -34,7 +34,7 @@ struct VimCmdline: View {
     switch kind {
     case .search: return "bolt.fill"
     case .command: return "chevron.right"
-    default: return nil
+    case .flash, .lineFlash, .wordHint: return nil
     }
   }
 
@@ -95,10 +95,17 @@ struct VimAwareBottomBar: View {
   let theme: Theme
   let isKey: Bool
 
+  /// Only a prompt that RENDERS a cmdline may displace the counter:
+  /// flash/word-hint prompts draw inside the editor and render nothing
+  /// here, so hiding the bar for them left it entirely blank.
+  private var promptHasCmdline: Bool {
+    controller.prompt.map { VimCmdline.sigil(for: $0.kind) != nil } ?? false
+  }
+
   var body: some View {
     RaycastBottomBar(characterCount: characterCount)
-      .opacity(controller.prompt == nil ? 1 : 0)
-      .animation(.easeOut(duration: 0.12), value: controller.prompt == nil)
+      .opacity(promptHasCmdline ? 0 : 1)
+      .animation(.easeOut(duration: 0.12), value: promptHasCmdline)
       .overlay(alignment: .leading) {
         VimCmdline(controller: controller, theme: theme, isKey: isKey)
           .padding(.trailing, 56)
