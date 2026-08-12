@@ -6,11 +6,12 @@ import Foundation
 /// every rule here is exact-testable.
 ///
 /// The load-bearing invariant is UNAMBIGUITY: a typed key either
-/// extends the query or names a label, never both. For literal
-/// substring search every occurrence of `query + c` starts at an
-/// occurrence of `query`, so the set of extending characters is exactly
-/// "the character after each current match" -- labels are drawn from
-/// the charset MINUS that set.
+/// extends the query or names a label, never both. Every occurrence of
+/// `query + c` starts at an occurrence of `query` -- but the DRAWN
+/// match list comes from a non-overlapping scan, which skips
+/// self-overlapping occurrences ("aaas" + "aa" records only (0,2), not
+/// (1,2)). The extension set therefore runs its own OVERLAPPING scan of
+/// the text; labels are drawn from the charset MINUS that set.
 struct VimSearchLabelPlan: Equatable {
   let label: Character
   let matchIndex: Int
@@ -48,17 +49,27 @@ enum VimSearchCore {
   }
 
   /// Characters that would extend the query to a non-empty match set:
-  /// the (case-folded) character immediately after each current match.
-  static func extensionCharacters(matches: [NSRange], text: String) -> Set<Character> {
+  /// the (case-folded) character immediately after EVERY occurrence of
+  /// the query, via an overlapping scan -- an occurrence the drawn
+  /// match list skips can still be extended, and a label handed out for
+  /// its next character would shadow that extension.
+  static func extensionCharacters(of query: String, in text: String) -> Set<Character> {
+    guard !query.isEmpty else { return [] }
     let nsText = text as NSString
     var set: Set<Character> = []
-    for match in matches {
-      let next = match.location + match.length
-      guard next < nsText.length else { continue }
-      let charRange = nsText.rangeOfComposedCharacterSequence(at: next)
-      for ch in nsText.substring(with: charRange).lowercased() {
-        set.insert(ch)
+    var location = 0
+    while location < nsText.length {
+      let remaining = NSRange(location: location, length: nsText.length - location)
+      let range = nsText.range(of: query, options: [.caseInsensitive], range: remaining)
+      if range.location == NSNotFound { break }
+      let next = range.location + range.length
+      if next < nsText.length {
+        let charRange = nsText.rangeOfComposedCharacterSequence(at: next)
+        for ch in nsText.substring(with: charRange).lowercased() {
+          set.insert(ch)
+        }
       }
+      location = range.location + 1
     }
     return set
   }
@@ -66,8 +77,8 @@ enum VimSearchCore {
   /// The label alphabet for this round: his charset minus every
   /// extending character. Can be empty (all keys extend) -- then no
   /// labels show and every key extends, the honest fallback.
-  static func survivingKeys(matches: [NSRange], text: String) -> [Character] {
-    let extending = extensionCharacters(matches: matches, text: text)
+  static func survivingKeys(query: String, text: String) -> [Character] {
+    let extending = extensionCharacters(of: query, in: text)
     return labelKeys.filter { !extending.contains($0) }
   }
 

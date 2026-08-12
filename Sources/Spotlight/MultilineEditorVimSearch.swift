@@ -137,13 +137,7 @@ extension PlaceholderTextView {
       return true
     }
     if event.keyCode == 36 || event.keyCode == 76 {
-      controller.cancelPrompt()
-      if vimSearchMatches.isEmpty {
-        clearVimSearch()
-        controller.clearSearchStatus()
-      } else {
-        commitVimSearch(bandsVisible: true)
-      }
+      handleSearchPromptEnter(controller: controller)
       return true
     }
     if event.keyCode == 51 {
@@ -158,11 +152,48 @@ extension PlaceholderTextView {
     if mods.contains(.control) {
       return handleSearchPromptControlChord(event: event, controller: controller)
     }
+    // The prompt owns its keys: an unrecognized ⌥/⌘ chord is swallowed,
+    // never declined -- falling through reaches handleVimKey, where ⌥J
+    // (mini.move) edited the note and destroyed the session mid-prompt.
+    // ⌥-composed printables (non-US layouts) are dropped too, a
+    // deliberate tradeoff.
     let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
+    guard nonShift.isEmpty else { return true }
     guard let typed = event.characters, !typed.isEmpty else { return true }
     consumeSearchPromptCharacters(typed, controller: controller)
     return true
+  }
+
+  /// Enter, vim's `/⏎` family. A typed query with matches commits
+  /// (bands persist, n/N cycle). An EMPTY query repeats the previous
+  /// committed search: restore the stash and step past the caret --
+  /// pre-fix this branch destroyed the stash, so `n` errored "no
+  /// previous search". A query with NO matches keeps the previous
+  /// pattern exactly like Escape and reports the failure; vim would
+  /// also overwrite @/ with the failed pattern -- deliberately diverged
+  /// so `n` keeps working on the last real search.
+  private func handleSearchPromptEnter(controller: VimController) {
+    let buffer = controller.prompt?.buffer ?? ""
+    controller.cancelPrompt()
+    if buffer.isEmpty {
+      guard let stash = vimSearchStash else {
+        clearVimSearch()
+        controller.clearSearchStatus()
+        controller.showMessage("no previous search", kind: .error)
+        return
+      }
+      restoreVimSearch(from: VimSearchStash(query: stash.query, bandsVisible: true))
+      vimSearchOriginCaret = nil
+      vimSearchStash = nil
+      executeVimFindStep(1)
+      return
+    }
+    if vimSearchMatches.isEmpty {
+      cancelVimSearchSession()
+      controller.showMessage("pattern not found: \(buffer)", kind: .error)
+      return
+    }
+    commitVimSearch(bandsVisible: true)
   }
 
   /// Control chords edit the QUERY, never the note (the shared
@@ -173,6 +204,12 @@ extension PlaceholderTextView {
     controller: VimController
   ) -> Bool {
     let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+    // c_CTRL-C aborts the cmdline exactly like Escape (vim parity).
+    if chars == "c" {
+      controller.cancelPrompt()
+      cancelVimSearchSession()
+      return true
+    }
     if let edited = VimController.promptBufferEdit(
       controlChord: chars,
       buffer: controller.prompt?.buffer ?? ""
@@ -250,7 +287,7 @@ extension PlaceholderTextView {
       vimSearchLabelPlans = []
       publishVimSearchStatus(controller: controller)
     } else {
-      let keys = VimSearchCore.survivingKeys(matches: result.ranges, text: string)
+      let keys = VimSearchCore.survivingKeys(query: query, text: string)
       vimSearchLabelPlans = VimSearchCore.labelPlan(
         matches: result.ranges,
         caret: origin,
@@ -288,16 +325,24 @@ extension PlaceholderTextView {
 
   // MARK: - n / N / *
 
-  /// Normal-mode `n`/`N`. Like nvim, stepping re-lights the bands even
-  /// after `:noh` or a label jump.
+  /// Normal-mode `n`/`N`, anchored to the CARET like vim -- the cursor
+  /// may have moved since the last jump, and vim searches from where it
+  /// IS: forward takes the first match strictly after the caret,
+  /// backward the last strictly before, wrapping. Only the sign of
+  /// `delta` matters (the dispatcher passes ±1). Like nvim, stepping
+  /// re-lights the bands even after `:noh` or a label jump.
   func executeVimFindStep(_ delta: Int) {
     guard vimSearchCommitted, !vimSearchMatches.isEmpty else {
       vimController?.showMessage("no previous search", kind: .error)
       return
     }
-    let count = vimSearchMatches.count
-    let current = vimSearchCurrent ?? 0
-    vimSearchCurrent = ((current + delta) % count + count) % count
+    let caret = selectedRange.location
+    if delta >= 0 {
+      vimSearchCurrent = vimSearchMatches.firstIndex { $0.location > caret } ?? 0
+    } else {
+      vimSearchCurrent =
+        vimSearchMatches.lastIndex { $0.location < caret } ?? vimSearchMatches.count - 1
+    }
     vimSearchBandsVisible = true
     moveCaretToVimSearchCurrent()
     if let controller = vimController { publishVimSearchStatus(controller: controller) }

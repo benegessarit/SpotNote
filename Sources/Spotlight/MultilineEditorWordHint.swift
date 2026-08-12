@@ -85,8 +85,16 @@ extension PlaceholderTextView {
       cancelWordHints(controller: controller)
       return true
     }
+    // c_CTRL-C aborts the prompt exactly like Escape (vim parity).
+    let chord = event.charactersIgnoringModifiers?.lowercased()
+    if mods.subtracting(.shift) == .control, chord == "c" {
+      cancelWordHints(controller: controller)
+      return true
+    }
+    // The prompt owns its keys -- swallow unrecognized ⌥/⌘ chords, never
+    // decline them (see handleSearchPromptKey).
     let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
+    guard nonShift.isEmpty else { return true }
     guard let typed = event.characters, !typed.isEmpty else { return true }
     for ch in typed {
       consumeWordHintKey(String(ch), controller: controller)

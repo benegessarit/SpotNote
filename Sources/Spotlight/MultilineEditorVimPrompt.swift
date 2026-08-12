@@ -17,7 +17,7 @@ extension PlaceholderTextView {
       return handleWordHintPromptKey(event: event, controller: controller, mods: mods)
     case .search:
       return handleSearchPromptKey(event: event, controller: controller, mods: mods)
-    default:
+    case .command, .none:
       return handleCommandPromptKey(event: event, controller: controller, mods: mods)
     }
   }
@@ -47,6 +47,12 @@ extension PlaceholderTextView {
     }
     if mods.contains(.control) {
       let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+      // c_CTRL-C aborts the cmdline exactly like Escape (vim parity).
+      if chars == "c" {
+        controller.cancelPrompt()
+        needsDisplay = true
+        return true
+      }
       if let edited = VimController.promptBufferEdit(
         controlChord: chars,
         buffer: controller.prompt?.buffer ?? ""
@@ -55,8 +61,10 @@ extension PlaceholderTextView {
       }
       return true
     }
+    // The prompt owns its keys -- swallow unrecognized ⌥/⌘ chords, never
+    // decline them (see handleSearchPromptKey).
     let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
+    guard nonShift.isEmpty else { return true }
     guard let typed = event.characters, !typed.isEmpty else { return true }
     let filtered = Self.filterPromptInput(typed)
     guard !filtered.isEmpty else { return true }

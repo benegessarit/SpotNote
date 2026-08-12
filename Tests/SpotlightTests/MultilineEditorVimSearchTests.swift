@@ -9,7 +9,7 @@ import Testing
 /// and the prompt capsule surface.
 @MainActor
 extension MultilineEditorVimLogicalLineMotionTests {
-  private func armedSearch(_ text: String, caret: Int) -> (PlaceholderTextView, VimController) {
+  func armedSearch(_ text: String, caret: Int) -> (PlaceholderTextView, VimController) {
     let textView = makeVimMotionTextView(text: text)
     textView.vimModeEnabled = true
     let controller = VimController()
@@ -19,7 +19,7 @@ extension MultilineEditorVimLogicalLineMotionTests {
     return (textView, controller)
   }
 
-  private func type(_ textView: PlaceholderTextView, _ chars: String, keyCode: UInt16 = 0) {
+  func type(_ textView: PlaceholderTextView, _ chars: String, keyCode: UInt16 = 0) {
     textView.keyDown(with: keyEvent(characters: chars, ignoring: chars, keyCode: keyCode))
   }
 
@@ -54,10 +54,9 @@ extension MultilineEditorVimLogicalLineMotionTests {
   @Test("label alphabet excludes every character that could extend the query")
   func coreSurvivingKeys() {
     let text = "sat sam sax"
-    let (matches, _) = VimSearchCore.matches(of: "sa", in: text)
-    let extending = VimSearchCore.extensionCharacters(matches: matches, text: text)
+    let extending = VimSearchCore.extensionCharacters(of: "sa", in: text)
     #expect(extending == Set("tmx"))
-    let surviving = VimSearchCore.survivingKeys(matches: matches, text: text)
+    let surviving = VimSearchCore.survivingKeys(query: "sa", text: text)
     #expect(!surviving.contains("t"))
     #expect(!surviving.contains("m"))
     #expect(!surviving.contains("x"))
@@ -404,6 +403,8 @@ extension MultilineEditorVimLogicalLineMotionTests {
     #expect(VimCmdline.sigil(for: .search) == "bolt.fill")
     #expect(VimCmdline.sigil(for: .command) == "chevron.right")
     #expect(VimCmdline.sigil(for: .wordHint) == nil)
+    #expect(VimCmdline.sigil(for: .flash(.forward, count: 1, scope: .document)) == nil)
+    #expect(VimCmdline.sigil(for: .lineFlash(count: 2)) == nil)
   }
 
   @Test("search status formats live counts, the cap, and no-matches")
