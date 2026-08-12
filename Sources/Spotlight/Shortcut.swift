@@ -79,6 +79,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case openSettings
   case newNote
   case browseNotes
+  case openActions
   case duplicateNote
   case togglePin
   case goBack
@@ -98,6 +99,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .openSettings: return "Open settings"
     case .newNote: return "New note"
     case .browseNotes: return "Browse notes"
+    case .openActions: return "Open actions menu"
     case .duplicateNote: return "Duplicate note"
     case .togglePin: return "Pin note"
     case .goBack: return "Go back"
@@ -119,6 +121,7 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .openSettings: return "Open this settings window."
     case .newNote: return "Save the current note and open a fresh blank one."
     case .browseNotes: return "Open the Browse Notes menu."
+    case .openActions: return "Open the Actions menu (the same menu as the pill's command icon)."
     case .duplicateNote: return "Open a new note carrying a copy of the current one."
     case .togglePin: return "Pin or unpin the current note; pinned notes sort first when browsing."
     case .goBack: return "Return to the previously open note."
@@ -140,6 +143,8 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     // ⌘[ back, ⌘] forward.
     case .newNote: return Shortcut(key: "n", modifiers: [.command])
     case .browseNotes: return Shortcut(key: "p", modifiers: [.command])
+    // Raycast parity: ⌘K opens the actions menu.
+    case .openActions: return Shortcut(key: "k", modifiers: [.command])
     case .duplicateNote: return Shortcut(key: "d", modifiers: [.command])
     case .togglePin: return Shortcut(key: "p", modifiers: [.command, .shift])
     case .goBack: return Shortcut(key: "[", modifiers: [.command])

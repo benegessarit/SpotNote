@@ -8,7 +8,11 @@ final class FocusTrigger: ObservableObject {
   /// Bumped to ask the editor to move its caret to the very end of the
   /// current note's text (editor-side plumbing kept for in-app callers).
   @Published private(set) var caretEndTick: Int = 0
+  /// Bumped by the ⌘K shortcut to open the actions menu -- the modal's
+  /// state is view-local, so the window controller signals through here.
+  @Published private(set) var actionsTick: Int = 0
   func pulse() { tick &+= 1 }
+  func pulseActions() { actionsTick &+= 1 }
 }
 
 /// Published key-window state for the main panel, driving the Raycast
@@ -107,6 +111,9 @@ struct SpotlightRootView: View {
       }
       .onChange(of: actionsModalShown) { _, isShown in
         if !isShown { focusTrigger.pulse() }
+      }
+      .onChange(of: focusTrigger.actionsTick) { _, _ in
+        actionsModalShown = true
       }
       .onAppear {
         let editorHeight = EditorMetrics.panelHeight(

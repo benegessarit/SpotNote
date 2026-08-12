@@ -76,7 +76,9 @@ struct ShortcutStoreTests {
   func retiredOneNoteShortcutsDoNotMatch() {
     let store = ShortcutStore(defaults: makeDefaults())
 
-    #expect(store.match(key: "k", modifiers: [.command]) == nil)
+    // Plain ⌘K was retired with the one-note era, then revived
+    // 2026-08-11 as Open Actions (Raycast parity) -- see
+    // multiNoteShortcutsMatch.
     #expect(store.match(key: "k", modifiers: [.command, .option]) == nil)
     #expect(store.match(key: "s", modifiers: [.command]) == nil)
   }
@@ -89,6 +91,7 @@ struct ShortcutStoreTests {
     // actions menus revived them (2026-08-10) to match Raycast Notes.
     #expect(store.match(key: "n", modifiers: [.command]) == .newNote)
     #expect(store.match(key: "p", modifiers: [.command]) == .browseNotes)
+    #expect(store.match(key: "k", modifiers: [.command]) == .openActions)
     #expect(store.match(key: "d", modifiers: [.command]) == .duplicateNote)
     #expect(store.match(key: "p", modifiers: [.command, .shift]) == .togglePin)
     #expect(store.match(key: "[", modifiers: [.command]) == .goBack)

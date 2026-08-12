@@ -739,6 +739,9 @@ extension SpotlightWindowController {
       Task { @MainActor [weak self] in await self?.session.newNote() }
     case .browseNotes:
       fuzzyController.toggle(corpus: session.chats)
+    case .openActions:
+      if fuzzyController.isVisible { fuzzyController.close() }
+      focusTrigger.pulseActions()
     case .duplicateNote:
       Task { @MainActor [weak self] in await self?.session.duplicateCurrent() }
     case .togglePin:
