@@ -6,10 +6,9 @@ import SwiftUI
 /// searchbar with the main editor text... make it the same size as
 /// the text itself"): the query IS note text, so it wears the note's
 /// type and ink; only the sigil (his flash.lua's bolt for `/`, a
-/// chevron for `:`) and the live match count sit in the chrome's
-/// counter gray. Nothing renders before a prompt opens; after Enter
-/// the line collapses to a bare counter-gray residue until the search
-/// clears.
+/// chevron for `:`) sits in the chrome's counter gray. Nothing renders
+/// outside an open prompt -- no count, no residue (the bands are the
+/// feedback).
 ///
 /// Until this surface existed, `/` and `:` were typed BLIND (no view
 /// rendered `prompt.buffer` or `searchStatus`).
@@ -21,13 +20,7 @@ struct VimCmdline: View {
   var body: some View {
     Group {
       if let prompt = controller.prompt, let sigil = Self.sigil(for: prompt.kind) {
-        line(
-          sigil: sigil,
-          buffer: prompt.buffer,
-          count: prompt.kind == .search ? controller.searchStatus : nil
-        )
-      } else if let status = controller.searchStatus {
-        residue(status)
+        line(sigil: sigil, buffer: prompt.buffer)
       }
     }
     .opacity(isKey ? 1 : 0.45)
@@ -46,14 +39,18 @@ struct VimCmdline: View {
   }
 
   /// The sigil lives IN the 37pt gutter (nvim's `/` occupies the column
-  /// before text) so the query's first glyph lands exactly on the
-  /// editor's text column.
-  private func line(sigil: String, buffer: String, count: String?) -> some View {
-    HStack(spacing: 0) {
+  /// before text), right-hugging the text column with its BASELINE on
+  /// the query's baseline, so the query's first glyph lands exactly on
+  /// the editor's text column with the sigil optically seated. No match
+  /// count anywhere (David 2026-08-11: "i don't need the count") -- the
+  /// bands are the feedback.
+  private func line(sigil: String, buffer: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 0) {
       Image(systemName: sigil)
         .font(.system(size: 13, weight: .semibold))
         .foregroundStyle(RaycastChromePalette.counter)
-        .frame(width: EditorMetrics.textLeadingGap)
+        .padding(.trailing, 8)
+        .frame(width: EditorMetrics.textLeadingGap, alignment: .trailing)
       if !buffer.isEmpty {
         Text(buffer)
           .font(Self.queryFont)
@@ -63,13 +60,8 @@ struct VimCmdline: View {
           .layoutPriority(-1)
       }
       caretBar
+        .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 5 }
         .padding(.leading, 2)
-      if let count {
-        Text(count)
-          .font(RaycastFont.regular(16))
-          .foregroundStyle(RaycastChromePalette.counter)
-          .padding(.leading, 12)
-      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .transition(.opacity)
@@ -82,18 +74,6 @@ struct VimCmdline: View {
     RoundedRectangle(cornerRadius: 1)
       .fill((theme.cursor ?? theme.headingText).opacity(0.9))
       .frame(width: 2, height: 24)
-  }
-
-  /// After Enter: the query goes away, the live counter stays as a
-  /// quiet residue in the chrome's own counter tone until the search
-  /// clears. No sigil -- nothing search-flavored persists.
-  private func residue(_ status: String) -> some View {
-    Text(status)
-      .font(RaycastFont.regular(16))
-      .foregroundStyle(RaycastChromePalette.counter)
-      .padding(.leading, EditorMetrics.textLeadingGap)
-      .transition(.opacity)
-      .accessibilityLabel("Search matches: \(status)")
   }
 
   /// The editor's face at the editor's size: the query reads as note

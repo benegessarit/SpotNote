@@ -271,7 +271,7 @@ require_grep "searchClearHandler" "Sources/Spotlight/SpotlightWindowVim.swift"
 # while tests stay green -- review P2-C, 2026-08-11).
 require_grep "endVimSearchForTextSwap" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "VimAwareBottomBar(" "Sources/Spotlight/SpotlightRootView.swift"
-require_grep "padding(.leading, EditorMetrics.textLeadingGap)" "Sources/Spotlight/VimCmdline.swift"
+require_grep "frame(width: EditorMetrics.textLeadingGap, alignment: .trailing)" "Sources/Spotlight/VimCmdline.swift"
 reject_grep "VimPromptCapsule" "Sources/Spotlight/SpotlightRootView.swift"
 reject_grep "VimModePill" "Sources/Spotlight/SpotlightRootView.swift"
 require_grep "a non-extending label character jumps, commits for n/N, and darkens bands" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
