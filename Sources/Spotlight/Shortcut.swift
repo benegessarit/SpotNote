@@ -74,40 +74,36 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
   case insertTodayBadge
   case sendToLinear
   case appendToDailyNote
-  case newChat
-  case olderChat
-  case newerChat
-  case deleteChat
-  case undoDelete
   case findInNote
-  case fuzzyFindAll
-  case shareCurrentChat
   case copyContent
   case openSettings
-  case pinNote
-  case commandPalette
+  case newNote
+  case browseNotes
+  case openActions
+  case duplicateNote
+  case togglePin
+  case goBack
+  case goForward
 
   public var id: String { rawValue }
 
   public var displayName: String {
     switch self {
     case .toggleHotkey: return "Open Tasks / hide HUD"
-    case .appendToLastNote: return "Append to most recent"
+    case .appendToLastNote: return "Open Tasks at end"
     case .insertTodayBadge: return "Insert today badge"
     case .sendToLinear: return "Send task to Linear"
     case .appendToDailyNote: return "Append line to Daily Note"
-    case .newChat: return "New note"
-    case .olderChat: return "Older note"
-    case .newerChat: return "Newer note"
-    case .deleteChat: return "Delete current note"
-    case .undoDelete: return "Undo delete"
     case .findInNote: return "Find in note"
-    case .fuzzyFindAll: return "Fuzzy find any note"
-    case .shareCurrentChat: return "Share current note"
     case .copyContent: return "Copy note"
     case .openSettings: return "Open settings"
-    case .pinNote: return "Pin / unpin note"
-    case .commandPalette: return "Command palette"
+    case .newNote: return "New note"
+    case .browseNotes: return "Browse notes"
+    case .openActions: return "Open actions menu"
+    case .duplicateNote: return "Duplicate note"
+    case .togglePin: return "Pin note"
+    case .goBack: return "Go back"
+    case .goForward: return "Go forward"
     }
   }
 
@@ -115,23 +111,21 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     switch self {
     case .toggleHotkey: return "Global hotkey to summon the Tasks list from any app."
     case .appendToLastNote:
-      return "Summon the HUD on the most recently edited note with the caret already at the end."
+      return "Summon the Tasks note with the caret already at the end."
     case .insertTodayBadge: return "Insert @today token at the caret."
     case .sendToLinear: return "Create one Linear task from the current bullet, then delete it after handoff."
     case .appendToDailyNote:
       return "Append current or counted lines to today's vault daily note, then delete them after handoff."
-    case .newChat: return "Start a fresh blank note."
-    case .olderChat: return "Step back through your saved notes (hold to repeat)."
-    case .newerChat: return "Step forward through your saved notes (hold to repeat)."
-    case .deleteChat: return "Delete the note currently in the editor."
-    case .undoDelete: return "Restore the most recently deleted note."
     case .findInNote: return "Search for text inside the current note."
-    case .fuzzyFindAll: return "Open the fuzzy palette to jump to any saved note."
-    case .shareCurrentChat: return "Export the current note as a .sn file and open the macOS share sheet."
     case .copyContent: return "Copy the whole note. With a selection, copies just the selection."
     case .openSettings: return "Open this settings window."
-    case .pinNote: return "Pin the current note so it stays at the top of the list."
-    case .commandPalette: return "Search settings and keyboard shortcuts."
+    case .newNote: return "Save the current note and open a fresh blank one."
+    case .browseNotes: return "Open the Browse Notes menu."
+    case .openActions: return "Open the Actions menu (the same menu as the pill's command icon)."
+    case .duplicateNote: return "Open a new note carrying a copy of the current one."
+    case .togglePin: return "Pin or unpin the current note; pinned notes sort first when browsing."
+    case .goBack: return "Return to the previously open note."
+    case .goForward: return "Redo a Go Back, returning to the newer note."
     }
   }
 
@@ -142,18 +136,19 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
     case .insertTodayBadge: return Shortcut(key: "t", modifiers: [.command, .shift])
     case .sendToLinear: return Shortcut(key: "l", modifiers: [.command, .option])
     case .appendToDailyNote: return Shortcut(key: "d", modifiers: [.command, .option])
-    case .newChat: return Shortcut(key: "n", modifiers: [.command])
-    case .olderChat: return Shortcut(key: "n", modifiers: [.control])
-    case .newerChat: return Shortcut(key: "p", modifiers: [.control])
-    case .deleteChat: return Shortcut(key: "d", modifiers: [.command])
-    case .undoDelete: return Shortcut(key: "z", modifiers: [.command])
     case .findInNote: return Shortcut(key: "f", modifiers: [.command])
-    case .fuzzyFindAll: return Shortcut(key: "p", modifiers: [.command])
-    case .shareCurrentChat: return Shortcut(key: "e", modifiers: [.command, .shift])
     case .copyContent: return Shortcut(key: "c", modifiers: [.command])
     case .openSettings: return Shortcut(key: ",", modifiers: [.command])
-    case .pinNote: return Shortcut(key: "s", modifiers: [.command])
-    case .commandPalette: return Shortcut(key: "k", modifiers: [.command, .option])
+    // Raycast Notes parity: ⌘N new, ⌘P browse, ⌘D duplicate, ⇧⌘P pin,
+    // ⌘[ back, ⌘] forward.
+    case .newNote: return Shortcut(key: "n", modifiers: [.command])
+    case .browseNotes: return Shortcut(key: "p", modifiers: [.command])
+    // Raycast parity: ⌘K opens the actions menu.
+    case .openActions: return Shortcut(key: "k", modifiers: [.command])
+    case .duplicateNote: return Shortcut(key: "d", modifiers: [.command])
+    case .togglePin: return Shortcut(key: "p", modifiers: [.command, .shift])
+    case .goBack: return Shortcut(key: "[", modifiers: [.command])
+    case .goForward: return Shortcut(key: "]", modifiers: [.command])
     }
   }
 
@@ -163,11 +158,6 @@ public enum ShortcutAction: String, CaseIterable, Codable, Sendable, Identifiabl
       return [
         defaultShortcut,
         Shortcut(key: "d", modifiers: [.command, .option, .shift])
-      ]
-    case .commandPalette:
-      return [
-        defaultShortcut,
-        Shortcut(key: "k", modifiers: [.command, .shift])
       ]
     default:
       return [defaultShortcut]
@@ -201,6 +191,14 @@ public final class ShortcutStore: ObservableObject {
 
   public func binding(for action: ShortcutAction) -> Shortcut {
     bindings[action] ?? action.defaultShortcut
+  }
+
+  /// The stored binding only -- nil when the action is unbound (every
+  /// default candidate was user-owned at load). Display surfaces use
+  /// this so they never advertise a chord that `match(key:modifiers:)`
+  /// cannot resolve; `binding(for:)` keeps the display-default fallback.
+  public func assignedBinding(for action: ShortcutAction) -> Shortcut? {
+    bindings[action]
   }
 
   @discardableResult
@@ -244,35 +242,30 @@ public final class ShortcutStore: ObservableObject {
         }
       }
     }
-    loaded = migrateLegacyBindings(loaded)
     var result: [ShortcutAction: Shortcut] = [:]
     let alreadyOwned = Set(loaded.values)
     for action in ShortcutAction.allCases {
       if let shortcut = loaded[action] {
         result[action] = shortcut
-      } else {
-        result[action] = firstAvailableCandidate(for: action, avoiding: alreadyOwned.union(result.values))
+      } else if let candidate = firstAvailableCandidate(
+        for: action,
+        avoiding: alreadyOwned.union(result.values)
+      ) {
+        result[action] = candidate
       }
     }
     return result
   }
 
-  private static func migrateLegacyBindings(
-    _ loaded: [ShortcutAction: Shortcut]
-  ) -> [ShortcutAction: Shortcut] {
-    var migrated = loaded
-    let legacyCommandPaletteShortcut = Shortcut(key: "k", modifiers: [.command])
-    if migrated[.commandPalette] == legacyCommandPaletteShortcut {
-      migrated[.commandPalette] = nil
-    }
-    return migrated
-  }
-
+  /// The first default candidate no other action owns, or nil when every
+  /// candidate is taken -- the action then loads UNBOUND rather than
+  /// double-booking a chord `setBinding` itself refuses (a duplicate
+  /// value would make `match(key:modifiers:)` nondeterministic).
   private static func firstAvailableCandidate(
     for action: ShortcutAction,
     avoiding used: Set<Shortcut>
-  ) -> Shortcut {
-    action.defaultShortcutCandidates.first { !used.contains($0) } ?? action.defaultShortcut
+  ) -> Shortcut? {
+    action.defaultShortcutCandidates.first { !used.contains($0) }
   }
 
   private func persist() {

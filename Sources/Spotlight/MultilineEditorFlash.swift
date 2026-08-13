@@ -19,8 +19,17 @@ extension PlaceholderTextView {
       backspaceFlashPrompt(controller: controller)
       return true
     }
+    // c_CTRL-C aborts the prompt exactly like Escape (vim parity).
+    let chord = event.charactersIgnoringModifiers?.lowercased()
+    if mods.subtracting(.shift) == .control, chord == "c" {
+      controller.cancelPrompt()
+      clearFlashHints()
+      return true
+    }
+    // The prompt owns its keys -- swallow unrecognized ⌥/⌘ chords, never
+    // decline them (see handleSearchPromptKey).
     let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
+    guard nonShift.isEmpty else { return true }
     guard let typed = event.characters, !typed.isEmpty else { return true }
     for ch in FlashPromptInput.filtered(typed) {
       consumeFlashCharacter(String(ch), controller: controller)
@@ -247,10 +256,13 @@ extension PlaceholderTextView {
   func clearFlashHints() {
     guard
       !flashHints.isEmpty || !flashLabelBuffer.isEmpty || isShowingLineFlashHints
-        || !flashTemporaryAttributeRanges.isEmpty
+        || !flashTemporaryAttributeRanges.isEmpty || !wordHintTargets.isEmpty
+        || !wordHintBuffer.isEmpty
     else { return }
     flashHints = []
     flashLabelBuffer = ""
+    wordHintTargets = []
+    wordHintBuffer = ""
     isShowingLineFlashHints = false
     clearFlashTextAppearance()
     invalidateLineFlashRuler()

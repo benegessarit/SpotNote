@@ -4,8 +4,8 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// First-run interactive tutorial. Walks the user through five chords
-/// (summon, new note, browse older, fuzzy jump, settings). Each cap
+/// First-run interactive tutorial. Walks the user through one-note chords
+/// (summon, today token, find, settings). Each cap
 /// reacts independently as its key is held; the step advances only
 /// when every key in the chord is held at once. The global toggle
 /// chord is intercepted by `AppDelegate` while `isActive == true` so
@@ -163,30 +163,18 @@ final class OnboardingModel: ObservableObject {
     ),
     Step(
       id: 1,
-      action: .newChat,
-      title: "Start a new note",
-      subtitle: "A blank canvas, no titles, no files."
+      action: .insertTodayBadge,
+      title: "Stamp today",
+      subtitle: "Insert a lightweight @today token at the caret."
     ),
     Step(
       id: 2,
-      action: .olderChat,
-      title: "Step back through past notes",
-      subtitle: "Hold to scroll. Pair with ⌃P to step forward."
+      action: .findInNote,
+      title: "Find inside the note",
+      subtitle: "Search within the single Tasks note."
     ),
     Step(
       id: 3,
-      action: .fuzzyFindAll,
-      title: "Jump to any note",
-      subtitle: "Type a few characters from anywhere in the note."
-    ),
-    Step(
-      id: 4,
-      action: .commandPalette,
-      title: "Search commands",
-      subtitle: "Find any action or shortcut from one place."
-    ),
-    Step(
-      id: 5,
       action: .openSettings,
       title: "Tweak everything",
       subtitle: "Themes, shortcuts, updates, all live in Settings."
@@ -449,40 +437,10 @@ struct OnboardingView: View {
 
   @ViewBuilder
   private var subtitleView: some View {
-    if model.current.action == .olderChat {
-      HStack(spacing: 4) {
-        Text("Hold to scroll. Pair with")
-        inlineChordBadge("⌃P")
-        Text("to step forward.")
-      }
+    Text(model.current.subtitle)
       .font(.system(size: 13))
       .foregroundStyle(Color.white.opacity(0.55))
-    } else {
-      Text(model.current.subtitle)
-        .font(.system(size: 13))
-        .foregroundStyle(Color.white.opacity(0.55))
-        .multilineTextAlignment(.center)
-    }
-  }
-
-  private func inlineChordBadge(_ chord: String) -> some View {
-    HStack(spacing: 2) {
-      ForEach(Array(KeyCap.split(chord: chord).enumerated()), id: \.offset) { _, key in
-        Text(key)
-          .font(.system(size: 11, weight: .semibold, design: .rounded))
-          .foregroundStyle(Color.white.opacity(0.9))
-          .padding(.horizontal, 5)
-          .padding(.vertical, 2)
-          .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-              .fill(Color.white.opacity(0.12))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-              .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.8)
-          )
-      }
-    }
+      .multilineTextAlignment(.center)
   }
 
   private var bottomBar: some View {

@@ -25,28 +25,28 @@ struct ShortcutStoreTests {
     let store = ShortcutStore(defaults: makeDefaults())
     let result = store.setBinding(
       Shortcut(key: "j", modifiers: [.command, .shift]),
-      for: .newChat
+      for: .findInNote
     )
     #expect(result == .ok)
-    #expect(store.binding(for: .newChat).key == "j")
+    #expect(store.binding(for: .findInNote).key == "j")
   }
 
   @Test("rebind to a chord owned by another action returns conflict")
   func rebindConflict() {
     let store = ShortcutStore(defaults: makeDefaults())
-    // Default `.newChat` is ⌘N. Try to assign that to `.openSettings`.
+    // Default `.findInNote` is ⌘F. Try to assign that to `.openSettings`.
     let result = store.setBinding(
-      Shortcut(key: "n", modifiers: [.command]),
+      Shortcut(key: "f", modifiers: [.command]),
       for: .openSettings
     )
-    #expect(result == .conflict(.newChat))
+    #expect(result == .conflict(.findInNote))
     #expect(store.binding(for: .openSettings).key == ",", "binding stays at default on conflict")
   }
 
   @Test("modifier-less chords are rejected")
   func rejectsBareKey() {
     let store = ShortcutStore(defaults: makeDefaults())
-    let result = store.setBinding(Shortcut(key: "n", modifiers: []), for: .newChat)
+    let result = store.setBinding(Shortcut(key: "f", modifiers: []), for: .findInNote)
     #expect(result == .missingModifier)
   }
 
@@ -56,29 +56,46 @@ struct ShortcutStoreTests {
     let first = ShortcutStore(defaults: defaults)
     _ = first.setBinding(
       Shortcut(key: "j", modifiers: [.command, .option]),
-      for: .deleteChat
+      for: .findInNote
     )
     let second = ShortcutStore(defaults: defaults)
-    #expect(second.binding(for: .deleteChat).key == "j")
-    #expect(second.binding(for: .deleteChat).modifiers == [.command, .option])
+    #expect(second.binding(for: .findInNote).key == "j")
+    #expect(second.binding(for: .findInNote).modifiers == [.command, .option])
   }
 
   @Test("match resolves the action that owns a chord, ignoring others")
   func matchResolvesOwner() {
     let store = ShortcutStore(defaults: makeDefaults())
-    let action = store.match(key: "n", modifiers: [.command])
-    #expect(action == .newChat)
+    let action = store.match(key: "f", modifiers: [.command])
+    #expect(action == .findInNote)
     let none = store.match(key: "j", modifiers: [.command])
     #expect(none == nil)
   }
 
-  @Test("plain Cmd-K does not open the command palette")
-  func commandPaletteDefaultAvoidsPlainCmdK() {
+  @Test("retired one-note-incompatible shortcuts do not match")
+  func retiredOneNoteShortcutsDoNotMatch() {
     let store = ShortcutStore(defaults: makeDefaults())
 
-    #expect(ShortcutAction.commandPalette.defaultShortcut != Shortcut(key: "k", modifiers: [.command]))
-    #expect(store.match(key: "k", modifiers: [.command]) == nil)
-    #expect(store.match(key: "k", modifiers: [.command, .option]) == .commandPalette)
+    // Plain ⌘K was retired with the one-note era, then revived
+    // 2026-08-11 as Open Actions (Raycast parity) -- see
+    // multiNoteShortcutsMatch.
+    #expect(store.match(key: "k", modifiers: [.command, .option]) == nil)
+    #expect(store.match(key: "s", modifiers: [.command]) == nil)
+  }
+
+  @Test("multi-note Raycast-parity shortcuts: Cmd N new note, Cmd P browse")
+  func multiNoteShortcutsMatch() {
+    let store = ShortcutStore(defaults: makeDefaults())
+
+    // ⌘N/⌘P were retired in the one-note era; the multi-note browse and
+    // actions menus revived them (2026-08-10) to match Raycast Notes.
+    #expect(store.match(key: "n", modifiers: [.command]) == .newNote)
+    #expect(store.match(key: "p", modifiers: [.command]) == .browseNotes)
+    #expect(store.match(key: "k", modifiers: [.command]) == .openActions)
+    #expect(store.match(key: "d", modifiers: [.command]) == .duplicateNote)
+    #expect(store.match(key: "p", modifiers: [.command, .shift]) == .togglePin)
+    #expect(store.match(key: "[", modifiers: [.command]) == .goBack)
+    #expect(store.match(key: "]", modifiers: [.command]) == .goForward)
   }
 
   @Test("send to Linear defaults to Cmd Option L")
@@ -143,21 +160,66 @@ struct ShortcutStoreTests {
     #expect(stored[ShortcutAction.appendToDailyNote.rawValue] == ShortcutAction.appendToDailyNote.defaultShortcut)
   }
 
-  @Test("legacy command palette Cmd-K binding migrates off plain Cmd-K")
-  func legacyCommandPaletteCmdKBindingMigratesOffPlainCmdK() throws {
+  @Test("retired shortcut actions are dropped from stored bindings")
+  func retiredShortcutActionsAreDroppedFromStoredBindings() throws {
     let defaults = makeDefaults()
     let key = "shortcuts.bindings.v5"
     var oldMap: [String: Shortcut] = [:]
     for action in ShortcutAction.allCases {
       oldMap[action.rawValue] = action.defaultShortcut
     }
-    oldMap[ShortcutAction.commandPalette.rawValue] = Shortcut(key: "k", modifiers: [.command])
+    oldMap["commandPalette"] = Shortcut(key: "k", modifiers: [.command, .option])
+    oldMap["pinNote"] = Shortcut(key: "s", modifiers: [.command])
+    oldMap["newChat"] = Shortcut(key: "n", modifiers: [.command])
+    oldMap["fuzzyFindAll"] = Shortcut(key: "p", modifiers: [.command])
+    defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
+
+    _ = ShortcutStore(defaults: defaults, storageKey: key)
+    let storedData = try #require(defaults.data(forKey: key))
+    let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
+
+    #expect(stored["commandPalette"] == nil)
+    #expect(stored["pinNote"] == nil)
+    #expect(stored["newChat"] == nil)
+    #expect(stored["fuzzyFindAll"] == nil)
+  }
+
+  @Test("backfill leaves a new action unbound when a user remap owns its only default")
+  func backfillExhaustionLeavesActionUnbound() throws {
+    let defaults = makeDefaults()
+    let key = "shortcuts.bindings.v5"
+    var oldMap: [String: Shortcut] = [:]
+    for action in ShortcutAction.allCases where action != .openActions {
+      oldMap[action.rawValue] = action.defaultShortcut
+    }
+    // The pre-upgrade user legally moved Find in Note onto ⌘K -- the
+    // single default candidate of the new openActions action.
+    oldMap[ShortcutAction.findInNote.rawValue] = Shortcut(key: "k", modifiers: [.command])
     defaults.set(try JSONEncoder().encode(oldMap), forKey: key)
 
     let store = ShortcutStore(defaults: defaults, storageKey: key)
 
-    #expect(store.match(key: "k", modifiers: [.command]) == nil)
-    #expect(store.binding(for: .commandPalette) == ShortcutAction.commandPalette.defaultShortcut)
+    #expect(store.assignedBinding(for: .openActions) == nil)
+    #expect(store.match(key: "k", modifiers: [.command]) == .findInNote)
+    let storedData = try #require(defaults.data(forKey: key))
+    let stored = try JSONDecoder().decode([String: Shortcut].self, from: storedData)
+    #expect(stored[ShortcutAction.openActions.rawValue] == nil)
+    #expect(Set(stored.values).count == stored.count, "no chord is double-booked")
+  }
+
+  @Test("default chords are pairwise unique so a fresh load never conflicts")
+  func defaultChordsArePairwiseUnique() {
+    let all = ShortcutAction.allCases.map(\.defaultShortcut)
+    #expect(Set(all).count == all.count)
+  }
+
+  @Test("settings pane lists every action whose binding has a live consumer")
+  func settingsPaneCoversAllConsumedActions() {
+    let listed = Set(ShortcutsPane.groups.flatMap(\.actions))
+    // appendToLastNote's binding has no live consumer (the global-hotkey
+    // lane registers only toggleHotkey), so it earns no settings row.
+    let expected = Set(ShortcutAction.allCases).subtracting([.appendToLastNote])
+    #expect(listed == expected)
   }
 
   @Test("resetAll restores every action to its default")
@@ -165,10 +227,10 @@ struct ShortcutStoreTests {
     let store = ShortcutStore(defaults: makeDefaults())
     _ = store.setBinding(
       Shortcut(key: "k", modifiers: [.command, .option]),
-      for: .newChat
+      for: .findInNote
     )
     store.resetAll()
-    #expect(store.binding(for: .newChat) == ShortcutAction.newChat.defaultShortcut)
+    #expect(store.binding(for: .findInNote) == ShortcutAction.findInNote.defaultShortcut)
   }
 
   @Test("normalize folds case and maps the bare space character to 'space'")

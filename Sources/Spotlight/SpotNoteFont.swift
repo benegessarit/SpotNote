@@ -1,21 +1,17 @@
 import AppKit
 
 enum SpotNoteFont {
-  /// Primary editor face: MonoLisa, a licensed font the user installs into
-  /// ~/Library/Fonts. We deliberately do NOT bundle/redistribute a paid font,
-  /// so it resolves from the system install (bold/italic weights too, which the
-  /// code stylers derive via NSFontManager trait conversion).
-  static let editorFontName = "MonoLisa-Regular"
-
-  /// Bundled fallback when MonoLisa is not installed: IBM Plex Mono ships in
-  /// Resources (registered process-locally by FontLoader) so the HUD always has
-  /// a fixed-pitch face even on a Mac without MonoLisa.
-  static let fallbackFontName = "IBMPlexMono"
-
+  /// Primary editor face: Lilex Nerd Font Mono -- the SAME face David's
+  /// nvim renders in (Ghostty `font-family`), restoring the mono grid on
+  /// David's order (2026-08-10 "switch to mono grid and use the same mono
+  /// font as my nvim") after the proportional editor made the hop/flash
+  /// letter hints gappy. Regular + Bold ship in Resources and register
+  /// through `FontLoader`; bold/italic weights derive via NSFontManager
+  /// trait conversion (the family carries true Bold/Italic faces). The
+  /// chrome stays Inter (`RaycastFont`) -- only the note body is mono.
+  /// Fallback is the system MONO face so the grid survives a bad bundle.
   static func editor(size: CGFloat = EditorMetrics.fontSize) -> NSFont {
-    FontLoader.registerBundledFonts()
-    return NSFont(name: editorFontName, size: size)
-      ?? NSFont(name: fallbackFontName, size: size)
+    NSFont(name: "LilexNFM-Regular", size: size)
       ?? .monospacedSystemFont(ofSize: size, weight: .regular)
   }
 }

@@ -6,7 +6,7 @@ import AppKit
 ///
 /// - Backticks stay as literal characters in the document.
 /// - Inline `` `code` `` spans get a subtle background + dimmed fences.
-/// - Markdown headings get bold + brighter visual attributes; the stored
+/// - Markdown headings get a heavier font in the normal text color; the stored
 ///   Markdown string stays plain text.
 /// - Triple-fenced blocks are NOT background-tinted; instead the inner
 ///   code is tokenized via `SyntaxHighlighter` and colored per category.
@@ -30,13 +30,54 @@ enum CodeStyler {
     let comment: NSColor
   }
 
+  /// nvim Visual parity: the selection is a SUBTLE flat lift of the
+  /// surface toward the text ink, never the macOS accent blue. David's
+  /// live rose-pine resolves Visual to #221F2E over the #191724 base --
+  /// exactly a 5% background→text blend (probed via headless nvim
+  /// nvim_get_hl, 2026-08-10); light schemes need a stronger step to
+  /// stay visible (his own rose-pine config raises Dawn's for the same
+  /// reason). Foreground is NOT overridden -- nvim keeps syntax colors
+  /// inside the selection.
+  @MainActor
+  static func applyVisualSelectionColor(to textView: NSTextView, theme: Theme) {
+    let base = NSColor(theme.background)
+    // Deliberately STRONGER than nvim's probed 5%/9%: on SpotNote's
+    // surfaces the nvim-exact blend read as invisible (David 2026-08-11,
+    // "still not really visible") -- the RELATIONSHIP (flat surface->text
+    // lift, no accent blue, foreground untouched) stays nvim, the depth
+    // is his taste.
+    let fraction: CGFloat = theme.mode == .dark ? 0.11 : 0.15
+    let visualBg = base.blended(withFraction: fraction, of: NSColor(theme.text)) ?? base
+    textView.selectedTextAttributes = [.backgroundColor: visualBg]
+    // The view paints visual-mode selection (and the yank flash) itself:
+    // AppKit swaps in the light unemphasized gray whenever the view is
+    // not first responder, which is exactly the band David flagged.
+    (textView as? PlaceholderTextView)?.editorVisualSelectionColor = visualBg
+    // Search bands: non-current matches sit one step BELOW the Visual
+    // band so the current match reads as "the" match.
+    let dimFraction: CGFloat = theme.mode == .dark ? 0.07 : 0.10
+    (textView as? PlaceholderTextView)?.editorSearchDimBandColor =
+      base.blended(withFraction: dimFraction, of: NSColor(theme.text)) ?? base
+  }
+
   @MainActor
   static func apply(to textView: NSTextView, theme: Theme) {
+    applyVisualSelectionColor(to: textView, theme: theme)
     guard let layoutManager = textView.layoutManager else { return }
     let nsText = textView.string as NSString
+    // Typing hot path: this runs on EVERY text change, and the
+    // full-document temporary-attribute clear below invalidates the
+    // whole layout each time. All styling here keys on backticks or a
+    // pasted URL scheme, so a note without either -- after a pass that
+    // left no attributes -- has nothing to clear and nothing to add.
+    let hasBackticks = nsText.range(of: "`").location != NSNotFound
+    let hasLinks = nsText.range(of: "://").location != NSNotFound
+    let placeholderView = textView as? PlaceholderTextView
+    if !hasBackticks, !hasLinks, placeholderView?.codeStylerLeftAttributes == false { return }
+    placeholderView?.codeStylerLeftAttributes = hasBackticks || hasLinks
     let fullRange = NSRange(location: 0, length: nsText.length)
-    layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
-    layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+    clearTransientAttributes(layoutManager, fullRange: fullRange)
+    placeholderView?.linkSpans = []
     guard fullRange.length > 0 else { return }
     let palette = palette(for: theme)
     let processed = styleTriples(
@@ -57,6 +98,15 @@ enum CodeStyler {
       fullRange: fullRange,
       layoutManager: layoutManager,
       palette: palette,
+      processed: processed
+    )
+    // MUST stay last: conceal rides storage fonts, and the heading pass
+    // above re-imposes the base font each restyle (that reset IS the
+    // un-conceal path -- see CodeStylerLinks).
+    CodeStylerLinks.apply(
+      in: nsText,
+      textView: textView,
+      style: CodeStylerLinks.Style(accent: NSColor(theme.headingText)),
       processed: processed
     )
   }
@@ -203,23 +253,27 @@ enum CodeStyler {
   }
 
   @MainActor
-  private static func headingStyle(for textView: NSTextView, theme: Theme) -> CodeStylerHeading.Style {
+  private static func headingStyle(
+    for _: NSTextView,
+    theme: Theme
+  ) -> CodeStylerHeading.Style {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerHeading.Style(
-      baseFont: textView.font,
+      baseFont: SpotNoteFont.editor(),
       bodyForeground: bodyForeground,
-      headingForeground: NSColor(theme.headingText)
+      headingForeground: bodyForeground,
+      headingStrokeWidth: -1.15
     )
   }
 
   @MainActor
   private static func listMarkerStyle(
-    for textView: NSTextView,
+    for _: NSTextView,
     theme: Theme
   ) -> CodeStylerListMarkers.Style {
     let bodyForeground = NSColor(theme.text)
     return CodeStylerListMarkers.Style(
-      baseFont: textView.font,
+      baseFont: SpotNoteFont.editor(),
       markerForeground: bodyForeground.withAlphaComponent(theme.mode == .dark ? 0.86 : 0.78),
       doneMarkerForeground: NSColor(theme.headingText)
     )
@@ -255,5 +309,19 @@ enum CodeStyler {
       number: NSColor(red: 0.04, green: 0.52, blue: 0.35, alpha: 1.0),
       comment: NSColor(white: 0.45, alpha: 1.0)
     )
+  }
+}
+
+extension CodeStyler {
+  /// Full-document clear of every temporary attribute a styling pass may
+  /// have left (code tints, backgrounds, link underlines).
+  static func clearTransientAttributes(
+    _ layoutManager: NSLayoutManager,
+    fullRange: NSRange
+  ) {
+    layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.underlineStyle, forCharacterRange: fullRange)
+    layoutManager.removeTemporaryAttribute(.underlineColor, forCharacterRange: fullRange)
   }
 }

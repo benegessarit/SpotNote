@@ -14,6 +14,7 @@ public actor ChatStore {
   /// a newer edit superseded it after its sleep completed, so it never clears
   /// a newer task's slot.
   private var writeGeneration: [UUID: Int] = [:]
+  private var onPersistFailure: (@Sendable (UUID, any Error) -> Void)?
 
   public init(directory: URL, debounce: Duration = .milliseconds(300)) throws {
     try FileManager.default.createDirectory(
@@ -29,6 +30,12 @@ public actor ChatStore {
   /// any disk scan or JSON decoding work happens.
   public func loadFromDisk() {
     chats = Self.loadAll(from: directory)
+  }
+
+  /// Called when a debounced background write fails (the only persist
+  /// path with no throwing caller). The chat text is still in memory.
+  public func setPersistFailureHandler(_ handler: (@Sendable (UUID, any Error) -> Void)?) {
+    onPersistFailure = handler
   }
 
   /// Default on-disk location for saved chats.
@@ -90,6 +97,15 @@ public actor ChatStore {
     scheduleWrite(id: id)
   }
 
+  /// Flips a chat's pin without touching `updatedAt` -- pinning is not an
+  /// edit, so the note keeps its place within its sort group.
+  public func setPinned(id: UUID, _ pinned: Bool) {
+    guard var chat = chats[id], chat.isPinned != pinned else { return }
+    chat.isPinned = pinned
+    chats[id] = chat
+    scheduleWrite(id: id)
+  }
+
   /// Re-inserts a chat that was previously removed via `delete`. Used by
   /// the session-level undo path, so the original `id`, `createdAt`, and
   /// last-edited text are preserved on restore.
@@ -111,13 +127,6 @@ public actor ChatStore {
       inserted.append(resolved)
     }
     return inserted
-  }
-
-  public func togglePin(id: UUID) throws {
-    guard var chat = chats[id] else { return }
-    chat.isPinned.toggle()
-    chats[id] = chat
-    try persistNow(chat)
   }
 
   public func delete(id: UUID) throws {
@@ -179,7 +188,15 @@ public actor ChatStore {
     guard writeGeneration[id] == generation else { return }
     pendingWrites[id] = nil
     guard let chat = chats[id] else { return }
-    try? persistNow(chat)
+    do {
+      try persistNow(chat)
+    } catch {
+      // Direct-call persist sites throw to their callers; the debounced
+      // path has no caller left, so a swallowed error here would be a
+      // SILENT data loss. The text stays in memory -- report it so the
+      // UI can tell the user their note is not on disk.
+      onPersistFailure?(chat.id, error)
+    }
   }
 
   private func persistNow(_ chat: Chat) throws {

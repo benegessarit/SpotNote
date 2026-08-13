@@ -1,68 +1,224 @@
-# roborev configuration for SpotNote.
-#
-# Enables roborev local AI code review for this repo. Pins the review + fix agents
-# to claude-code (subscription-backed) so reviews never silently fall back to the
-# global default agent. The config file alone is inert — enable commit-time review
-# with `roborev install-hook` in your local clone.
-#
-# Auto-fix loop (`roborev refine`) is intended to run ONLY on a feature branch
-# headed for a PR (never main), so each fix lands as its own labeled
-# "Address review findings (job N)" commit reviewed in the PR diff + re-reviewed
-# by a fresh roborev job before merge. Recommended caps:
-#   roborev refine --min-severity high --max-iterations 3
-agent = "claude-code"
-review_agent = "claude-code"
-refine_agent = "claude-code"
-# Leave model unset so Claude Code uses the authenticated subscription default.
+# Local RoboRev policy for SpotNote. The hook dispatches every commit;
+# the exact-SHA receipt remains advisory evidence, never merge authority.
+agent = "codex"
+review_agent = "codex"
+refine_agent = "codex"
+model = "gpt-5.6-sol"
 display_name = "SpotNote"
-# Keep each review prompt isolated so roborev does not imitate stale prose from
-# previous review bodies.
 review_context_count = 0
 post_commit_review = "commit"
-review_reasoning = "standard"
+review_reasoning = "maximum"
+refine_reasoning = "maximum"
 review_min_severity = "medium"
 auto_close_passing_reviews = true
+max_prompt_size = 120000
 
-# Review source/config diffs only; skip build artifacts, generated files, and
-# secret-shaped paths.
 exclude_patterns = [
   ".env",
   "**/.env",
   ".env.*",
   "**/.env.*",
+  "*.env",
+  "**/*.env",
+  "*.env.local",
+  "**/*.env.local",
+  "*.env.development",
+  "**/*.env.development",
+  "*.env.production",
+  "**/*.env.production",
+  "*.env.staging",
+  "**/*.env.staging",
+  "*.env.test",
+  "**/*.env.test",
+  "*.env.preview",
+  "**/*.env.preview",
+  "*.env.qa",
+  "**/*.env.qa",
+  "*.envrc",
+  "**/*.envrc",
+  "*.envrc.local",
+  "**/*.envrc.local",
   "*.pem",
   "**/*.pem",
   "*.key",
   "**/*.key",
+  "*.p12",
+  "**/*.p12",
+  "*.pfx",
+  "**/*.pfx",
   "auth.json",
-  "**/auth.json*",
+  "**/auth.json",
+  "credentials",
+  "**/credentials",
+  "credentials/**",
+  "**/credentials/**",
+  "credentials*.json",
+  "**/credentials*.json",
+  "credentials*.yaml",
+  "**/credentials*.yaml",
+  "credentials*.yml",
+  "**/credentials*.yml",
+  "credentials*.toml",
+  "**/credentials*.toml",
+  "credentials*.ini",
+  "**/credentials*.ini",
+  "credentials*.txt",
+  "**/credentials*.txt",
+  "secrets",
+  "**/secrets",
+  "secrets/**",
+  "**/secrets/**",
+  "secrets*.json",
+  "**/secrets*.json",
+  "secrets*.yaml",
+  "**/secrets*.yaml",
+  "secrets*.yml",
+  "**/secrets*.yml",
+  "secrets*.toml",
+  "**/secrets*.toml",
+  "secrets*.ini",
+  "**/secrets*.ini",
+  "secrets*.txt",
+  "**/secrets*.txt",
+  "secrets*.enc",
+  "**/secrets*.enc",
+  "*.bak",
+  "**/*.bak",
+  "*.bak.*",
+  "**/*.bak.*",
+  "*.bak-*",
+  "**/*.bak-*",
+  "*.bak_*",
+  "**/*.bak_*",
+  "*.backup",
+  "**/*.backup",
+  "*.backup.*",
+  "**/*.backup.*",
+  "*.backup-*",
+  "**/*.backup-*",
+  "*.backup_*",
+  "**/*.backup_*",
+  "*.old",
+  "**/*.old",
+  "*.old.*",
+  "**/*.old.*",
+  "*.old-*",
+  "**/*.old-*",
+  "*.old_*",
+  "**/*.old_*",
+  "*.orig",
+  "**/*.orig",
+  "*.orig.*",
+  "**/*.orig.*",
+  "*.orig-*",
+  "**/*.orig-*",
+  "*.orig_*",
+  "**/*.orig_*",
+  "*.bak[0-9]",
+  "*.bak[0-9][0-9]",
+  "*.bak[0-9][0-9][0-9]",
+  "*.bak[0-9][0-9][0-9][0-9]",
+  "*.bak[0-9][0-9][0-9][0-9][0-9]",
+  "*.bak[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.bak[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.bak[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.backup[0-9]",
+  "*.backup[0-9][0-9]",
+  "*.backup[0-9][0-9][0-9]",
+  "*.backup[0-9][0-9][0-9][0-9]",
+  "*.backup[0-9][0-9][0-9][0-9][0-9]",
+  "*.backup[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.backup[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.backup[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.old[0-9]",
+  "*.old[0-9][0-9]",
+  "*.old[0-9][0-9][0-9]",
+  "*.old[0-9][0-9][0-9][0-9]",
+  "*.old[0-9][0-9][0-9][0-9][0-9]",
+  "*.old[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.old[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.old[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.orig[0-9]",
+  "*.orig[0-9][0-9]",
+  "*.orig[0-9][0-9][0-9]",
+  "*.orig[0-9][0-9][0-9][0-9]",
+  "*.orig[0-9][0-9][0-9][0-9][0-9]",
+  "*.orig[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.orig[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*.orig[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.bak[0-9]",
+  "**/*.bak[0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9][0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.bak[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.backup[0-9]",
+  "**/*.backup[0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9][0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.backup[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.old[0-9]",
+  "**/*.old[0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9][0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.old[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.orig[0-9]",
+  "**/*.orig[0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9][0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "**/*.orig[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]",
+  "*~",
+  "**/*~",
+  "node_modules/**",
+  "**/node_modules/**",
   "**/.build/**",
-  "**/build/**",
-  "**/.swiftpm/**",
   "**/DerivedData/**",
-  "**/xcuserdata/**",
+  "**/.swiftpm/**",
   "*.app/**",
-  "**/*.xcodeproj/**",
-  "**/*.lcov",
-  "Tools/reports/**",
-  "dist/**",
+  "**/*.app/**",
+  ".venv/**",
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/*.egg-info/**",
+  ".codegraph/**",
+  "**/.codegraph/**",
+  ".roborev/**",
+  "**/.roborev/**",
+  ".cache/**",
   "**/.cache/**",
   "**/tmp/**",
   "**/logs/**",
+  "*.log",
+  "**/*.log",
+  "coverage/**",
+  "**/coverage/**",
+  "**/*.db",
+  "**/*.db-wal",
+  "**/*.db-shm",
+  "**/*.sqlite",
+  "**/*.sqlite3",
 ]
 
 review_guidelines = """
-SpotNote is a Swift / SwiftUI macOS application (Swift Package Manager + XcodeGen).
+A Swift and AppKit macOS note editor with Vim motions, Linear handoff, and vault-backed Markdown storage.
 Review only the committed diff that remains after exclude_patterns are applied.
+Prioritize concrete Medium, High, or Critical defects:
+- functional regressions, incorrect state transitions, boundary mistakes, and silent failure;
+- data loss, privacy or secret exposure, unsafe file/process behavior, and concurrency bugs;
+- missing error handling or validation at user, filesystem, process, network, and persistence boundaries;
+- tests that pass without exercising changed behavior, or missing regression coverage when a realistic failure could escape.
 
-Prioritize concrete correctness and safety issues:
-- runtime crash risks: force-unwraps (`!`), force-casts (`as!`), array index out
-  of range, division by zero, implicitly-unwrapped optionals that can be nil;
-- concurrency / main-actor violations, data races, retain cycles / leaks;
-- silent logic errors (off-by-one, wrong boundary, inverted condition);
-- swallowed errors and unhandled failure paths.
-
-Report only concrete Medium, High, or Critical issues with a clear location and a
-specific fix. Do not emit findings for pure style/taste; mention those only when
-they expose a real correctness, crash, concurrency, or data-loss risk.
+Do not report style-only findings, speculative rewrites, or generic requests for more tests.
 """

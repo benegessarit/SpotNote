@@ -1,11 +1,11 @@
 import AppKit
 
-/// A borderless floating panel tuned for HUD-style input.
+/// The main HUD panel: borderless with a full-bleed SwiftUI surface; the
+/// Raycast-style traffic lights are drawn by the SwiftUI chrome.
 ///
-/// Overrides `canBecomeKey` so the panel can receive keyboard focus even
-/// though its window style is borderless. The panel intentionally avoids
-/// `.nonactivatingPanel`: SpotNote's HUD must become a real key window when
-/// summoned from another app.
+/// Overrides `canBecomeKey` so the panel receives keyboard focus reliably.
+/// The panel intentionally avoids `.nonactivatingPanel`: SpotNote's HUD must
+/// become a real key window when summoned from another app.
 final class SpotlightPanel: NSPanel {
   var keyEquivalentHandler: ((NSEvent) -> Bool)?
 

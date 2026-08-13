@@ -100,6 +100,80 @@ struct ScratchpadHandoffTests {
     #expect(!payload.text.contains("do not silently create a partial issue"))
   }
 
+  @Test("Linear payload carries structured data for deterministic ingress handling")
+  func linearPayloadCarriesStructuredData() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: LinearTaskHandoffRequest(
+        title: "Call Elliot",
+        targetStatus: .started,
+        labels: ["Amplify"],
+        dueDate: "2026-06-15"
+      ),
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.kind == "linear_issue")
+    #expect(data.title == "Call Elliot")
+    #expect(data.status == "Started")
+    #expect(data.labels == ["Amplify"])
+    #expect(data.dueDate == "2026-06-15")
+  }
+
+  @Test("Code workspace payload routes to Code and carries a Develop label")
+  func codeWorkspacePayloadRoutesToCode() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: LinearTaskHandoffRequest(
+        title: "Fix the parser",
+        targetStatus: .triage,
+        workspace: .code,
+        labels: ["Develop"]
+      ),
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.workspace == "code")
+    #expect(data.labels == ["Develop"])
+    #expect(payload.text.contains("Code Linear workspace"))
+    #expect(!payload.text.contains("personal Linear workspace"))
+  }
+
+  @Test("default workspace is personal on the wire")
+  func defaultWorkspaceIsPersonal() throws {
+    let payload = try ScratchpadHandoffClient.payload(
+      forLinearTask: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+    let data = try #require(payload.data)
+    #expect(data.workspace == "personal")
+    #expect(payload.text.contains("personal Linear workspace"))
+  }
+
+  @Test("Code request merges the Develop label with parsed labels, deduped")
+  func codeRequestMergesDevelopLabel() throws {
+    let request = try #require(
+      LinearTaskMetadataParser.request(
+        from: "- ship gc motion #Develop #SpotNote",
+        targetStatus: .triage,
+        workspace: .code,
+        labels: ["Develop"]
+      )
+    )
+    #expect(request.workspace == .code)
+    #expect(request.labels == ["Develop", "SpotNote"])
+    #expect(request.title == "ship gc motion")
+  }
+
+  @Test("Linear payload encodes a data object")
+  func dataFieldWireFormat() throws {
+    let linear = try ScratchpadHandoffClient.payload(
+      forLinearTask: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+    let linearJSON = try #require(String(data: JSONEncoder().encode(linear), encoding: .utf8))
+    #expect(linearJSON.contains("\"data\""))
+    #expect(linearJSON.contains("\"kind\":\"linear_issue\""))
+  }
+
   @Test("blank Linear title is rejected")
   func blankTitleRejected() {
     #expect(throws: ScratchpadHandoffError.emptyText) {
@@ -122,6 +196,29 @@ struct ScratchpadHandoffTests {
     )
 
     #expect(receipt.captureID == "spotnote-linear-task:test")
+  }
+
+  @Test("deterministic Linear receipt exposes the created identifier for the toast")
+  func deterministicLinearReceiptExposesIdentifier() async throws {
+    let responseBody = """
+      {"accepted":true,"capture_id":"PER-999","identifier":"PER-999","url":"https://linear.app/x/PER-999","deterministic":true}
+      """
+    let response = Data(responseBody.utf8)
+    let endpoint = try #require(URL(string: "http://127.0.0.1:8645/api/local-ingress/marginal"))
+    let client = ScratchpadHandoffClient(
+      endpoint: endpoint,
+      session: StubURLSession(data: response, statusCode: 201)
+    )
+
+    let receipt = try await client.sendLinearTask(
+      title: "Call Elliot",
+      id: "spotnote-linear-task:test"
+    )
+
+    #expect(receipt.captureID == "PER-999")
+    #expect(receipt.identifier == "PER-999")
+    #expect(receipt.url == "https://linear.app/x/PER-999")
+    #expect(receipt.linearSuccessMessage == "Created PER-999 in Linear")
   }
 }
 

@@ -17,6 +17,12 @@ extension PlaceholderTextView {
     controller.flashHandler = { [weak self] request in
       self?.performFlashJump(request) ?? false
     }
+    controller.normalizeHandler = { [weak self] in
+      self?.normalizeDocumentForVim() ?? false
+    }
+    controller.searchClearHandler = { [weak self] in
+      self?.dismissVimSearchHighlight()
+    }
   }
 
   /// Per-keystroke vim dispatch. Extracted from `keyDown` so the main
@@ -50,55 +56,13 @@ extension PlaceholderTextView {
       return true
     }
     let key = vimKey(for: event, mods: mods, chars: chars)
-    let hasModifiers = !mods.subtracting(.shift).isEmpty
+    // Option is a vim-visible modifier (the `<M-…>` tokens); the engine
+    // still bails on command/control chords.
+    let hasModifiers = !mods.subtracting([.shift, .option]).isEmpty
     let action = engine.handle(key: key, hasModifiers: hasModifiers)
     if isInsert, action == .none { return false }
     executeVimAction(action)
     return true
-  }
-
-  /// Routes one keystroke into the active `:` / `/` prompt. Returns
-  /// `true` when the event was consumed.
-  func handlePromptKey(
-    event: NSEvent,
-    controller: VimController,
-    mods: NSEvent.ModifierFlags
-  ) -> Bool {
-    switch controller.prompt?.kind {
-    case .flash, .lineFlash:
-      return handleFlashPromptKey(event: event, controller: controller, mods: mods)
-    default:
-      break
-    }
-    if event.keyCode == 53 {
-      controller.cancelPrompt()
-      needsDisplay = true
-      return true
-    }
-    if event.keyCode == 36 || event.keyCode == 76 {
-      controller.submitPrompt()
-      needsDisplay = true
-      return true
-    }
-    if event.keyCode == 51 {
-      controller.backspacePrompt()
-      return true
-    }
-    let nonShift = mods.subtracting(.shift)
-    guard nonShift.isEmpty else { return false }
-    guard let typed = event.characters, !typed.isEmpty else { return true }
-    let filtered = Self.filterPromptInput(typed)
-    guard !filtered.isEmpty else { return true }
-    controller.appendToPrompt(filtered)
-    return true
-  }
-
-  private static func filterPromptInput(_ raw: String) -> String {
-    raw.filter { ch in
-      ch.unicodeScalars.allSatisfy { scalar in
-        !scalar.properties.isDefaultIgnorableCodePoint && scalar.value >= 0x20
-      }
-    }
   }
 
   /// `<n>G` / `:<n>` -- moves the caret to the start of the n-th line
@@ -146,6 +110,25 @@ extension PlaceholderTextView {
     return count
   }
 
+  /// `\f` / `:fmt` -- tidy blank-line spacing around section headers (one blank
+  /// line above and below each header, none above the top header) without
+  /// disturbing bullets or multiline bullet bodies. Returns whether anything
+  /// changed so the caller can flash the right toast; undo-able via the standard
+  /// text-view change machinery.
+  @discardableResult
+  func normalizeDocumentForVim() -> Bool {
+    let current = string
+    let normalized = SpotNoteFormatter.normalize(current)
+    guard normalized != current else { return false }
+    let fullRange = NSRange(location: 0, length: (current as NSString).length)
+    guard shouldChangeText(in: fullRange, replacementString: normalized) else { return false }
+    replaceCharacters(in: fullRange, with: normalized)
+    didChangeText()
+    let cursor = min(selectedRange.location, (string as NSString).length)
+    setSelectedRange(NSRange(location: cursor, length: 0))
+    return true
+  }
+
   /// `s<char>` / `S<char>` -- a native, Flash-style one-character jump.
   /// The pure target selection lives in `VimFlash`; this method only applies
   /// the resulting AppKit caret/scroll side effects to the live text view.
@@ -171,8 +154,32 @@ extension PlaceholderTextView {
   /// file so the giant per-case switch doesn't bloat
   /// `MultilineEditor.swift`.
   func executeVimAction(_ action: VimAction) {
+    defer { repairVisualCoherence() }
     if VimActionDispatcher.handleSimple(action, on: self) { return }
     executeMutatingVimAction(action)
+  }
+
+  /// The engine can leave visual mode on paths that never touch the
+  /// view's visual state (leader handoffs, future commands). Stale
+  /// anchors then make the NEXT motion extend a selection the engine no
+  /// longer owns -- the UI looks wedged in a broken half-visual state.
+  /// After every action: if the engine is out of visual mode but
+  /// anchors linger, remember the range for `gv`, drop the anchors,
+  /// and collapse the leftover highlight.
+  private func repairVisualCoherence() {
+    guard let engine = vimEngine, engine.mode != .visual, engine.mode != .visualLine,
+      visualAnchor != nil || visualLineAnchor != nil
+    else { return }
+    captureLastVisualRange()
+    visualAnchor = nil
+    visualCaret = nil
+    visualLineAnchor = nil
+    visualLineCaret = nil
+    if selectedRange.length > 0 {
+      setSelectedRange(NSRange(location: selectedRange.location, length: 0))
+    }
+    notifyVimModeChanged()
+    needsDisplay = true
   }
 
   private func executeMutatingVimAction(_ action: VimAction) {
@@ -185,12 +192,37 @@ extension PlaceholderTextView {
 
   private func executeTextMutatingVimAction(_ action: VimAction) -> Bool {
     if executeDeletionVimAction(action) { return true }
+    if executeCapsFamilyVimAction(action) { return true }
     switch action {
     case .pasteAfter(let count): executeVimPasteAfter(count: count)
     case .undo(let count):
       for _ in 0..<count { undoManager?.undo() }
     case .composite(let actions):
       for sub in actions { executeVimAction(sub) }
+    case .normalizeDocument:
+      let changed = normalizeDocumentForVim()
+      vimController?.showMessage(
+        changed ? "Formatted" : "Already tidy",
+        kind: changed ? .success : .info,
+        icon: .hermes
+      )
+    default:
+      return false
+    }
+    return true
+  }
+
+  /// The caps/tilde single-key editing family (P, J, ~, r) -- see
+  /// `MultilineEditorVimEdit.swift` and the paste twin for the bodies.
+  private func executeCapsFamilyVimAction(_ action: VimAction) -> Bool {
+    switch action {
+    case .pasteBefore(let count): executeVimPasteBefore(count: count)
+    case .joinLines(let count): executeJoinLines(count: count)
+    case .toggleCase(let count): executeToggleCase(count: count)
+    case .replaceChar(let replacement, let count):
+      executeReplaceChar(replacement, count: count)
+    case .moveLinesDown(let count): executeMoveLines(down: true, count: count)
+    case .moveLinesUp(let count): executeMoveLines(down: false, count: count)
     default:
       return false
     }
@@ -199,11 +231,13 @@ extension PlaceholderTextView {
 
   private func executeDeletionVimAction(_ action: VimAction) -> Bool {
     switch action {
-    case .delete(let motion): executeDeleteMotion(motion)
+    case .applyOperator(let op, let target): applyVimOperator(op, to: target)
+    case .yankLine(let count): executeYankLines(count)
     case .deleteLine(let count): executeDeleteLines(count)
     case .deleteLineInsert(let count): executeDeleteLinesInsert(count)
     case .changeBulletBody: changeCurrentBulletBodyForVim()
     case .deleteChar(let count): executeDeleteChar(count)
+    case .deleteCharBefore(let count): executeDeleteCharBefore(count: count)
     default:
       return false
     }
@@ -212,10 +246,11 @@ extension PlaceholderTextView {
 
   private func executeHandoffVimAction(_ action: VimAction) -> Bool {
     switch action {
-    case .sendCurrentTaskToLinear(let status, let count):
-      sendCurrentTaskToLinear(status: status, count: count)
+    case .sendCurrentTaskToLinear(let status, let workspace, let count):
+      sendCurrentTaskToLinear(status: status, workspace: workspace, count: count)
     case .appendCurrentLineToDailyNote(let count): appendCurrentLinesToDailyNote(count)
     case .appendCurrentLineToTrayNote(let count): appendCurrentLinesToTrayNote(count)
+    case .appendCurrentLineToStateNote(let count): appendCurrentLinesToStateNote(count)
     default:
       return false
     }
@@ -228,7 +263,6 @@ extension PlaceholderTextView {
     case .gotoLine(let line):
       _ = jumpToLine(line)
     case .jumpToTraySection: _ = jumpToTraySectionForVim()
-    case .jumpToHabitsSection: _ = jumpToHabitsSectionForVim()
     case .jumpToToDoSection: _ = jumpToToDoSectionForVim()
     default:
       return false
@@ -281,7 +315,7 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
-  private func linewiseRange(from anchor: Int, to caret: Int) -> NSRange {
+  func linewiseRange(from anchor: Int, to caret: Int) -> NSRange {
     let nsString = string as NSString
     let lo = min(anchor, caret)
     let hi = max(anchor, caret)
@@ -295,6 +329,7 @@ extension PlaceholderTextView {
   /// `y` in visual line mode -- copies the selection (with the trailing
   /// newline preserved, matching real vim) and exits to normal.
   private func yankVisualLineSelection() {
+    captureLastVisualRange()
     let nsString = string as NSString
     let range = selectedRange
     if range.length > 0, range.length <= nsString.length {
@@ -303,11 +338,13 @@ extension PlaceholderTextView {
       vimPasteboard.setString(text, forType: .string)
     }
     exitVisualLineSelection(restoreCaretTo: range.location)
+    flashYankHighlight(over: range)
   }
 
   /// `d` / `c` in visual line mode -- deletes the selection and either
   /// returns to normal (delete) or switches to insert (change).
   private func deleteVisualLineSelection(switchingToInsert: Bool) {
+    captureLastVisualRange()
     let range = selectedRange
     let restorePoint = range.location
     if range.length > 0, shouldChangeText(in: range, replacementString: "") {
@@ -323,6 +360,7 @@ extension PlaceholderTextView {
   }
 
   private func exitVisualLineSelection(restoreCaretTo location: Int) {
+    captureLastVisualRange()
     visualLineAnchor = nil
     visualLineCaret = nil
     let clamped = min(location, (string as NSString).length)
@@ -331,13 +369,6 @@ extension PlaceholderTextView {
     needsDisplay = true
   }
 
-  private func executeDeleteChar(_ count: Int) {
-    let nsString = string as NSString
-    let cursor = selectedRange.location
-    let end = min(cursor + count, nsString.length)
-    guard end > cursor else { return }
-    insertText("", replacementRange: NSRange(location: cursor, length: end - cursor))
-  }
 }
 
 /// Pure-Swift core of the substitute command -- split out so it can be

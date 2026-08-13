@@ -6,20 +6,30 @@ import SwiftUI
 final class FocusTrigger: ObservableObject {
   @Published private(set) var tick: Int = 0
   /// Bumped to ask the editor to move its caret to the very end of the
-  /// current note's text. Used by the append-to-last-note global hotkey.
+  /// current note's text (editor-side plumbing kept for in-app callers).
   @Published private(set) var caretEndTick: Int = 0
+  /// Bumped by the ⌘K shortcut to open the actions menu -- the modal's
+  /// state is view-local, so the window controller signals through here.
+  @Published private(set) var actionsTick: Int = 0
   func pulse() { tick &+= 1 }
-  func requestCaretEnd() { caretEndTick &+= 1 }
+  func pulseActions() { actionsTick &+= 1 }
+}
+
+/// Published key-window state for the main panel, driving the Raycast
+/// chrome's resigned look (lights/pill/theme button hide, title dims).
+@MainActor
+final class PanelKeyState: ObservableObject {
+  @Published var isKey = false
 }
 
 struct SpotlightRootView: View {
   @ObservedObject var focusTrigger: FocusTrigger
+  @ObservedObject var keyState: PanelKeyState
   @ObservedObject var preferences: ThemePreferences
   @ObservedObject var session: ChatSession
   @ObservedObject var shortcuts: ShortcutStore
   @ObservedObject var find: FindController
   @ObservedObject var fuzzy: FuzzyController
-  @ObservedObject var command: CommandController
   let vimController: VimController
   /// Called synchronously from the editor delegate when the text's line
   /// count changes, so the panel resize happens in the same runloop tick
@@ -28,9 +38,10 @@ struct SpotlightRootView: View {
   /// Invoked when Esc should dismiss the HUD (vim off, or vim on and
   /// already in normal mode).
   let onEscape: () -> Void
-  let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> Void
+  let onSendLinearTask: (LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt
   let onAppendDailyNote: (String) async throws -> URL
   let onAppendTrayNote: (String) async throws -> URL
+  let onAppendStateNote: (String) async throws -> URL
 
   private var theme: Theme { preferences.activeTheme }
 
@@ -53,83 +64,116 @@ struct SpotlightRootView: View {
     )
   }
 
+  /// Chrome the SwiftUI tree adds around the editor. Must mirror the
+  /// window controller's `chromeAboveEditor + chromeBelowEditor`: the
+  /// Raycast bars are always present; the find bar is conditional. The
+  /// notes/actions modals float in an overlay and never change height.
   private var extraChromeHeight: CGFloat {
-    var total: CGFloat = 0
+    var total = EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
     if find.isVisible { total += EditorMetrics.findBarHeight }
-    if fuzzy.isVisible {
-      total += FuzzyPalette.reservedHeight
-    } else if command.isVisible {
-      total += CommandPalette.reservedHeight
-    } else if session.navigationPreview != nil {
-      total += NavigationOverlay.reservedHeight
-    }
     return total
   }
 
+  @State private var actionsModalShown = false
+  /// Pointer-over-window state driving the hover-revealed traffic
+  /// lights. A modal child window intercepts tracking events, so the
+  /// lights also stay lit while any modal is up (like the live app).
+  @State private var windowHovered = false
+
   var body: some View {
+    mainColumn
+      .frame(width: EditorMetrics.panelWidth)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background {
+        SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+          .clipShape(surfaceShape)
+          .overlay(surfaceShape.fill(surfaceFill))
+      }
+      .overlay(modalLayer)
+      .background(
+        RaycastModalOverhang(
+          content: anyModalShown ? AnyView(activeModal) : nil,
+          onDismissTap: { dismissModals() },
+          onKeyEquivalent: { handleModalKeyEquivalent($0) }
+        )
+      )
+      .overlay(surfaceShape.strokeBorder(theme.border, lineWidth: 1))
+      .onHover { windowHovered = $0 }
+      .colorScheme(theme.mode == .dark ? .dark : .light)
+      .animation(.easeOut(duration: 0.10), value: find.isVisible)
+      .onChange(of: session.chats) { _, updatedChats in
+        fuzzy.updateCorpus(updatedChats)
+      }
+      .onChange(of: find.isVisible) { _, isVisible in
+        if !isVisible { focusTrigger.pulse() }
+      }
+      .onChange(of: fuzzy.isVisible) { _, isVisible in
+        if !isVisible { focusTrigger.pulse() }
+      }
+      .onChange(of: actionsModalShown) { _, isShown in
+        if !isShown { focusTrigger.pulse() }
+      }
+      .onChange(of: focusTrigger.actionsTick) { _, _ in
+        actionsModalShown = true
+      }
+      .onAppear {
+        let editorHeight = EditorMetrics.panelHeight(
+          forLines: EditorMetrics.lineCount(in: session.currentText),
+          maxLines: preferences.maxVisibleLines
+        )
+        onHeightChange(editorHeight + extraChromeHeight)
+      }
+  }
+
+  /// The Raycast Notes column: bars and editor, always `panelWidth` wide.
+  private var mainColumn: some View {
     VStack(spacing: 0) {
+      RaycastTopBar(
+        title: noteTitle,
+        theme: theme,
+        // The chrome stays lit while a modal child window holds key --
+        // the live app keeps the close light red under its menus.
+        isKey: keyState.isKey || anyModalShown,
+        showsLights: windowHovered || anyModalShown,
+        onClose: onEscape,
+        onShowActions: { actionsModalShown = true },
+        onToggleNotes: { fuzzy.toggle(corpus: session.chats) },
+        onNewNote: { newNote() }
+      )
       if find.isVisible {
         FindBar(controller: find, theme: theme, editorText: session.currentText)
           .transition(.opacity)
       }
       editorCard
         .transaction { $0.animation = nil }
-      if fuzzy.isVisible {
-        FuzzyPalette(controller: fuzzy, theme: theme) { chat in
-          session.jump(to: chat)
-        }
-        .padding(.horizontal, EditorMetrics.outerPadding)
-        .padding(.bottom, EditorMetrics.outerPadding)
-        .frame(height: FuzzyPalette.reservedHeight)
-        .transition(.opacity)
-      } else if command.isVisible {
-        CommandPalette(controller: command, theme: theme)
-          .padding(.horizontal, EditorMetrics.outerPadding)
-          .padding(.bottom, EditorMetrics.outerPadding)
-          .frame(height: CommandPalette.reservedHeight)
-          .transition(.opacity)
-      } else if let preview = session.navigationPreview {
-        NavigationOverlay(
-          preview: preview,
+      if preferences.vimMode {
+        VimAwareBottomBar(
+          controller: vimController,
+          characterCount: session.currentText.count,
           theme: theme,
-          shortcuts: shortcuts,
-          canUndo: session.lastDeleted != nil
+          isKey: keyState.isKey || anyModalShown
         )
-        .padding(.horizontal, EditorMetrics.outerPadding)
-        .padding(.bottom, EditorMetrics.outerPadding)
-        .frame(height: NavigationOverlay.reservedHeight)
-        .transition(.opacity)
+      } else {
+        RaycastBottomBar(characterCount: session.currentText.count)
       }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .colorScheme(theme.mode == .dark ? .dark : .light)
-    .animation(.easeOut(duration: 0.10), value: session.navigationPreview != nil)
-    .animation(.easeOut(duration: 0.10), value: find.isVisible)
-    .animation(.easeOut(duration: 0.10), value: fuzzy.isVisible)
-    .animation(.easeOut(duration: 0.10), value: command.isVisible)
-    .onChange(of: session.chats) { _, newChats in
-      fuzzy.updateCorpus(newChats)
-    }
-    .onChange(of: find.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onChange(of: fuzzy.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onChange(of: command.isVisible) { _, isVisible in
-      if !isVisible { focusTrigger.pulse() }
-    }
-    .onAppear {
-      let editorHeight = EditorMetrics.panelHeight(
-        forLines: EditorMetrics.lineCount(in: session.currentText),
-        maxLines: preferences.maxVisibleLines
-      )
-      onHeightChange(editorHeight + extraChromeHeight)
     }
   }
 
-  private var hasAttachedBottom: Bool {
-    session.navigationPreview != nil || fuzzy.isVisible || command.isVisible
+  private func newNote() {
+    Task { @MainActor in
+      await session.newNote()
+      focusTrigger.pulse()
+    }
+  }
+
+  /// First line of the current note, shown as the centered window title.
+  private var noteTitle: String {
+    let firstLine =
+      session.currentText
+      .components(separatedBy: "\n")
+      .first?
+      .trimmingCharacters(in: .whitespaces) ?? ""
+    return firstLine.isEmpty ? "New Note" : firstLine
   }
 
   // Near-opaque tint: the panel should read as a solid surface with only a hint
@@ -141,15 +185,25 @@ struct SpotlightRootView: View {
     theme.mode == .dark ? Self.darkGlassTintOpacity : Self.lightGlassTintOpacity
   }
 
-  private var editorCardShape: UnevenRoundedRectangle {
-    let flat = hasAttachedBottom
-    return UnevenRoundedRectangle(
-      topLeadingRadius: 10,
-      bottomLeadingRadius: flat ? 0 : 10,
-      bottomTrailingRadius: flat ? 0 : 10,
-      topTrailingRadius: 10,
-      style: .continuous
-    )
+  /// Full-bleed Raycast-style surface: one rounded rectangle for the whole
+  /// panel; the bars and editor all sit on this single sheet.
+  private var surfaceShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: EditorMetrics.surfaceCornerRadius, style: .continuous)
+  }
+
+  /// Themes with a `backgroundTop` render Raycast Notes' vertical top-lit
+  /// gradient at full opacity; flat themes keep the near-opaque glass tint.
+  private var surfaceFill: AnyShapeStyle {
+    if let top = theme.backgroundTop {
+      return AnyShapeStyle(
+        LinearGradient(
+          colors: [top, theme.background],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      )
+    }
+    return AnyShapeStyle(theme.background.opacity(glassTintOpacity))
   }
 
   private var editorCard: some View {
@@ -159,7 +213,6 @@ struct SpotlightRootView: View {
       onChecklistLinesChange: { session.updateChecklistLines($0) },
       theme: theme,
       placeholder: editorPlaceholder,
-      showLineNumbers: preferences.showLineNumbers,
       font: editorFont,
       focusRequest: focusTrigger.tick,
       caretEndRequest: focusTrigger.caretEndTick,
@@ -168,24 +221,17 @@ struct SpotlightRootView: View {
       findHighlight: find.currentMatch,
       vimModeEnabled: preferences.vimMode,
       vimController: vimController,
-      onEscape: onEscape,
+      onEscape: { handleEscape() },
       onSendLinearTask: onSendLinearTask,
       onAppendDailyNote: onAppendDailyNote,
       onAppendTrayNote: onAppendTrayNote,
+      onAppendStateNote: onAppendStateNote,
       onHeightChange: onHeightChange
     )
     .padding(.leading, EditorMetrics.leadingInset)
     .padding(.trailing, EditorMetrics.trailingInset)
-    .padding(.vertical, EditorMetrics.verticalInset)
-    .background {
-      SpotNoteVisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-        .clipShape(editorCardShape)
-        .overlay(editorCardShape.fill(theme.background.opacity(glassTintOpacity)))
-    }
-    .overlay(editorCardShape.strokeBorder(theme.border, lineWidth: 1))
-    .padding(.top, EditorMetrics.outerPadding)
-    .padding(.horizontal, EditorMetrics.outerPadding)
-    .padding(.bottom, hasAttachedBottom ? 0 : EditorMetrics.outerPadding)
+    .padding(.top, EditorMetrics.topInset)
+    .padding(.bottom, EditorMetrics.bottomInset)
   }
 
   private var editorPlaceholder: String {
@@ -195,4 +241,211 @@ struct SpotlightRootView: View {
     }
   }
 
+}
+
+// MARK: - Floating modal layer
+
+extension SpotlightRootView {
+  private var anyModalShown: Bool {
+    fuzzy.isVisible || actionsModalShown
+  }
+
+  /// Transparent tap-catch over the note while a modal shows -- Raycast
+  /// leaves the editor UNDIMMED with a menu open (window probes (40,42,56)
+  /// either way, 2026-08-09); a click on the note body just dismisses. The
+  /// modal sheet itself lives in an overhanging CHILD WINDOW
+  /// (`RaycastModalOverhang`) so it can extend past the panel's bottom
+  /// edge like the live app; neither layer ever touches the measured
+  /// height tree.
+  @ViewBuilder
+  private var modalLayer: some View {
+    if anyModalShown {
+      surfaceShape
+        .fill(Color.clear)
+        .contentShape(surfaceShape)
+        .onTapGesture { dismissModals() }
+    }
+  }
+
+  @ViewBuilder
+  private var activeModal: some View {
+    if fuzzy.isVisible {
+      RaycastNotesModal(
+        controller: fuzzy,
+        currentChatID: session.currentID,
+        isDeletable: { session.isDeletable($0) },
+        onPick: { chat in
+          session.jump(to: chat)
+        },
+        onTogglePin: { chat in
+          Task { @MainActor in
+            await session.togglePin(chat)
+          }
+        },
+        onDelete: { chat in
+          Task { @MainActor in
+            await session.delete(chat)
+            fuzzy.updateCorpus(session.chats)
+          }
+        }
+      )
+    } else {
+      RaycastActionsModal(actions: modalActions, onClose: { actionsModalShown = false })
+    }
+  }
+
+  private var modalActions: [SpotNoteCommand] {
+    // Raycast's live row order: note actions, then find/copy, then chrome.
+    let currentChat = session.chats.first(where: { $0.id == session.currentID })
+    let currentPinned = currentChat?.isPinned ?? false
+    return [
+      SpotNoteCommand(
+        id: "new-note",
+        title: "New Note",
+        icon: .raster(resource: "RaycastPlus", frame: 19.5),
+        keys: keycaps(for: .newNote),
+        section: 0,
+        // Frames re-pinned round 12: the live rows' icon ink runs 34px
+        // at 2x (ours drew 31 at 17.5pt frames) -- 19.5pt with the
+        // 0.875-ink rasters lands 34.1; the Plus and TextSearch carry
+        // their own ink ratios.
+        // Raycast dims New Note while the current note is empty -- the
+        // new note would be an identical blank.
+        isEnabled: !session.currentText.isEmpty,
+        perform: { newNote() }
+      ),
+      SpotNoteCommand(
+        id: "duplicate-note",
+        title: "Duplicate Note",
+        icon: .raster(resource: "RaycastDuplicate", frame: 19.5),
+        keys: keycaps(for: .duplicateNote),
+        section: 0,
+        // Raycast dims Duplicate on an empty note -- nothing to copy.
+        isEnabled: !session.currentText.isEmpty,
+        perform: { Task { @MainActor in await session.duplicateCurrent() } }
+      ),
+      SpotNoteCommand(
+        id: "pin-note",
+        title: currentPinned ? "Unpin Note" : "Pin Note",
+        icon: .raster(resource: "RaycastTack", frame: 19.5),
+        keys: keycaps(for: .togglePin),
+        section: 0,
+        // Vault-backed notes live outside the store and cannot pin.
+        isEnabled: currentChat.map { session.isDeletable($0) } ?? false,
+        perform: {
+          guard let chat = currentChat else { return }
+          Task { @MainActor in await session.togglePin(chat) }
+        }
+      ),
+      SpotNoteCommand(
+        id: "browse-notes",
+        title: "Browse Notes",
+        icon: .stackedCards,
+        keys: keycaps(for: .browseNotes),
+        section: 0,
+        perform: { fuzzy.toggle(corpus: session.chats) }
+      ),
+      SpotNoteCommand(
+        id: "go-back",
+        title: "Go Back",
+        icon: .raster(resource: "RaycastArrowLeftCircle", frame: 19.5),
+        keys: keycaps(for: .goBack),
+        section: 0,
+        isEnabled: session.canGoBack,
+        perform: { Task { @MainActor in await session.goBack() } }
+      ),
+      SpotNoteCommand(
+        id: "go-forward",
+        title: "Go Forward",
+        icon: .raster(resource: "RaycastArrowRightCircle", frame: 19.5),
+        keys: keycaps(for: .goForward),
+        section: 0,
+        isEnabled: session.canGoForward,
+        perform: { Task { @MainActor in await session.goForward() } }
+      ),
+      SpotNoteCommand(
+        id: "find-in-note",
+        title: "Find in Note",
+        // Raycast's Find glyph is text lines + magnifier; not in the
+        // public @raycast/icons set, so the SVG (in Resources, beside
+        // its raster) is composed from David's capture geometry.
+        icon: .raster(resource: "RaycastTextSearch", frame: 20),
+        keys: keycaps(for: .findInNote),
+        section: 1,
+        // Inapplicable on an empty note: dims like the live menu's
+        // greyed rows instead of offering a no-op.
+        isEnabled: !session.currentText.isEmpty,
+        perform: { find.toggle(text: session.currentText) }
+      ),
+      SpotNoteCommand(
+        id: "copy-note",
+        title: "Copy Note",
+        icon: .raster(resource: "RaycastCopyClipboard", frame: 19.5),
+        keys: keycaps(for: .copyContent),
+        section: 1,
+        isEnabled: !session.currentText.isEmpty,
+        perform: {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(session.currentText, forType: .string)
+        }
+      ),
+      SpotNoteCommand(
+        id: "change-theme",
+        title: "Change Theme",
+        icon: .raster(resource: "RaycastSwatch", frame: 19.5),
+        keys: [],
+        section: 2,
+        submenu: { SpotNoteCommands.themeSubmenu(preferences: preferences) }
+      )
+    ]
+  }
+
+  /// Keycap strings for the action's live (user-remappable) binding, e.g.
+  /// ["⌘", "F"]. An unbound action gets no chip -- showing the default
+  /// would advertise a chord that never fires.
+  private func keycaps(for action: ShortcutAction) -> [String] {
+    guard let binding = shortcuts.assignedBinding(for: action) else { return [] }
+    var caps = binding.modifiers.displayString.map(String.init)
+    caps.append(Shortcut.displayKey(binding.key))
+    return caps
+  }
+
+  private func dismissModals() {
+    if fuzzy.isVisible { fuzzy.close() }
+    actionsModalShown = false
+  }
+
+  /// Chords pressed while a modal shows land on the key CHILD panel,
+  /// never on the main panel's key-equivalent table -- resolve against
+  /// the same bindings and let the policy decide (Raycast parity: ⌘K
+  /// toggles the actions menu closed; over the browse modal it switches
+  /// to the actions menu).
+  private func handleModalKeyEquivalent(_ event: NSEvent) -> Bool {
+    let mask: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+    let mods = ShortcutModifierSet(event.modifierFlags.intersection(mask))
+    let key = Shortcut.normalize(event.charactersIgnoringModifiers ?? "")
+    switch ModalKeyEquivalentPolicy.reaction(
+      action: shortcuts.match(key: key, modifiers: mods),
+      fuzzyVisible: fuzzy.isVisible
+    ) {
+    case .switchToActions:
+      fuzzy.close()
+      actionsModalShown = true
+      return true
+    case .toggleActions:
+      actionsModalShown.toggle()
+      return true
+    case .ignore:
+      return false
+    }
+  }
+
+  /// Esc closes an open modal before it can close the HUD.
+  private func handleEscape() {
+    if anyModalShown {
+      dismissModals()
+    } else {
+      onEscape()
+    }
+  }
 }

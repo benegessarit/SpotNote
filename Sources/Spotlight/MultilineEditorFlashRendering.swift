@@ -20,6 +20,7 @@ extension PlaceholderTextView {
     addFlashTemporaryForeground(flashDimmedTextColor, range: fullRange, layoutManager: layoutManager)
     let queryLength = (prompt.buffer as NSString).length
     guard queryLength > 0 else { return }
+    let labelsVisible = regularFlashLabelsAreVisible(query: prompt.buffer)
     let visibleHints = visibleRegularFlashTargets()
     for hint in visibleHints {
       let queryRange = NSRange(
@@ -29,11 +30,47 @@ extension PlaceholderTextView {
       if queryRange.length > 0 {
         addFlashTemporaryForeground(flashQueryTextColor, range: queryRange, layoutManager: layoutManager)
       }
-      guard regularFlashLabelsAreVisible(query: prompt.buffer),
-        let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer)
-      else { continue }
-      addFlashTemporaryForeground(.clear, range: labelRange, layoutManager: layoutManager)
+      // Labels replace the characters they anchor on (hop/flash
+      // `hl_mode = "replace"`): the glyphs the label's ink will COVER go
+      // clear and the label letters draw in their place
+      // (`drawFlashHints`). The covered span is advance-measured, not
+      // one-char -- see `hintHiddenRange`.
+      if labelsVisible, let labelRange = flashLabelCharacterRange(for: hint, query: prompt.buffer) {
+        let covered = hintHiddenRange(at: labelRange.location, label: hint.label, bold: true)
+        addFlashTemporaryForeground(.clear, range: covered, layoutManager: layoutManager)
+      }
     }
+  }
+
+  /// The characters a hint label visually covers in this PROPORTIONAL
+  /// editor. nvim's replace only works on a monospace grid; here a label
+  /// wider than its anchor glyph would collide with the next glyph (and
+  /// the anchor's advance survives hiding, so a narrower label just
+  /// leaves a small gap -- the acceptable direction). Walk forward from
+  /// the anchor accumulating glyph advances until the label's ink fits,
+  /// minimum one character, never across a line break.
+  func hintHiddenRange(at location: Int, label: String, bold: Bool) -> NSRange {
+    let nsString = string as NSString
+    guard location >= 0, location < nsString.length else {
+      return NSRange(location: max(0, location), length: 0)
+    }
+    let baseFont = font ?? SpotNoteFont.editor()
+    let labelFont =
+      bold
+      ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
+      : baseFont
+    let labelWidth = (label as NSString).size(withAttributes: [.font: labelFont]).width
+    var covered = 0.0
+    var length = 0
+    while location + length < nsString.length {
+      let charRange = nsString.rangeOfComposedCharacterSequence(at: location + length)
+      let char = nsString.substring(with: charRange)
+      if char == "\n" { break }
+      covered += (char as NSString).size(withAttributes: [.font: baseFont]).width
+      length = charRange.location + charRange.length - location
+      if covered >= labelWidth { break }
+    }
+    return NSRange(location: location, length: max(1, length))
   }
 
   func clearFlashTextAppearance() {
@@ -102,13 +139,7 @@ extension PlaceholderTextView {
     if let query, !regularFlashLabelsAreVisible(query: query) { return }
     layoutManager.ensureLayout(for: textContainer)
     for hint in visibleRegularFlashTargets() {
-      drawFlashHint(
-        hint,
-        query: query ?? "",
-        dirtyRect: dirtyRect,
-        layoutManager: layoutManager,
-        textContainer: textContainer
-      )
+      drawFlashHint(hint, query: query ?? "", dirtyRect: dirtyRect)
     }
   }
 
@@ -122,63 +153,71 @@ extension PlaceholderTextView {
   private func drawFlashHint(
     _ hint: VimFlashTarget,
     query: String,
-    dirtyRect: NSRect,
-    layoutManager: NSLayoutManager,
-    textContainer: NSTextContainer
+    dirtyRect: NSRect
   ) {
-    let nsString = string as NSString
     guard let labelRange = flashLabelCharacterRange(for: hint, query: query),
-      labelRange.location < nsString.length,
-      layoutManager.numberOfGlyphs > 0
+      let anchor = hintAnchorRects(forCharacterAt: labelRange.location)
     else { return }
+    let active = !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
+    drawHintLabel(
+      hint.label,
+      anchor: anchor,
+      ink: active ? flashActiveLabelTextColor : flashLabelTextColor,
+      bold: true,
+      dirtyRect: dirtyRect
+    )
+  }
+
+  /// Line fragment + first-glyph rect for the character a hint label
+  /// anchors to, in container coordinates. Nil when layout has nothing
+  /// there yet.
+  func hintAnchorRects(forCharacterAt location: Int) -> (glyph: NSRect, line: NSRect)? {
+    guard let layoutManager, let textContainer else { return nil }
+    guard location < (string as NSString).length, layoutManager.numberOfGlyphs > 0 else { return nil }
     let glyphIndex = min(
-      layoutManager.glyphIndexForCharacter(at: labelRange.location),
+      layoutManager.glyphIndexForCharacter(at: location),
       max(0, layoutManager.numberOfGlyphs - 1)
     )
     let line = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
     let glyph = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
-    guard !line.isEmpty, !glyph.isEmpty else { return }
-    let rect = flashHintRect(label: hint.label, glyph: glyph, line: line)
-    guard rect.intersects(dirtyRect) else { return }
-    drawFlashHintLabel(
-      label: hint.label,
-      in: rect,
-      active: !flashLabelBuffer.isEmpty && hint.label.hasPrefix(flashLabelBuffer)
-    )
+    guard !line.isEmpty, !glyph.isEmpty else { return nil }
+    return (glyph, line)
   }
 
-  private func flashHintRect(label: String, glyph: NSRect, line: NSRect) -> NSRect {
-    let attrs = flashHintTextAttributes(active: true)
-    let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
-    let height = EditorMetrics.lineHeight
-    return NSRect(
-      x: textContainerOrigin.x + glyph.minX,
-      y: textContainerOrigin.y + line.minY,
-      width: max(labelWidth + 2, glyph.width),
-      height: height
-    )
-  }
-
-  private func drawFlashHintLabel(label: String, in rect: NSRect, active: Bool) {
-    let attrs = flashHintTextAttributes(active: active)
-    let effectiveFont =
-      attrs[.font] as? NSFont ?? font
-      ?? .monospacedSystemFont(
-        ofSize: EditorMetrics.fontSize,
-        weight: .bold
-      )
-    let baseline = LineNumberRuler.synthesizedBaseline(fragmentHeight: rect.height, font: effectiveFont)
-    let point = NSPoint(x: rect.minX, y: rect.minY + baseline - effectiveFont.ascender)
-    (label as NSString).draw(at: point, withAttributes: attrs)
-  }
-
-  private func flashHintTextAttributes(active: Bool) -> [NSAttributedString.Key: Any] {
-    let baseFont = font ?? NSFont.monospacedSystemFont(ofSize: EditorMetrics.fontSize, weight: .bold)
-    let labelFont = NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
-      .withSize(baseFont.pointSize)
-    return [
+  /// Draws a hint label as bare colored letters in the anchor's character
+  /// cell, baseline-aligned with its text row — nvim's `hl_mode =
+  /// "replace"` look (David's hop/flash render foreground-only letters,
+  /// no pill). The glyphs underneath are hidden via a clear temporary
+  /// foreground at refresh time, so layout never shifts; the label just
+  /// draws where they were.
+  func drawHintLabel(
+    _ label: String,
+    anchor: (glyph: NSRect, line: NSRect),
+    ink: NSColor,
+    bold: Bool,
+    dirtyRect: NSRect
+  ) {
+    let baseFont = font ?? SpotNoteFont.editor()
+    let labelFont =
+      bold
+      ? NSFontManager.shared.convert(baseFont, toHaveTrait: .boldFontMask)
+      : baseFont
+    let attrs: [NSAttributedString.Key: Any] = [
       .font: labelFont,
-      .foregroundColor: active ? flashActiveLabelTextColor : flashLabelTextColor
+      .foregroundColor: ink
     ]
+    let labelWidth = ceil((label as NSString).size(withAttributes: attrs).width)
+    let fontHeight = ceil(labelFont.ascender - labelFont.descender)
+    let baselineY =
+      anchor.line.minY
+      + LineNumberRuler.synthesizedBaseline(fragmentHeight: anchor.line.height, font: labelFont)
+    let rect = NSRect(
+      x: textContainerOrigin.x + anchor.glyph.minX,
+      y: textContainerOrigin.y + baselineY - labelFont.ascender,
+      width: labelWidth,
+      height: fontHeight
+    )
+    guard rect.intersects(dirtyRect) else { return }
+    (label as NSString).draw(at: rect.origin, withAttributes: attrs)
   }
 }

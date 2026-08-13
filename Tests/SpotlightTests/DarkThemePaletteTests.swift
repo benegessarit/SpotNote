@@ -57,8 +57,8 @@ struct DarkThemePaletteTests {
     }
   }
 
-  @Test("Markdown headings render with the selected theme heading color")
-  func markdownHeadingsUseThemeHeadingColor() throws {
+  @Test("Markdown headings render with the selected theme body color")
+  func markdownHeadingsUseThemeBodyColor() throws {
     let text = "plain\n## To Do\nnext"
     let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
     textView.font = SpotNoteFont.editor()
@@ -71,14 +71,14 @@ struct DarkThemePaletteTests {
       storageColor(at: lineStart(1, in: text), in: textView)?.usingColorSpace(.sRGB)
     )
     let draculaBody = try #require(NSColor(ThemeCatalog.dracula.text).usingColorSpace(.sRGB))
-    let draculaHeading = try #require(NSColor(ThemeCatalog.dracula.headingText).usingColorSpace(.sRGB))
 
     #expect(colorDistance(bodyColor, draculaBody) < 0.01)
-    #expect(colorDistance(headingColor, draculaHeading) < 0.01)
+    #expect(colorDistance(headingColor, draculaBody) < 0.01)
   }
 
   private func expectedDarkThemeColors() -> [ExpectedThemeColors] {
     [
+      ExpectedThemeColors(id: "raycast-dark", body: Color(testHex: 0xCFD6F1), heading: Color(testHex: 0x9CC3FF)),
       ExpectedThemeColors(id: "fahrenheit", body: Color(testHex: 0xFFFFCE), heading: Color(testHex: 0xFD9F4D)),
       ExpectedThemeColors(id: "catppuccin-frappe", body: Color(testHex: 0xC6D0F5), heading: Color(testHex: 0xCA9EE6)),
       ExpectedThemeColors(id: "catppuccin-mocha", body: Color(testHex: 0xCDD6F4), heading: Color(testHex: 0xCBA6F7)),

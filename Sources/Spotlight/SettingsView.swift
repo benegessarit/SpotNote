@@ -344,17 +344,6 @@ private struct EditorPane: View {
 
         SettingsDivider()
 
-        SettingsToggleRow(
-          title: "Line numbers",
-          subtitle: "Show numeric labels; the narrow marker gutter stays visible.",
-          isOn: Binding(
-            get: { preferences.showLineNumbers },
-            set: { preferences.showLineNumbers = $0 }
-          )
-        )
-
-        SettingsDivider()
-
         SettingsSliderRow(
           title: "Max visible lines",
           subtitle: "Panel grows up to this many rows before scrolling.",

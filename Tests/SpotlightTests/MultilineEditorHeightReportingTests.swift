@@ -19,7 +19,6 @@ struct MultilineEditorHeightReportingTests {
       ),
       theme: ThemeCatalog.obsidian,
       placeholder: "",
-      showLineNumbers: false,
       font: .systemFont(ofSize: EditorMetrics.fontSize),
       focusRequest: 0,
       maxVisibleLines: 4,

@@ -45,8 +45,8 @@ struct MultilineEditorTrayNoteAppendTests {
     #expect(textView.string == "plain\n- gamma")
   }
 
-  @Test("gy motion sends the current bullet block to tray.md")
-  func gyMotionSendsCurrentBulletBlockToTrayNote() async throws {
+  @Test("\\t motion sends the current bullet block to the tray note")
+  func backslashTMotionSendsCurrentBulletBlockToTrayNote() async throws {
     let text = "plain\n- beta\n  wrapped context\n- gamma"
     let textView = makeTextView(text: text)
     textView.vimModeEnabled = true
@@ -58,8 +58,8 @@ struct MultilineEditorTrayNoteAppendTests {
       return URL(fileURLWithPath: "/tmp/tray.md")
     }
 
-    textView.keyDown(with: keyEvent(characters: "g", ignoring: "g", keyCode: 5))
-    textView.keyDown(with: keyEvent(characters: "y", ignoring: "y", keyCode: 16))
+    textView.keyDown(with: keyEvent(characters: "\\", ignoring: "\\", keyCode: 42))
+    textView.keyDown(with: keyEvent(characters: "t", ignoring: "t", keyCode: 17))
     try await waitUntil { captured.count == 1 }
 
     #expect(captured == ["- beta\n  wrapped context"])

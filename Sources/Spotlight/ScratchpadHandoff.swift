@@ -33,6 +33,10 @@ struct ScratchpadHandoffClient: Sendable {
   private func send(payload: ScratchpadHandoffPayload) async throws -> ScratchpadHandoffReceipt {
     let body = try JSONEncoder().encode(payload)
     var request = URLRequest(url: endpoint)
+    // The ingress creates the Linear issue synchronously before responding, so the
+    // budget must exceed Linear API latency, not just loopback RTT. 15s bounds a
+    // wedged/hung local port (the default would be 60s) without aborting a slow-but-real create.
+    request.timeoutInterval = 15
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = body
@@ -59,7 +63,15 @@ struct ScratchpadHandoffClient: Sendable {
       id: id,
       intent: "linear_issue",
       text: LinearTaskHandoffPrompt.render(request: normalizedRequest),
-      source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Linear task")
+      source: ScratchpadHandoffPayload.Source(app: "SpotNote", title: "Linear task"),
+      data: ScratchpadHandoffPayload.LinearData(
+        kind: "linear_issue",
+        title: normalizedRequest.title,
+        status: normalizedRequest.targetStatus.rawValue,
+        workspace: normalizedRequest.workspace.rawValue,
+        labels: normalizedRequest.labels,
+        dueDate: normalizedRequest.dueDate
+      )
     )
   }
 
@@ -67,7 +79,11 @@ struct ScratchpadHandoffClient: Sendable {
     if data.isEmpty { return ScratchpadHandoffReceipt(captureID: nil) }
     let decoded = try JSONDecoder().decode(LocalIngressResponse.self, from: data)
     guard decoded.accepted else { throw ScratchpadHandoffError.notAccepted }
-    return ScratchpadHandoffReceipt(captureID: decoded.captureID)
+    return ScratchpadHandoffReceipt(
+      captureID: decoded.captureID,
+      identifier: decoded.identifier,
+      url: decoded.url
+    )
   }
 
   private static func linearTaskID() -> String {
@@ -87,14 +103,55 @@ struct ScratchpadHandoffPayload: Codable, Equatable, Sendable {
     let title: String
   }
 
+  /// Structured payload for deterministic, no-LLM handling at the ingress.
+  /// Present only for the Linear motions; when absent the receiving Hermes
+  /// session reads `text` and acts (the habit motion and any future intents
+  /// stay on that LLM-mediated path).
+  struct LinearData: Codable, Equatable, Sendable {
+    let kind: String
+    let title: String
+    let status: String
+    let workspace: String
+    let labels: [String]
+    let dueDate: String?
+  }
+
   let id: String
   let intent: String
   let text: String
   let source: Source
+  /// Synthesized Codable omits this when nil, so non-Linear payloads are unchanged on the wire.
+  var data: LinearData?
 }
 
 struct ScratchpadHandoffReceipt: Equatable, Sendable {
   let captureID: String?
+  let identifier: String?
+  let url: String?
+
+  init(captureID: String?, identifier: String? = nil, url: String? = nil) {
+    self.captureID = captureID
+    self.identifier = identifier
+    self.url = url
+  }
+
+  var linearSuccessMessage: String? {
+    if let identifier = trimmed(identifier), !identifier.isEmpty {
+      return "Created \(identifier) in Linear"
+    }
+    if let captureID = trimmed(captureID), Self.looksLikeLinearIdentifier(captureID) {
+      return "Created \(captureID) in Linear"
+    }
+    return nil
+  }
+
+  private static func looksLikeLinearIdentifier(_ value: String) -> Bool {
+    value.range(of: #"^[A-Z]+-\d+$"#, options: .regularExpression) != nil
+  }
+
+  private func trimmed(_ value: String?) -> String? {
+    value?.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
 }
 
 enum LinearTaskTargetStatus: String, Equatable, Sendable {
@@ -105,26 +162,42 @@ enum LinearTaskTargetStatus: String, Equatable, Sendable {
   case later = "Later"
 }
 
+/// Which Linear workspace a handoff targets. `personal` is the default for the
+/// gd/gp/gs/gt/gl motions; `code` routes to David's Code workspace (the gc motion).
+enum LinearTaskWorkspace: String, Equatable, Sendable {
+  case personal
+  case code
+}
+
 struct LinearTaskHandoffRequest: Equatable, Sendable {
   let title: String
   let targetStatus: LinearTaskTargetStatus
+  let workspace: LinearTaskWorkspace
   let labels: [String]
   let dueDate: String?
 
   init(
     title: String,
     targetStatus: LinearTaskTargetStatus = .triage,
+    workspace: LinearTaskWorkspace = .personal,
     labels: [String] = [],
     dueDate: String? = nil
   ) {
     self.title = title
     self.targetStatus = targetStatus
+    self.workspace = workspace
     self.labels = labels
     self.dueDate = dueDate
   }
 
   func withTitle(_ title: String) -> Self {
-    Self(title: title, targetStatus: targetStatus, labels: labels, dueDate: dueDate)
+    Self(
+      title: title,
+      targetStatus: targetStatus,
+      workspace: workspace,
+      labels: labels,
+      dueDate: dueDate
+    )
   }
 }
 
@@ -138,11 +211,15 @@ enum ScratchpadHandoffError: Error, Equatable {
 private struct LocalIngressResponse: Decodable {
   let accepted: Bool
   let captureID: String?
+  let identifier: String?
+  let url: String?
 
   private enum CodingKeys: String, CodingKey {
     case accepted
     case captureID
     case captureIDSnake = "capture_id"
+    case identifier
+    case url
   }
 
   init(from decoder: Decoder) throws {
@@ -151,6 +228,8 @@ private struct LocalIngressResponse: Decodable {
     captureID =
       try container.decodeIfPresent(String.self, forKey: .captureID)
       ?? container.decodeIfPresent(String.self, forKey: .captureIDSnake)
+    identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
+    url = try container.decodeIfPresent(String.self, forKey: .url)
   }
 }
 
@@ -206,20 +285,25 @@ enum LinearTaskMetadataParser {
   static func request(
     from rawText: String,
     targetStatus: LinearTaskTargetStatus,
+    workspace: LinearTaskWorkspace = .personal,
+    labels extraLabels: [String] = [],
     today: Date = Date(),
     calendar: Calendar = Calendar.current
   ) -> LinearTaskHandoffRequest? {
     guard let cleaned = LinearTaskTitleNormalizer.title(fromSpotNoteLine: rawText) else {
       return nil
     }
-    let labels = labels(in: cleaned)
+    let parsedLabels = labels(in: cleaned)
     let dueDate = dueDate(in: cleaned, today: today, calendar: calendar)
     let title = strippedMetadata(from: cleaned)
     guard !title.isEmpty else { return nil }
+    // Caller-supplied labels (e.g. the Code motion's "Develop") lead; parsed #labels
+    // follow. `deduped` is case-insensitive, so a typed #Develop won't duplicate it.
     return LinearTaskHandoffRequest(
       title: title,
       targetStatus: targetStatus,
-      labels: deduped(labels),
+      workspace: workspace,
+      labels: deduped(extraLabels + parsedLabels),
       dueDate: dueDate
     )
   }
@@ -303,10 +387,11 @@ enum LinearTaskHandoffPrompt {
       ? "none"
       : request.labels.joined(separator: ", ")
     let dueDateLine = request.dueDate ?? "none"
+    let workspaceName = request.workspace == .code ? "Code" : "personal"
     return """
       SpotNote Linear task handoff.
 
-      Create exactly one new Linear issue in David's personal Linear workspace.
+      Create exactly one new Linear issue in David's \(workspaceName) Linear workspace.
       Required issue shape:
       - Team: David
       - State/status: \(request.targetStatus.rawValue)

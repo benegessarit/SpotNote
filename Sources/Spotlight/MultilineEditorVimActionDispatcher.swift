@@ -22,7 +22,9 @@ enum VimActionDispatcher {
     case .switchToInsert, .switchToNormal:
       // Collapse any lingering visual-line selection back to the
       // motion's last caret so Esc/V from VISUAL LINE leaves the user
-      // exactly where they were, not on a wide highlight.
+      // exactly where they were, not on a wide highlight. The range is
+      // remembered first so `gv` can reselect it.
+      view.captureLastVisualRange()
       if let caret = view.visualLineCaret ?? view.visualCaret {
         let clamped = min(caret, (view.string as NSString).length)
         view.setSelectedRange(NSRange(location: clamped, length: 0))
@@ -54,14 +56,19 @@ enum VimActionDispatcher {
   ) -> Bool {
     switch action {
     case .enterCommand: view.vimController?.enterPrompt(.command)
-    case .enterSearch: view.vimController?.enterPrompt(.search)
+    case .enterSearch:
+      view.vimController?.enterPrompt(.search)
+      view.beginVimSearchSession()
     case .enterFlash(let direction, let count, let scope):
       view.enterFlashPrompt(direction: direction, count: count, scope: scope)
     case .enterLineFlash(let count):
       view.vimController?.enterPrompt(.lineFlash(count: count))
       view.refreshLineFlashHints()
-    case .findNext: view.vimController?.findStep(1)
-    case .findPrevious: view.vimController?.findStep(-1)
+    case .enterWordHint:
+      view.enterWordHintPrompt()
+    case .findNext: view.executeVimFindStep(1)
+    case .findPrevious: view.executeVimFindStep(-1)
+    case .searchWordUnderCaret: view.executeVimSearchWordUnderCaret()
     default: return false
     }
     return true

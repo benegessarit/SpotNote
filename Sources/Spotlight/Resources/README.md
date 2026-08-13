@@ -1,28 +1,23 @@
 # Spotlight resources
 
-SpotNote's editor asks AppKit for **MonoLisa** by PostScript name
-`MonoLisa-Regular`. MonoLisa is a licensed font, so it is **not** bundled or
-redistributed here — install it into `~/Library/Fonts` (regular + bold/italic
-weights) and the editor resolves it system-wide. Bold/italic styling derives
-from the installed weights via `NSFontManager` trait conversion in the code
-stylers.
+`FontLoader.registerBundledFonts()` registers every bundled `.ttf` / `.otf`
+process-locally at launch, before any view asks for a face by PostScript
+name. `.custom`/`NSFont(name:)` fall back SILENTLY on a wrong PostScript
+name, so never rename these files casually.
 
-When MonoLisa is not installed, the editor falls back to the bundled
-`IBMPlexMono-Regular.ttf` (so the HUD never drops to Inter or a proportional
-system font), then to the system monospaced face. `FontLoader.registerBundledFonts()`
-registers bundled `.ttf` / `.otf` files process-locally before the editor asks
-for the font.
+Bundled fonts:
 
-Bundled fallback font:
+- `LilexNerdFontMono-Regular.ttf` / `LilexNerdFontMono-Bold.ttf`
+  (PostScript `LilexNFM-Regular` / `LilexNFM-Bold`) — the EDITOR body,
+  the same mono face David's nvim renders in (Ghostty `font-family`,
+  IBM Plex Mono letterforms + ligatures). `SpotNoteFont.editor()` asks
+  for it and falls back to the system monospaced face; bold/italic
+  derive in-family via `NSFontManager` trait conversion.
+- `Inter-Regular.otf` / `Inter-Medium.otf` (PostScript `Inter-Regular` /
+  `Inter-Medium`) — ALL Raycast-parity chrome text via `RaycastFont`
+  (the live Raycast app ships Inter in its frontend bundle).
 
-- `IBMPlexMono-Regular.ttf` or `IBMPlexMono-Regular.otf`
-- Optional matching weights, such as `IBMPlexMono-Bold.ttf`
-
-Installing the bundled fallback (only needed if you change which fallback ships):
-
-```bash
-brew install --cask font-ibm-plex
-# then copy the installed IBM Plex Mono regular file into this directory:
-cp ~/Library/Fonts/IBMPlexMono-Regular.ttf \
-   Sources/Spotlight/Resources/
-```
+The PNGs are exact @raycast/icons v0.4.7 rasters (white-on-transparent,
+128px, rendered from the package path data) plus composed glyphs that the
+public icon set lacks (`RaycastTextSearch`); sibling `.svg` files keep the
+source geometry.

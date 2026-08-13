@@ -54,29 +54,6 @@ struct FindControllerTests {
 }
 
 @MainActor
-@Suite("CommandController")
-struct CommandControllerTests {
-  private func makeDefaults(_ tag: String = #function) -> UserDefaults {
-    let suite = "spotnote.command-controller.\(tag).\(UUID().uuidString)"
-    return UserDefaults(suiteName: suite) ?? .standard
-  }
-
-  @Test("command corpus excludes retired statusline controls")
-  func commandCorpusExcludesRetiredStatuslineControls() {
-    let defaults = makeDefaults()
-    let shortcuts = ShortcutStore(defaults: defaults)
-    let preferences = ThemePreferences(defaults: defaults)
-
-    let corpus = CommandController.buildCorpus(shortcuts: shortcuts, preferences: preferences)
-    let searchable = corpus.map { "\($0.title) \($0.subtitle)" }.joined(separator: "\n")
-
-    #expect(!searchable.localizedCaseInsensitiveContains("Hints bar"))
-    #expect(!searchable.localizedCaseInsensitiveContains("hint strip"))
-    #expect(!searchable.localizedCaseInsensitiveContains("Toggle hints"))
-  }
-}
-
-@MainActor
 @Suite("FuzzyController")
 struct FuzzyControllerTests {
   private func makeChat(_ text: String) -> Chat {
@@ -145,21 +122,6 @@ struct FuzzyControllerTests {
     let ranked = FuzzyController.rank(query: "this", in: [chat], limit: 10)
     let result = try #require(ranked.first)
     #expect(result.matchRanges == [TextRange(location: 4, length: 4)])
-  }
-
-  @Test("preview excerpt clamps large notes around the highlighted match")
-  func previewExcerptClampsLargeNotes() throws {
-    let prefix = String(repeating: "a", count: FuzzyPreviewExcerpt.characterLimit + 500)
-    let text = prefix + "needle" + String(repeating: "b", count: FuzzyPreviewExcerpt.characterLimit)
-    let range = TextRange(location: prefix.count, length: 6)
-
-    let excerpt = FuzzyPreviewExcerpt.make(text: text, ranges: [range])
-    let highlighted = try #require(excerpt.ranges.first)
-    let start = excerpt.text.index(excerpt.text.startIndex, offsetBy: highlighted.location)
-    let end = excerpt.text.index(start, offsetBy: highlighted.length)
-
-    #expect(excerpt.text.count <= FuzzyPreviewExcerpt.characterLimit + 8)
-    #expect(String(excerpt.text[start..<end]) == "needle")
   }
 
   @Test("previewLine returns the first non-empty line trimmed and clamped")

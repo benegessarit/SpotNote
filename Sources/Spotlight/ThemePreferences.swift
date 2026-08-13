@@ -6,15 +6,16 @@ import SwiftUI
 @MainActor
 public final class ThemePreferences: ObservableObject {
   public static let minVisibleLines = 1
-  public static let maxVisibleLinesCap = 30
+  /// 22 rows at the 41pt Raycast line pitch is the tallest editor that
+  /// still fits under the menu bar on the built-in display.
+  public static let maxVisibleLinesCap = 22
   /// Default growth cap before the editor scrolls. Short notes still open
-  /// at the 9-row resting floor, while longer notes can expand well beyond
+  /// at the resting floor, while longer notes can expand well beyond
   /// that before scrolling.
-  public static let defaultVisibleLines = 28
+  public static let defaultVisibleLines = 22
 
   private enum Key {
     static let selectedID = "theme.selected.id"
-    static let showLineNumbers = "editor.showLineNumbers"
     static let showMenuBarIcon = "menubar.showIcon"
     static let maxVisibleLines = "editor.maxVisibleLines"
     static let showHints = "hud.showTutorial"
@@ -27,10 +28,6 @@ public final class ThemePreferences: ObservableObject {
 
   @Published public var selectedThemeID: String {
     didSet { defaults.set(selectedThemeID, forKey: Key.selectedID) }
-  }
-
-  @Published public var showLineNumbers: Bool {
-    didSet { defaults.set(showLineNumbers, forKey: Key.showLineNumbers) }
   }
 
   @Published public var showMenuBarIcon: Bool {
@@ -103,7 +100,6 @@ public final class ThemePreferences: ObservableObject {
   public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     self.selectedThemeID = defaults.string(forKey: Key.selectedID) ?? ThemeCatalog.defaultID
-    self.showLineNumbers = Self.boolOrDefault(defaults, Key.showLineNumbers, default: false)
     self.showMenuBarIcon = Self.boolOrDefault(defaults, Key.showMenuBarIcon, default: true)
     self.showHints = Self.boolOrDefault(defaults, Key.showHints, default: true)
     self.vimMode = Self.boolOrDefault(defaults, Key.vimMode, default: false)

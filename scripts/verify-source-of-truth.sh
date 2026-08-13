@@ -51,7 +51,8 @@ require_file "Sources/Spotlight/ScratchpadHandoff.swift"
 require_file "Sources/Spotlight/HermesToastView.swift"
 require_file "Sources/Spotlight/MarkdownOutline.swift"
 require_file "Sources/Spotlight/Resources/HermesLogo.png"
-require_file "Sources/Spotlight/Resources/IBMPlexMono-Regular.ttf"
+require_file "Sources/Spotlight/Resources/LilexNerdFontMono-Regular.ttf"
+require_file "Sources/Spotlight/Resources/LilexNerdFontMono-Bold.ttf"
 require_file "Tests/SpotlightTests/ScratchpadHandoffTests.swift"
 require_file "Tests/SpotlightTests/MultilineEditorOutlineTests.swift"
 require_file "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
@@ -80,23 +81,234 @@ require_grep "rose-pine-moonlight" "Sources/Spotlight/Theme.swift"
 require_grep "dracula" "Sources/Spotlight/Theme.swift"
 require_grep "ScratchpadHandoffClient" "Sources/Spotlight/ScratchpadHandoff.swift"
 require_grep "Sending to Linear" "Sources/Spotlight/MultilineEditor.swift"
-require_grep "Sent to Hermes for Linear" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "Created \(identifier) in Linear" "Sources/Spotlight/ScratchpadHandoff.swift"
+reject_grep "Sent to Hermes for Linear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "defaultHUDOriginHugsRightEdge" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 require_grep "defaultHUDOriginHugsBottomEdge" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 require_grep "defaultEdgeInset: CGFloat =" "Sources/Spotlight/SpotlightWindow.swift"
 require_grep "hugs the right edge" "Tests/SpotlightTests/SpotlightWindowControllerTests.swift"
 require_grep "bottom-right corner" "AGENTS.md"
 require_grep "leadingInset: CGFloat = 0" "Sources/Spotlight/EditorMetrics.swift"
-require_grep "textLeadingGap: CGFloat = 32" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "textLeadingGap: CGFloat = 37" "Sources/Spotlight/EditorMetrics.swift"
+# 22pt body + 45pt pitch: David's deliberate step up from the measured
+# 20/41 Raycast parity ("make the font somewhat bigger", 2026-08-10) --
+# the 41x22/20 ratio keeps his approved leading.
 require_grep "fontSize: CGFloat = 22" "Sources/Spotlight/EditorMetrics.swift"
-require_grep "editorFontName = \"MonoLisa-Regular\"" "Sources/Spotlight/SpotNoteFont.swift"
+require_grep "lineHeight: CGFloat = 45" "Sources/Spotlight/EditorMetrics.swift"
+# Editor body is the nvim mono face (David 2026-08-10 "switch to mono
+# grid and use the same mono font as my nvim"); chrome stays Inter.
+require_grep "LilexNFM-Regular" "Sources/Spotlight/SpotNoteFont.swift"
 require_grep "SpotNoteFont.editor()" "Sources/Spotlight/SpotlightRootView.swift"
 require_grep "continuationPrefix" "Sources/Spotlight/MarkdownOutline.swift"
 require_grep "normal-mode o under a bullet opens a matching bullet below" "Tests/SpotlightTests/MultilineEditorOutlineTests.swift"
 reject_grep "uncheckedLineMarkerGlyph" "Sources/Spotlight/LineNumberRuler.swift"
 reject_grep "checkedLineMarkerGlyph" "Sources/Spotlight/LineNumberRuler.swift"
 reject_grep "lineMarkerRightNudge" "Sources/Spotlight/LineNumberRulerMarkers.swift"
-require_grep "hidden-line-number mode reserves no checkbox gutter" "Tests/SpotlightTests/LineNumberRulerTests.swift"
+require_grep "the gutter is zero-width whenever line-flash hints are not showing" "Tests/SpotlightTests/LineNumberRulerTests.swift"
+reject_grep "showLineNumbers" "Sources/Spotlight/ThemePreferences.swift"
+# Raycast leaves the editor undimmed with a menu open (probed 2026-08-09).
+reject_grep "RaycastModalPalette.backdrop" "Sources/Spotlight/SpotlightRootView.swift"
+# Sheet translucency (round 12): the live sheet is the SYSTEM GLASS
+# material (their [macos] stylesheet: -apple-system-glass-material on
+# .popover__webPopover, ~48% measured transmission) -- bare, no tint
+# overlay on the glass path. The popover+0.45 sandwich survives only as
+# the pre-macOS-26 fallback.
+require_grep "SpotNoteGlassBackdrop(cornerRadius: RaycastModalPalette.cornerRadius)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "NSGlassEffectView" "Sources/Spotlight/SpotNoteVisualEffectView.swift"
+require_grep "SpotNoteVisualEffectView(material: .popover, blendingMode: .behindWindow)" "Sources/Spotlight/RaycastModals.swift"
+# Menu polish round 2 (probed 2026-08-09 same-scale captures): the pill +
+# is drawn at 2pt, not the heavier-stroke raster. (The round-2 "gaps are
+# pure whitespace" call was retracted round 9 -- the gap carries a
+# centered hairline via sectionGap; `sectionRule` is just the dead name.)
+reject_grep "sectionRule" "Sources/Spotlight/RaycastActionsModal.swift"
+# The actions sheet hugs its content (computed listHeight, NO height
+# cap -- a 400pt cap hid Show Sidebar/Change Theme below the fold while
+# the live menu shows its whole list) and draws the probed hairline
+# under its search field; the lights are hover-gated but the pill is not
+# (David 2026-08-10).
+require_grep "frame(height: listHeight)" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "searchDivider" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "showsLights: windowHovered || anyModalShown" "Sources/Spotlight/SpotlightRootView.swift"
+# Pill icon hover is a CIRCLE at a bare +8 RGB, not a rounded rect
+# (probed on David's 2026-08-10 Raycast hover capture).
+require_grep "Circle()" "Sources/Spotlight/RaycastChrome.swift"
+# Editor hint labels are bare colored letters (nvim hl_mode "replace"
+# look) -- the opaque pink pills were retired 2026-08-10; hop_red is the
+# love-toward-red blend, never bare love. The hidden span under a label
+# is advance-MEASURED (proportional editor; a fixed label-length hide
+# collided with the next glyph, David 2026-08-10).
+require_grep "drawHintLabel" "Sources/Spotlight/MultilineEditorWordHint.swift"
+require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorWordHint.swift"
+require_grep "hintHiddenRange" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
+# Browse hover buttons are Raycast's own Tack/Trash rasters at PRIMARY
+# tint, the metadata line runs on the brighter second secondary tone,
+# rows sit on the live 70pt pitch, and the list hugs six rows before
+# scrolling (all probed on 2026-08-10 native captures).
+require_grep "RaycastTrash" "Sources/Spotlight/RaycastModals.swift"
+require_grep "metadataText" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowPitch: CGFloat = 70" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "maxHeight: 320" "Sources/Spotlight/RaycastModals.swift"
+# Round 10 (2026-08-10 side-by-side captures, both modals in ONE frame):
+# hairlines are a SINGLE pixel at 2x (0.5pt of fg-10 ink) and the browse
+# modal draws one under its search field too (the round-4 "no divider"
+# read was a coarse-scan miss); the search zone is 47pt (caret centers
+# 47px at 2x); row highlights inset 9.5pt (728px wide in the 766px
+# sheet) with content pads compensated; actions rows are 42pt TOUCHING
+# (the live selected rect is one full 84px pitch -- rowSpacing is gone);
+# the browse header zone is 38.5pt and the 6-row hug clips 3pt like the
+# live sheet.
+require_grep "RaycastModalHairline" "Sources/Spotlight/RaycastModals.swift"
+require_grep "RaycastModalHairline()" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "frame(height: 0.5)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "frame(height: 47)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowInset: CGFloat = 9.5" "Sources/Spotlight/RaycastModals.swift"
+require_grep "rowHeight: CGFloat = 43" "Sources/Spotlight/RaycastModals.swift"
+require_grep "headerHeight: CGFloat = 38.5" "Sources/Spotlight/RaycastModals.swift"
+require_grep "sectionGapHeight: CGFloat = 26.5" "Sources/Spotlight/RaycastActionsModal.swift"
+reject_grep "rowSpacing" "Sources/Spotlight/RaycastModals.swift"
+# Round 11 (2026-08-10, Raycast's own shipped stylesheet as ground truth:
+# frontend/*.css in the Raycast Beta bundle). The modal ink system is ONE
+# foreground (#CFD6F1) at opacity tiers -- fg-20 borders (menu border ==
+# keycap ring, --shadow-panel-border), fg-60 secondary, fg-10 hairlines;
+# kbd chips are HOLLOW (transparent bg, 1px inset ring); the menu corner
+# radius circle-fits 33px at 2x; pin/trash render on the SELECTED browse
+# row (their JS: e.isSelected) with the multiline accessories gap; the
+# browse list scrolls animated on keyboard moves only (hover re-scroll
+# fought trackpad flicks); invalidateShadow only fires on a frame change.
+require_grep "borderInk = primaryText.opacity(0.2)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "hairlineInk = primaryText.opacity(0.10)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "cornerRadius: CGFloat = 16.5" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "white.opacity(0.05)" "Sources/Spotlight/RaycastActionsModal.swift"
+reject_grep "white.opacity(0.16)" "Sources/Spotlight/RaycastActionsModal.swift"
+require_grep "controller.selectedIndex == index, isDeletable" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "hoveredIndex" "Sources/Spotlight/RaycastModals.swift"
+require_grep "pendingKeyboardScroll" "Sources/Spotlight/RaycastModals.swift"
+require_grep "allowsNonContiguousLayout = true" "Sources/Spotlight/MultilineEditor.swift"
+# Round 12 (2026-08-10 same-frame captures + the shipped stylesheet):
+# the sheet border is 0.75pt fg-20 (the live edge is one strong + one
+# falloff pixel at 2x; 1pt drew two full-strength and read heavy); the
+# modal panel draws NO window-server shadow (its hard contact rim was a
+# near-black ring the live menu lacks -- do not re-enable hasShadow);
+# the selected row is the translucent selection-5 fill, disabled rows
+# sit at their [data-disabled] 30%; browse pin/trash ride a 20pt gap +
+# 6pt trailing; actions row icons draw 34px of ink at 2x (19.5pt frames
+# on the 0.875-ink rasters).
+require_grep "borderWidth: CGFloat = 0.75" "Sources/Spotlight/RaycastModals.swift"
+require_grep "hasShadow = false" "Sources/Spotlight/RaycastModalWindow.swift"
+reject_grep "invalidateShadow" "Sources/Spotlight/RaycastModalWindow.swift"
+require_grep "selectedRow = primaryText.opacity(0.05)" "Sources/Spotlight/RaycastModals.swift"
+require_grep "disabledOpacity: CGFloat = 0.3" "Sources/Spotlight/RaycastModals.swift"
+require_grep "HStack(spacing: 20) {" "Sources/Spotlight/RaycastModals.swift"
+reject_grep "frame: 17.5" "Sources/Spotlight/SpotlightRootView.swift"
+# Caps/tilde vim family (C/Y/P/J/X/~/r, David 2026-08-10 "C doesn't
+# work"): C=c$ entering insert, Y=y$ (nvim default), P before-paste,
+# J join, ~ toggle-case, r literal replace (digits are literal after r).
+require_grep "case \"C\":" "Sources/Spotlight/VimEngine.swift"
+require_grep "case joinLines(count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "case replaceChar(String, count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "handlePendingReplace" "Sources/Spotlight/VimEngineNormalPending.swift"
+require_grep "executeVimPasteBefore" "Sources/Spotlight/MultilineEditorVimPaste.swift"
+require_grep "r treats a digit as the literal replacement" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep "J joins the next line up with a single space" "Tests/SpotlightTests/MultilineEditorVimCapsFamilyTests.swift"
+# Vim theme/feel round (David 2026-08-10: "cursor color isn't appropriate
+# ... visual select ... yank micro-interaction ... responsiveness"): the
+# block cursor is his nvim's rosewater chrome with the covered glyph
+# flipped to the surface (theme-switch.lua: Cursor bg=cursor fg=base) --
+# never the caret red or heading accent; the visual band substitutes in
+# the LAYOUT MANAGER's fill pass, the one place that holds when AppKit
+# swaps in the non-key unemphasized gray; yanks flash the Visual band on
+# nvim's 300ms clock (vim.hl.on_yank higroup=Visual); typing skips the
+# full-document styler clear while a note holds no backticks.
+require_grep "vimBlockCursor" "Sources/Spotlight/Theme.swift"
+require_grep "fillVimBlockCursor" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+reject_grep "withAlphaComponent(0.82)" "Sources/Spotlight/MultilineEditor.swift"
+reject_grep "withAlphaComponent(0.82)" "Sources/Spotlight/MultilineEditorVimVisual.swift"
+require_grep "vimVisualBandColor" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "flashYankHighlight" "Sources/Spotlight/MultilineEditorVimOperator.swift"
+require_grep "codeStylerLeftAttributes" "Sources/Spotlight/CodeStyler.swift"
+# Yank flash redesign (David 2026-08-11 "think like a top animation /
+# micro interaction designer"): scan-lift-dissolve -- a yank is an
+# EVENT wearing the cursor's rosewater identity (never the Visual
+# band), pure curves in YankFlashCurve, ghost capped for huge spans.
+require_grep "enum YankFlashCurve" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "drawYankGhost" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "yankGlowColor" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "ghostCharacterCap" "Sources/Spotlight/MultilineEditorVimYankFlash.swift"
+require_grep "yy arms the scan-lift-dissolve flash over the yanked line" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "rosewater identity, not the Visual band" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "code styler skips the full clear while the note has no backticks" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+# Visual band depth (David 2026-08-11 "still not really visible"): the
+# nvim RELATIONSHIP (flat surface->text lift) at his stronger 11%/15%,
+# not the probed-nvim 5%/9%. Line moves are his mini.move <M-j>/<M-k>
+# (Option chords become nvim-style tokens), silent edge clamping,
+# selection + anchors ride the block.
+require_grep "theme.mode == .dark ? 0.11 : 0.15" "Sources/Spotlight/CodeStyler.swift"
+require_grep "case moveLinesDown(count: Int)" "Sources/Spotlight/VimEngine.swift"
+require_grep "<M-" "Sources/Spotlight/MultilineEditorVimKeys.swift"
+require_grep "executeMoveLines" "Sources/Spotlight/MultilineEditorVimEdit.swift"
+require_grep "M-j swaps the caret line with the line below" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+require_grep "visual line M-j moves the selected block and keeps the selection" "Tests/SpotlightTests/MultilineEditorVimCursorFlashTests.swift"
+# `/` flash-search (2026-08-11, port of David's flash.lua modes.search):
+# fully VIEW-owned -- never routed through the ⌘F FindController; typed
+# chars that could extend the query beat labels (extension set excluded
+# from the label alphabet, single-char labels only, overflow -> nearest);
+# label-jump commits with bands off (his jump nohlsearch), Enter with
+# bands on; n/N re-light; * searches the caret word; edits clear; the
+# cmdline renders the prompt editor-aligned at editor size (typed BLIND
+# before); the mode badge wears the Raycast T-circle treatment; dim
+# bands sit one step under the Visual band.
+require_file "Sources/Spotlight/VimSearch.swift"
+require_file "Sources/Spotlight/MultilineEditorVimSearch.swift"
+require_file "Sources/Spotlight/VimCmdline.swift"
+require_file "Sources/Spotlight/VimModeBadge.swift"
+require_grep "matchCap = 500" "Sources/Spotlight/VimSearch.swift"
+require_grep "survivingKeys" "Sources/Spotlight/VimSearch.swift"
+require_grep "theme.mode == .dark ? 0.07 : 0.10" "Sources/Spotlight/CodeStyler.swift"
+require_grep "case .search, .flash, .lineFlash, .wordHint:" "Sources/Spotlight/VimController.swift"
+require_grep "searchClearHandler" "Sources/Spotlight/SpotlightWindowVim.swift"
+# The teardown FUNCTION is test-pinned; this pins its WIRING at the
+# note-swap site (deleting the call resurrects the stale-offset crash
+# while tests stay green -- review P2-C, 2026-08-11).
+require_grep "endVimSearchForTextSwap" "Sources/Spotlight/MultilineEditor.swift"
+require_grep "VimAwareBottomBar(" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "frame(width: EditorMetrics.textLeadingGap, alignment: .trailing)" "Sources/Spotlight/VimCmdline.swift"
+reject_grep "VimPromptCapsule" "Sources/Spotlight/SpotlightRootView.swift"
+reject_grep "VimModePill" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "a non-extending label character jumps, commits for n/N, and darkens bands" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+require_grep "label alphabet excludes every character that could extend the query" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+require_grep "labels stay single-character on overflow" "Tests/SpotlightTests/MultilineEditorVimSearchTests.swift"
+reject_grep "applySearchOutcome" "Sources/Spotlight/VimController.swift"
+reject_grep "findStepHandler" "Sources/Spotlight/VimController.swift"
+# Command registry + Raycast flyout submenu (2026-08-11, pixel-probed
+# from David's Raycast AI "Change Model…" capture + their shipped
+# popover stylesheet): rows/sections are DATA (SpotNoteCommand), the
+# submenu rides a SECOND stacked child panel with the shared
+# ModalFocusPolicy deciding every resign (key inside the family never
+# dismisses), and Change Theme is the first consumer -- the standalone
+# themes modal is retired.
+require_file "Sources/Spotlight/SpotNoteCommand.swift"
+require_file "Sources/Spotlight/RaycastSubmenu.swift"
+require_file "Sources/Spotlight/RaycastSubmenuWindow.swift"
+require_grep "width: CGFloat = 419" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "chipGap: CGFloat = 22.5" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "sectionBreakHeight: CGFloat = 48.75" "Sources/Spotlight/RaycastSubmenu.swift"
+require_grep "ModalFocusPolicy" "Sources/Spotlight/SpotlightWindow.swift"
+require_grep "ownedWindows" "Sources/Spotlight/RaycastModalWindow.swift"
+require_grep "themeSubmenu" "Sources/Spotlight/SpotlightRootView.swift"
+require_grep "key moving to its submenu is not a dismissal" "Tests/SpotlightTests/ModalFocusPolicyTests.swift"
+require_grep "filtering narrows items and drops emptied sections" "Tests/SpotlightTests/SpotNoteCommandTests.swift"
+[[ ! -e "$ROOT/Sources/Spotlight/RaycastThemesModal.swift" ]] || fail "retired themes modal source still exists"
+reject_grep "themePickerShown" "Sources/Spotlight/SpotlightRootView.swift"
+reject_grep "activeChildWindow" "Sources/Spotlight/RaycastModalWindow.swift"
+reject_grep "drawHintChip" "Sources/Spotlight/MultilineEditorFlashRendering.swift"
+reject_grep "0xEB" "Sources/Spotlight/MultilineEditorWordHint.swift"
+reject_grep "sectionRule" "Sources/Spotlight/RaycastModals.swift"
+require_grep "RaycastPlusShape" "Sources/Spotlight/RaycastChrome.swift"
+# The notes sidebar is REMOVED entirely (David 2026-08-10) -- no shelf
+# panel, no ⌘\ shortcut, no sidebarShown pref; the window never widens.
+reject_grep "expectedPanelWidth" "Sources/Spotlight/SpotlightWindow.swift"
+reject_grep "sidebarShelf" "Sources/Spotlight/SpotlightWindow.swift"
+reject_grep "toggleSidebar" "Sources/Spotlight/Shortcut.swift"
 require_grep "task editor keeps restored breathing room before text" "Tests/SpotlightTests/EditorMetricsTests.swift"
 require_grep "sendCurrentTaskToLinear" "Sources/Spotlight/MultilineEditor.swift"
 require_grep "case planned = \"Planned\"" "Sources/Spotlight/ScratchpadHandoff.swift"
@@ -105,19 +317,57 @@ require_grep "case later = \"Later\"" "Sources/Spotlight/ScratchpadHandoff.swift
 require_grep "dueDate" "Sources/Spotlight/ScratchpadHandoff.swift"
 require_grep "g-status motions send the current bullet to Linear" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "status Linear handoff sends the current bullet block with labels and due date" "Tests/SpotlightTests/MultilineEditorLinearTaskMotionTests.swift"
+require_grep "gc sends the current bullet to the Code workspace at Triage" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep "case code" "Sources/Spotlight/ScratchpadHandoff.swift"
+require_file "Sources/Spotlight/SpotNoteFormatter.swift"
+require_grep "static func normalize" "Sources/Spotlight/SpotNoteFormatter.swift"
+require_grep "case normalizeDocument" "Sources/Spotlight/VimEngine.swift"
+# Vim operator grammar (engine program S1, 2026-08-10): operators
+# compose with range producers in one applicator; cw enters insert and
+# acts as ce; deletes yank; counts multiply across the operator; dj is
+# linewise. The old per-pair .delete(Motion) action is retired.
+require_file "Sources/Spotlight/VimOperators.swift"
+require_file "Sources/Spotlight/MultilineEditorVimOperator.swift"
+require_grep "case applyOperator(VimOperator, VimRangeTarget)" "Sources/Spotlight/VimEngine.swift"
+require_grep "pendingResolvedCount" "Sources/Spotlight/VimEngine.swift"
+require_grep "cw acts as ce" "Tests/SpotlightTests/MultilineEditorVimOperatorTests.swift"
+require_grep "dj deletes both whole lines" "Tests/SpotlightTests/MultilineEditorVimOperatorTests.swift"
+require_grep "2d3w multiplies the counts" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep "ciw/diw/yiw compose operators" "Tests/SpotlightTests/VimEngineTests.swift"
+reject_grep "case delete(Motion)" "Sources/Spotlight/VimEngine.swift"
+reject_grep "executeDeleteMotion" "Sources/Spotlight/MultilineEditor.swift"
+# Visual mode is nvim-exact (rebuilt 2026-08-10 after David's "crashing
+# + ugly" report): ONE engine handler for both wises; selection is the
+# flat 5%/9% background→text lift (never accent blue), foreground kept;
+# a block cursor draws at the moving end; o/gv/visual-p(no-clobber)/
+# absolute <n>G exist; a coherence repair clears stranded anchors after
+# every action so the engine and view can never disagree about visual.
+require_grep "applyVisualSelectionColor" "Sources/Spotlight/CodeStyler.swift"
+require_grep "visualBlockCursorRect" "Sources/Spotlight/MultilineEditorVimVisual.swift"
+require_grep "repairVisualCoherence" "Sources/Spotlight/MultilineEditorVim.swift"
+require_grep "handleVisualMode(key: String, wise: VisualWise)" "Sources/Spotlight/VimEngine.swift"
+require_grep "case swapVisualEnds" "Sources/Spotlight/VimEngine.swift"
+require_grep "case pasteOverVisualSelection" "Sources/Spotlight/VimEngine.swift"
+require_grep "never clobbers the register" "Tests/SpotlightTests/MultilineEditorVimVisualNvimTests.swift"
+require_grep "cannot strand anchors" "Tests/SpotlightTests/MultilineEditorVimVisualNvimTests.swift"
+reject_grep "func handleVisualLine" "Sources/Spotlight/VimEngine.swift"
 require_grep "gg scrolls the document start to the top" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
-require_grep "roomyVisibleLinesFloor = 9" "Sources/Spotlight/EditorMetrics.swift"
+require_grep "roomyVisibleLinesFloor = 1" "Sources/Spotlight/EditorMetrics.swift"
 require_grep "appendCurrentLineToTrayNote" "Sources/Spotlight/VimEngine.swift"
-require_grep "jumpToHabitsSection" "Sources/Spotlight/VimEngine.swift"
 require_grep "jumpToToDoSection" "Sources/Spotlight/VimEngine.swift"
-require_grep "## Habits" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
 require_grep "## Todo" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
 require_grep "## Tray" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
-require_grep "## Big Things" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
-require_grep "gH jumps to the HABITS section" "Tests/SpotlightTests/VimEngineTests.swift"
-require_grep "gD jumps to the TODO section" "Tests/SpotlightTests/VimEngineTests.swift"
+reject_grep "jumpToHabitsSection" "Sources/Spotlight/VimEngine.swift"
+reject_grep "jumpToBigThingsSection" "Sources/Spotlight/VimEngine.swift"
+reject_grep "## Habits" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+reject_grep "## Big Things" "Sources/Spotlight/SpotNoteSectionHeadings.swift"
+reject_grep ",h jumps to" "Tests/SpotlightTests/VimEngineTests.swift"
+reject_grep ",b jumps to" "Tests/SpotlightTests/VimEngineTests.swift"
+require_grep ",d jumps to the Todo section" "Tests/SpotlightTests/VimEngineTests.swift"
 require_grep "gT ignores internal Tray blank lines" "Tests/SpotlightTests/MultilineEditorVimMotionTests.swift"
-require_grep "Captures/tray.md" "Sources/Spotlight/TrayNoteDestination.swift"
+require_grep "Captures/Trays/spotnote-tray.md" "Sources/Spotlight/TrayNoteDestination.swift"
+require_grep "appendCurrentLineToStateNote" "Sources/Spotlight/VimEngine.swift"
+require_grep "Work/hermes-build/Notes/State.md" "Sources/Spotlight/StateNoteDestination.swift"
 require_grep "tray has no separate global open shortcut" "Tests/SpotlightTests/ShortcutStoreTests.swift"
 require_grep "SPOTNOTE_HEADLESS_TEST" "Sources/SpotNoteApp/AppDelegate.swift"
 require_grep "SPOTNOTE_HEADLESS_TEST=1" "scripts/headless-smoke.sh"
@@ -138,20 +388,22 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
   BIN="$APP/Contents/MacOS/SpotNote"
   RESOURCE_BUNDLE="$APP/Contents/Resources/SpotNote_Spotlight.bundle"
   HERMES_LOGO="$RESOURCE_BUNDLE/Resources/HermesLogo.png"
-  IBM_PLEX_MONO="$RESOURCE_BUNDLE/Resources/IBMPlexMono-Regular.ttf"
+  LILEX_MONO="$RESOURCE_BUNDLE/Resources/LilexNerdFontMono-Regular.ttf"
   [[ -x "$BIN" ]] || fail "installed SpotNote binary missing: $BIN"
   [[ -d "$RESOURCE_BUNDLE" ]] || fail "installed resource bundle missing: $RESOURCE_BUNDLE"
   [[ -f "$HERMES_LOGO" ]] || fail "installed Hermes logo missing: $HERMES_LOGO"
-  [[ -f "$IBM_PLEX_MONO" ]] || fail "installed IBM Plex Mono resource missing: $IBM_PLEX_MONO"
+  [[ -f "$LILEX_MONO" ]] || fail "installed Lilex mono resource missing: $LILEX_MONO"
   STRINGS="$(/usr/bin/strings "$BIN")"
   for needle in \
     "catppuccin-frappe" \
     "rose-pine-moonlight" \
     "ScratchpadHandoffClient" \
-    "Sending to Linear" \
-    "Sent to Hermes for Linear"; do
+    "Sending to Linear"; do
     /usr/bin/grep -F -- "$needle" <<<"$STRINGS" >/dev/null || fail "installed binary missing string: $needle"
   done
+  if /usr/bin/grep -F -- "Sent to Hermes for Linear" <<<"$STRINGS" >/dev/null; then
+    fail "installed binary still contains retired Linear handoff toast wording"
+  fi
   if /usr/bin/grep -F -- "VimStatusLine" <<<"$STRINGS" >/dev/null; then
     fail "installed binary still contains VimStatusLine"
   fi
@@ -165,10 +417,11 @@ if [[ "$CHECK_INSTALLED" == "1" ]]; then
       fail "installed binary still contains retired tray contract: $retired_tray_contract"
     fi
   done
-  /usr/bin/grep -F -- "Sent to tray.md" <<<"$STRINGS" >/dev/null \
-    || fail "installed binary missing tray.md append confirmation string"
-  /usr/bin/grep -F -- "## Habits" <<<"$STRINGS" >/dev/null \
-    || fail "installed binary missing Habits heading contract string"
+  /usr/bin/grep -F -- "Sent to spotnote-tray.md" <<<"$STRINGS" >/dev/null \
+    || fail "installed binary missing spotnote-tray.md append confirmation string"
+  if /usr/bin/grep -F -- "## Habits" <<<"$STRINGS" >/dev/null; then
+    fail "installed binary still contains retired Habits heading contract string"
+  fi
   if /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$APP/Contents/Info.plist" 2>/dev/null | /usr/bin/grep -F -- "true" >/dev/null; then
     fail "installed app still sets LSUIElement=true; LaunchServices will open it as an invisible background status item"
   fi

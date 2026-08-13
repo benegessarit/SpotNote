@@ -5,6 +5,25 @@ struct ShortcutsPane: View {
   @ObservedObject var shortcuts: ShortcutStore
   @State private var confirmResetAll = false
 
+  /// One flat source for the grouped rows so tests can assert coverage:
+  /// every action is listed except those whose binding has no live
+  /// consumer (`appendToLastNote` -- the global-hotkey lane registers
+  /// only `toggleHotkey`, so a settings row would offer a dead remap).
+  static let groups: [(title: String, actions: [ShortcutAction])] = [
+    ("Global", [.toggleHotkey]),
+    (
+      "Editor",
+      [
+        .insertTodayBadge, .appendToDailyNote, .sendToLinear, .copyContent, .duplicateNote,
+        .togglePin
+      ]
+    ),
+    (
+      "Navigation",
+      [.newNote, .browseNotes, .goBack, .goForward, .findInNote, .openActions, .openSettings]
+    )
+  ]
+
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       VStack(alignment: .leading, spacing: 6) {
@@ -15,29 +34,9 @@ struct ShortcutsPane: View {
           .foregroundStyle(.secondary)
       }
 
-      ShortcutGroup(
-        title: "Global",
-        actions: [.toggleHotkey, .appendToLastNote],
-        store: shortcuts
-      )
-      ShortcutGroup(
-        title: "Editor",
-        actions: [.insertTodayBadge],
-        store: shortcuts
-      )
-      ShortcutGroup(
-        title: "Notes",
-        actions: [
-          .newChat, .olderChat, .newerChat, .deleteChat, .undoDelete, .pinNote,
-          .appendToDailyNote, .copyContent, .shareCurrentChat
-        ],
-        store: shortcuts
-      )
-      ShortcutGroup(
-        title: "Navigation",
-        actions: [.findInNote, .fuzzyFindAll, .commandPalette, .openSettings],
-        store: shortcuts
-      )
+      ForEach(Self.groups, id: \.title) { group in
+        ShortcutGroup(title: group.title, actions: group.actions, store: shortcuts)
+      }
 
       SettingsPillButton("Reset all to defaults") { confirmResetAll = true }
         .confirmationDialog(
@@ -189,11 +188,17 @@ private struct ShortcutRecorderField: View {
 
   private var idleButton: some View {
     Button(action: startRecording) {
-      KeyCap.row(
-        for: store.binding(for: action).displayString,
-        theme: theme,
-        size: .regular
-      )
+      Group {
+        if let binding = store.assignedBinding(for: action) {
+          KeyCap.row(for: binding.displayString, theme: theme, size: .regular)
+        } else {
+          // Unbound (every default candidate was user-owned at load):
+          // say so instead of advertising a chord that never fires.
+          Text("None")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
+        }
+      }
       .padding(.horizontal, 6)
       .padding(.vertical, 3)
       .background(

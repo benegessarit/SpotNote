@@ -21,7 +21,26 @@ struct SpotlightRootToastTests {
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
 
-    fixture.vimController.showMessage("Sent to Hermes for Linear", kind: .success, icon: .hermes)
+    fixture.vimController.showMessage("Created PER-999 in Linear", kind: .success, icon: .hermes)
+    await settleSwiftUI()
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+  }
+
+  @Test("notes modal overlay does not trigger panel height callbacks")
+  func notesModalDoesNotTriggerPanelHeightCallbacks() async throws {
+    let fixture = try makeFixture()
+    defer { fixture.cleanup() }
+
+    try await waitUntil { !fixture.recorder.values.isEmpty }
+    await settleSwiftUI()
+    let stableCallbackCount = fixture.recorder.values.count
+
+    fixture.fuzzy.toggle(corpus: fixture.session.chats)
+    await settleSwiftUI()
+    #expect(fixture.fuzzy.isVisible)
+    #expect(fixture.recorder.values.count == stableCallbackCount)
+
+    fixture.fuzzy.close()
     await settleSwiftUI()
     #expect(fixture.recorder.values.count == stableCallbackCount)
   }
@@ -38,9 +57,11 @@ struct SpotlightRootToastTests {
       forLines: EditorMetrics.lineCount(in: fixture.session.currentText),
       maxLines: fixture.preferences.maxVisibleLines
     )
+    let expectedRootHeight =
+      expectedEditorHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
     #expect(fixture.preferences.showHints == true)
-    #expect(fixture.recorder.values.last == expectedEditorHeight)
+    #expect(fixture.recorder.values.last == expectedRootHeight)
 
     fixture.preferences.showHints = false
     await settleSwiftUI()
@@ -57,6 +78,7 @@ struct SpotlightRootToastTests {
     let tempDirectory: URL
     let preferences: ThemePreferences
     let session: ChatSession
+    let fuzzy: FuzzyController
     let vimController: VimController
     let recorder: HeightRecorder
 
@@ -96,6 +118,7 @@ struct SpotlightRootToastTests {
       tempDirectory: tmpDir,
       preferences: root.preferences,
       session: root.session,
+      fuzzy: root.fuzzy,
       vimController: vimController,
       recorder: recorder
     )
@@ -110,18 +133,19 @@ struct SpotlightRootToastTests {
     let preferences = ThemePreferences(defaults: defaults)
     return SpotlightRootView(
       focusTrigger: FocusTrigger(),
+      keyState: PanelKeyState(),
       preferences: preferences,
       session: ChatSession(store: try ChatStore(directory: tmpDir)),
       shortcuts: ShortcutStore(defaults: defaults),
       find: FindController(),
       fuzzy: FuzzyController(),
-      command: CommandController(),
       vimController: vimController,
       onHeightChange: { recorder.values.append($0) },
       onEscape: {},
-      onSendLinearTask: { _ in },
+      onSendLinearTask: { _ in ScratchpadHandoffReceipt(captureID: "PER-1", identifier: "PER-1") },
       onAppendDailyNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-daily.md") },
-      onAppendTrayNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-tray.md") }
+      onAppendTrayNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-tray.md") },
+      onAppendStateNote: { _ in URL(fileURLWithPath: "/tmp/spotnote-state.md") }
     )
   }
 

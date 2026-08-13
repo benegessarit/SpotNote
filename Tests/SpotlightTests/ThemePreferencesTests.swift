@@ -145,25 +145,9 @@ struct ThemePreferencesTests {
 
   @Test("catalog restores neutral and custom themes")
   func catalogSize() {
-    #expect(ThemeCatalog.darkThemes.count == 15)
+    #expect(ThemeCatalog.darkThemes.count == 16)
     #expect(ThemeCatalog.lightThemes.count == 6)
-    #expect(ThemeCatalog.all.count == 21)
-  }
-
-  @Test("showLineNumbers defaults to false on first launch")
-  func lineNumbersDefaultOn() {
-    let prefs = ThemePreferences(defaults: makeDefaults())
-    #expect(prefs.showLineNumbers == false)
-  }
-
-  @Test("showLineNumbers persists to UserDefaults, including the off value")
-  func lineNumbersPersist() {
-    let defaults = makeDefaults()
-    let prefs = ThemePreferences(defaults: defaults)
-    prefs.showLineNumbers = false
-    #expect(defaults.bool(forKey: "editor.showLineNumbers") == false)
-    let rehydrated = ThemePreferences(defaults: defaults)
-    #expect(rehydrated.showLineNumbers == false)
+    #expect(ThemeCatalog.all.count == 22)
   }
 
   @Test("showMenuBarIcon defaults to true on first launch")
@@ -182,22 +166,20 @@ struct ThemePreferencesTests {
     #expect(rehydrated.showMenuBarIcon == false)
   }
 
-  @Test("maxVisibleLines defaults to ten rows beyond twice the resting HUD height before scrolling")
+  @Test("maxVisibleLines defaults to a 22-row scroll cap")
   func maxVisibleLinesDefault() {
     let prefs = ThemePreferences(defaults: makeDefaults())
-    let restingRows = EditorMetrics.roomyVisibleLinesFloor
     let defaultCap = ThemePreferences.defaultVisibleLines
 
     #expect(prefs.maxVisibleLines == ThemePreferences.defaultVisibleLines)
-    #expect(defaultCap == restingRows * 2 + 10)
-    #expect(prefs.maxVisibleLines == 28)
+    #expect(prefs.maxVisibleLines == 22)
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap + 1, maxLines: defaultCap)
         == EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)
     )
     #expect(
       EditorMetrics.panelHeight(forLines: defaultCap, maxLines: defaultCap)
-        > EditorMetrics.panelHeight(forLines: restingRows, maxLines: defaultCap)
+        > EditorMetrics.panelHeight(forLines: 1, maxLines: defaultCap)
     )
   }
 

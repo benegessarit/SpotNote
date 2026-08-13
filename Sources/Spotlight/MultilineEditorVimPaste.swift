@@ -11,6 +11,38 @@ extension PlaceholderTextView {
     }
   }
 
+  /// `P` -- the before-side twin: charwise inserts AT the caret (caret
+  /// ends on the last pasted char), linewise inserts a line above the
+  /// current one (caret at its start), like vim.
+  func executeVimPasteBefore(count: Int) {
+    guard let text = vimPasteboard.string(forType: .string), !text.isEmpty else { return }
+    let pasteText = String(repeating: text, count: max(1, count))
+    if isLinewisePaste(text) {
+      pasteLinewiseAboveCurrentLine(pasteText)
+    } else {
+      pasteCharacterwiseAtCursor(pasteText)
+    }
+  }
+
+  private func pasteCharacterwiseAtCursor(_ text: String) {
+    let nsString = string as NSString
+    let insertion = min(selectedRange.location, nsString.length)
+    performVimPaste(text, at: insertion)
+    let pastedLength = (text as NSString).length
+    let caret = pastedLength > 0 ? insertion + pastedLength - 1 : insertion
+    setSelectedRange(NSRange(location: min(caret, (string as NSString).length), length: 0))
+    needsDisplay = true
+  }
+
+  private func pasteLinewiseAboveCurrentLine(_ text: String) {
+    let nsString = string as NSString
+    let cursor = min(selectedRange.location, nsString.length)
+    let currentLine = nsString.lineRange(for: NSRange(location: cursor, length: 0))
+    performVimPaste(text, at: currentLine.location)
+    setSelectedRange(NSRange(location: min(currentLine.location, (string as NSString).length), length: 0))
+    needsDisplay = true
+  }
+
   private func pasteCharacterwiseAfterCursor(_ text: String) {
     let nsString = string as NSString
     let insertion = nsString.length == 0 ? 0 : min(selectedRange.location + 1, nsString.length)

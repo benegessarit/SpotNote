@@ -24,6 +24,83 @@ struct ChatSessionTests {
     #expect(chats.first?.text == "typed before bootstrap")
   }
 
+  @Test("togglePin persists the pin, resorts pinned-first, and survives reload")
+  func togglePinPersistsAndResortsPinnedFirst() async throws {
+    let dir = try makeTempDirectory()
+    let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    let older = try await store.create()
+    await store.update(id: older.id, text: "older note")
+    try await Task.sleep(for: .milliseconds(5))
+    let newer = try await store.create()
+    await store.update(id: newer.id, text: "newer note")
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+
+    let target = try #require(session.chats.first { $0.id == older.id })
+    await session.togglePin(target)
+
+    #expect(session.chats.first?.id == older.id)
+    #expect(session.chats.first?.isPinned == true)
+    await store.flush()
+    let reloaded = try ChatStore(directory: dir, debounce: .milliseconds(20))
+    await reloaded.loadFromDisk()
+    let reloadedList = await reloaded.list()
+    #expect(reloadedList.first?.id == older.id)
+    #expect(reloadedList.first?.isPinned == true)
+
+    let pinned = try #require(session.chats.first { $0.id == older.id })
+    await session.togglePin(pinned)
+    #expect(session.chats.first?.id == newer.id)
+    #expect(session.chats.allSatisfy { !$0.isPinned })
+  }
+
+  @Test("go back / go forward walk note history; new navigation clears forward")
+  func goBackForwardWalkHistory() async throws {
+    let store = try ChatStore(directory: makeTempDirectory(), debounce: .milliseconds(20))
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+    let first = try #require(session.currentID)
+
+    await session.newNote()
+    let second = try #require(session.currentID)
+    #expect(session.canGoBack)
+    #expect(!session.canGoForward)
+
+    await session.goBack()
+    #expect(session.currentID == first)
+    #expect(session.canGoForward)
+
+    await session.goForward()
+    #expect(session.currentID == second)
+    #expect(!session.canGoForward)
+
+    await session.goBack()
+    #expect(session.currentID == first)
+    await session.newNote()
+    #expect(!session.canGoForward, "fresh navigation clears the forward stack")
+    await session.goBack()
+    #expect(session.currentID == first)
+  }
+
+  @Test("duplicate opens a new note carrying the current text")
+  func duplicateCopiesCurrentNote() async throws {
+    let store = try ChatStore(directory: makeTempDirectory(), debounce: .milliseconds(20))
+    let session = ChatSession(store: store)
+    await session.bootstrap()
+    session.currentText = "keep me"
+    session.persistIfNeeded()
+    let original = try #require(session.currentID)
+
+    await session.duplicateCurrent()
+
+    #expect(session.currentID != original)
+    #expect(session.currentText == "keep me")
+    #expect(session.canGoBack)
+    await session.goBack()
+    #expect(session.currentID == original)
+    #expect(session.currentText == "keep me")
+  }
+
   @Test("bootstrap displays checklist Markdown as icon-only plain text")
   func bootstrapStripsChecklistMarkdownFromEditableText() async throws {
     let dir = try makeTempDirectory()
@@ -44,7 +121,7 @@ struct ChatSessionTests {
     #expect(session.currentChecklistLines == [0: .checked])
   }
 
-  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes")
+  @Test("bootstrap prefers the vault SpotNote inbox over newer app-local notes without adding default sections")
   func bootstrapPrefersVaultInbox() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
@@ -61,8 +138,8 @@ struct ChatSessionTests {
     await session.bootstrap()
 
     #expect(session.currentID == vaultInbox.id)
-    #expect(session.currentText == "## Habits\nEmail down @ 120\nWrite pass email for Cure51")
-    #expect(session.currentChecklistLines == [1: .unchecked, 2: .unchecked])
+    #expect(session.currentText == "Email down @ 120\nWrite pass email for Cure51")
+    #expect(session.currentChecklistLines == [0: .unchecked, 1: .unchecked])
     #expect(session.chats.first?.id == vaultInbox.id)
   }
 
@@ -76,18 +153,18 @@ struct ChatSessionTests {
     let session = ChatSession(store: store, vaultInbox: vaultInbox)
 
     await session.bootstrap()
-    #expect(session.currentText == "## Habits\nold inbox\ndone item")
-    #expect(session.currentChecklistLines == [1: .unchecked, 2: .checked])
+    #expect(session.currentText == "old inbox\ndone item")
+    #expect(session.currentChecklistLines == [0: .unchecked, 1: .checked])
 
-    session.currentText = "## Habits\nupdated inbox   \ndone item\t"
+    session.currentText = "updated inbox   \ndone item\t"
     session.persistIfNeeded()
     await session.flush()
 
     let saved = try String(contentsOf: inboxURL, encoding: .utf8)
-    #expect(saved == "## Habits\n[   ] updated inbox\n[ x ] done item")
+    #expect(saved == "[   ] updated inbox\n[ x ] done item")
   }
 
-  @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting Habits")
+  @Test("bootstrap normalizes a TODO heading to Title-Case Todo without inserting default sections")
   func bootstrapNormalizesTodoHeadingCase() async throws {
     let dir = try makeTempDirectory()
     let store = try ChatStore(directory: dir, debounce: .milliseconds(20))
@@ -120,30 +197,28 @@ struct ChatSessionTests {
 
     await session.bootstrap()
     #expect(session.currentVaultState == .tasks)
-    #expect(session.currentText == "## Habits\nexisting task")
-    #expect(session.currentChecklistLines == [1: .unchecked])
-    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "## Habits\n[   ] existing task")
+    #expect(session.currentText == "existing task")
+    #expect(session.currentChecklistLines == [0: .unchecked])
+    #expect(try String(contentsOf: tasksURL, encoding: .utf8) == "[   ] existing task")
   }
 
-  @Test("undo delete restores checklist state")
-  func undoDeleteRestoresChecklistState() async throws {
+  @Test("missing vault inbox opens blank instead of inserting a default section")
+  func missingVaultInboxOpensBlankWithoutDefaultHeading() async throws {
     let dir = try makeTempDirectory()
-    let writer = try ChatStore(directory: dir, debounce: .milliseconds(20))
-    let chat = try await writer.create()
-    await writer.update(id: chat.id, text: "[ x ] done item")
-    await writer.flush()
-    let reader = try ChatStore(directory: dir, debounce: .milliseconds(20))
-    let session = ChatSession(store: reader)
+    let store = try ChatStore(directory: dir.appending(path: "store"), debounce: .milliseconds(20))
+    let tasksURL = dir.appending(path: "spotnote-inbox.md", directoryHint: .notDirectory)
+    let session = ChatSession(
+      store: store,
+      vaultDocuments: [
+        VaultNoteDocument(state: .tasks, url: tasksURL, debounce: .milliseconds(20))
+      ]
+    )
 
     await session.bootstrap()
-    #expect(session.currentText == "done item")
-    #expect(session.currentChecklistLines == [0: .checked])
 
-    await session.deleteCurrent()
-    await session.undoDelete()
-
-    #expect(session.currentText == "done item")
-    #expect(session.currentChecklistLines == [0: .checked])
+    #expect(session.currentVaultState == .tasks)
+    #expect(session.currentText.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: tasksURL.path))
   }
 
   private func makeTempDirectory() throws -> URL {

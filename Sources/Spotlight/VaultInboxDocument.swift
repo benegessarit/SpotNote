@@ -6,18 +6,6 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   public var id: String { rawValue }
 
-  public var displayName: String {
-    switch self {
-    case .tasks: return "Tasks"
-    }
-  }
-
-  public var switchLabel: String {
-    switch self {
-    case .tasks: return "\(displayName) 󰄱"
-    }
-  }
-
   public var defaultID: UUID {
     switch self {
     case .tasks:
@@ -38,7 +26,7 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
 
   var defaultMarkdown: String {
     switch self {
-    case .tasks: return SpotNoteSectionHeadings.habits.canonicalLine
+    case .tasks: return ""
     }
   }
 
@@ -53,14 +41,9 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
       in: droppingLeadingNewlines(from: markdown)
     )
     // Normalize every recognized heading to its Title-Case canonical (so the note
-    // isn't a mix of `## HABITS` / `# todo` / `## Tray`). Give a truly
-    // header-less inbox a default Habits section so the HUD has structure, but
-    // NEVER prepend when the note already starts with one of its own sections
-    // (e.g. Big Things) -- the note's existing headers are respected as-is.
-    let normalized = normalizingSectionHeadings(in: body)
-    if startsWithRecognizedHeading(normalized) { return normalized }
-    guard !normalized.isEmpty else { return SpotNoteSectionHeadings.habits.canonicalLine }
-    return SpotNoteSectionHeadings.habits.canonicalLine + normalized
+    // isn't a mix of `## HABITS` / `# todo` / `## Tray`). Do not inject or reorder
+    // sections: header-less notes stay header-less, and fresh inboxes open blank.
+    return normalizingSectionHeadings(in: body)
   }
 
   private static func normalizingSectionHeadings(in markdown: String) -> String {
@@ -68,12 +51,6 @@ public enum VaultNoteState: String, CaseIterable, Codable, Identifiable, Sendabl
       .split(separator: "\n", omittingEmptySubsequences: false)
       .map { SpotNoteSectionHeadings.canonicalHeading(for: String($0)) ?? String($0) }
       .joined(separator: "\n")
-  }
-
-  private static func startsWithRecognizedHeading(_ markdown: String) -> Bool {
-    let firstLine =
-      markdown.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
-    return SpotNoteSectionHeadings.canonicalHeading(for: String(firstLine)) != nil
   }
 
   private static func droppingLeadingNewlines(from markdown: String) -> String {
@@ -97,6 +74,16 @@ public actor VaultNoteDocument {
 
   private let debounce: Duration
   private var pendingWrite: Task<Void, Never>?
+  /// The note's mtime as of our last read or write. The vault is
+  /// multi-writer (Neovim, Hermes, crons): a debounced overwrite may only
+  /// land when the file still matches what this session last saw --
+  /// otherwise the external edit wins the canonical path and OUR text
+  /// diverts to a conflict sibling.
+  private var lastKnownModification: Date?
+  /// One sibling per conflict episode: later keystrokes update the same
+  /// file instead of scattering a sibling per debounce tick.
+  private var activeConflictURL: URL?
+  private var onConflict: (@Sendable (URL) -> Void)?
 
   public init(
     state: VaultNoteState = .tasks,
@@ -110,6 +97,12 @@ public actor VaultNoteDocument {
     self.debounce = debounce
   }
 
+  /// Called with the conflict sibling's URL the first time a debounced
+  /// write diverts because the note changed on disk under this session.
+  public func setConflictHandler(_ handler: (@Sendable (URL) -> Void)?) {
+    onConflict = handler
+  }
+
   func load() -> Chat? {
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
     guard let rawText = try? String(contentsOf: url, encoding: .utf8) else { return nil }
@@ -117,7 +110,9 @@ public actor VaultNoteDocument {
     if text != rawText {
       try? text.write(to: url, atomically: true, encoding: .utf8)
     }
-    let updatedAt = modificationDate() ?? Date()
+    lastKnownModification = modificationDate()
+    activeConflictURL = nil
+    let updatedAt = lastKnownModification ?? Date()
     return Chat(
       id: id,
       createdAt: updatedAt,
@@ -133,23 +128,56 @@ public actor VaultNoteDocument {
 
   func update(text: String) {
     pendingWrite?.cancel()
-    let url = url
     let debounce = debounce
     let text = state.normalizedMarkdown(text)
     pendingWrite = Task {
       do { try await Task.sleep(for: debounce) } catch { return }
-      do {
-        try FileManager.default.createDirectory(
-          at: url.deletingLastPathComponent(),
-          withIntermediateDirectories: true
-        )
-        try text.write(to: url, atomically: true, encoding: .utf8)
-      } catch {
-        // The editor should never crash on a vault write failure; the text
-        // remains in memory and the next edit/quit flush can retry.
-      }
+      persist(text)
     }
   }
+
+  private func persist(_ text: String) {
+    do {
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+      if let target = conflictTarget() {
+        try text.write(to: target, atomically: true, encoding: .utf8)
+        if activeConflictURL == nil {
+          activeConflictURL = target
+          onConflict?(target)
+        }
+        return
+      }
+      try text.write(to: url, atomically: true, encoding: .utf8)
+      lastKnownModification = modificationDate()
+    } catch {
+      // The editor should never crash on a vault write failure; the text
+      // remains in memory and the next edit/quit flush can retry.
+    }
+  }
+
+  /// Non-nil when the canonical note may not be overwritten: the file
+  /// changed on disk since this session last read or wrote it (or exists
+  /// but was never read). Returns the sibling URL our text goes to.
+  private func conflictTarget() -> URL? {
+    if let activeConflictURL { return activeConflictURL }
+    guard let current = modificationDate() else { return nil }
+    let drift = lastKnownModification.map { abs(current.timeIntervalSince($0)) } ?? .infinity
+    if drift < 0.001 { return nil }
+    let stamp = Self.conflictStampFormatter.string(from: Date())
+    let base = url.deletingPathExtension().lastPathComponent
+    return url.deletingLastPathComponent()
+      .appending(path: "\(base).conflict-\(stamp).md", directoryHint: .notDirectory)
+  }
+
+  private static let conflictStampFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    return formatter
+  }()
 
   func flush() async {
     await pendingWrite?.value
@@ -157,10 +185,9 @@ public actor VaultNoteDocument {
   }
 
   private func modificationDate() -> Date? {
-    guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey]) else {
-      return nil
-    }
-    return values.contentModificationDate
+    // NSURL caches resource values; go through FileManager for a fresh stat.
+    let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+    return attributes?[.modificationDate] as? Date
   }
 }
 

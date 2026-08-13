@@ -16,6 +16,9 @@ public struct Theme: Equatable, Identifiable, Sendable {
   /// theme's cursor tracks its own palette instead of one global color; set it
   /// explicitly to honor a theme's official cursor (e.g. Fahrenheit's #bbbbbb).
   let cursor: Color?
+  /// Optional lighter top color for a vertical surface gradient (Raycast
+  /// Notes' top-lit sheet). `nil` renders the flat `background`.
+  let backgroundTop: Color?
 
   // #lizard forgives -- a plain field-assignment initializer; wide only because
   // Theme has many color roles. The `cursor` default keeps every existing theme
@@ -29,7 +32,8 @@ public struct Theme: Equatable, Identifiable, Sendable {
     text: Color,
     headingText: Color,
     placeholder: Color,
-    cursor: Color? = nil
+    cursor: Color? = nil,
+    backgroundTop: Color? = nil
   ) {
     self.id = id
     self.name = name
@@ -40,10 +44,26 @@ public struct Theme: Equatable, Identifiable, Sendable {
     self.headingText = headingText
     self.placeholder = placeholder
     self.cursor = cursor
+    self.backgroundTop = backgroundTop
   }
 
   /// Resolved cursor color: the explicit `cursor` when set, else the heading accent.
   var resolvedCursor: Color { cursor ?? headingText }
+
+  /// nvim-parity vim BLOCK cursor (normal/visual modes): the catppuccin
+  /// ROSEWATER role his own nvim chrome uses for every block cursor
+  /// (config/theme-switch.lua apply_chrome + Ghostty cursor-color
+  /// #f5e0dc) with the covered glyph flipped to the surface color
+  /// (nvim: Cursor bg=cursor fg=base). Deliberately NOT `cursor` or the
+  /// heading accent: `cursor` is the INSERT caret's Raycast-parity role
+  /// (raycast-dark's is the probed caret red), and reusing it drew the
+  /// red block David rejected (2026-08-10). Mocha rosewater #F5E0DC on
+  /// dark themes, latte rosewater #DC8A78 on light.
+  var vimBlockCursor: Color {
+    mode == .dark
+      ? Color(red: 0xF5 / 255, green: 0xE0 / 255, blue: 0xDC / 255)
+      : Color(red: 0xDC / 255, green: 0x8A / 255, blue: 0x78 / 255)
+  }
 }
 
 /// Curated themes: the original neutral set plus David's custom Catppuccin/Rose Pine/Ayu skins.
@@ -295,9 +315,25 @@ enum ThemeCatalog {
     placeholder: Color(red: 0.557, green: 0.557, blue: 0.576)
   )
 
+  /// Raycast Notes -- pixel-sampled from the live Raycast Beta Notes
+  /// window (slate-navy surface, near-white body, dim grey counter text,
+  /// Raycast-red caret). The default theme for the Raycast-style shell.
+  static let raycastDark = Theme(
+    id: "raycast-dark",
+    name: "Raycast Dark",
+    mode: .dark,
+    background: Color(red: 0x25 / 255, green: 0x26 / 255, blue: 0x34 / 255),
+    border: Color(red: 1, green: 1, blue: 1).opacity(0.25),
+    text: Color(red: 0xCF / 255, green: 0xD6 / 255, blue: 0xF1 / 255),
+    headingText: Color(red: 0x9C / 255, green: 0xC3 / 255, blue: 0xFF / 255),
+    placeholder: Color(red: 0x66 / 255, green: 0x6A / 255, blue: 0x7E / 255),
+    cursor: Color(red: 0xEB / 255, green: 0x55 / 255, blue: 0x45 / 255),
+    backgroundTop: Color(red: 0x2A / 255, green: 0x2C / 255, blue: 0x3B / 255)
+  )
+
   static let darkThemes: [Theme] = [
-    fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage, mirage, dracula,
-    nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
+    raycastDark, fahrenheit, catppuccinFrappe, catppuccinMocha, rosePineMoonlight, ayuMirage,
+    mirage, dracula, nvimDark, neobonesDark, nightfox, obsidian, ink, graphite, midnight, charcoal
   ]
   static let lightThemes: [Theme] = [catppuccinLatte, parchment, mist, bone, linen, porcelain]
   static let all: [Theme] = darkThemes + lightThemes

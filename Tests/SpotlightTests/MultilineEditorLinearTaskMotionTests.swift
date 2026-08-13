@@ -24,6 +24,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-1", identifier: "PER-1")
     }
 
     textView.sendCurrentTaskToLinear(status: .done, count: 1)
@@ -46,6 +47,7 @@ struct MultilineEditorLinearTaskMotionTests {
     var captured: [LinearTaskHandoffRequest] = []
     textView.onSendLinearTask = { request in
       captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-2", identifier: "PER-2")
     }
 
     textView.sendCurrentTaskToLinear(status: .triage, count: 1)
@@ -56,6 +58,62 @@ struct MultilineEditorLinearTaskMotionTests {
     #expect(captured.first?.labels == ["Bio"])
     #expect(captured.first?.dueDate == "2026-06-15")
     #expect(textView.string == "alpha\ngamma")
+  }
+
+  @Test("gc handoff targets the Code workspace with a Develop label")
+  func gcHandoffTargetsCodeWorkspaceWithDevelopLabel() async throws {
+    let textView = makeTextView(text: "- ship the gc motion #SpotNote")
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    var captured: [LinearTaskHandoffRequest] = []
+    textView.onSendLinearTask = { request in
+      captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "DAB-42", identifier: "DAB-42")
+    }
+
+    textView.sendCurrentTaskToLinear(status: .triage, workspace: .code, count: 1)
+    try await waitUntil { captured.count == 1 }
+
+    #expect(captured.first?.workspace == .code)
+    #expect(captured.first?.targetStatus == .triage)
+    #expect(captured.first?.labels == ["Develop", "SpotNote"])
+    #expect(captured.first?.title == "ship the gc motion")
+    #expect(!textView.string.contains("ship"))
+  }
+
+  @Test("a double-fired handoff sends only once (in-flight guard)")
+  func doubleFiredHandoffSendsOnce() async throws {
+    let textView = makeTextView(text: "- only once please")
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    var captured: [LinearTaskHandoffRequest] = []
+    textView.onSendLinearTask = { request in
+      captured.append(request)
+      return ScratchpadHandoffReceipt(captureID: "PER-3", identifier: "PER-3")
+    }
+
+    // Two synchronous presses before the first send's Task runs: the first sets
+    // isHandoffInFlight, so the second must be ignored — only one external write.
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    try await waitUntil { captured.count == 1 }
+    try await Task.sleep(nanoseconds: 50_000_000)
+    #expect(captured.count == 1)
+  }
+
+  @Test("Linear handoff success toast names the created issue")
+  func linearHandoffSuccessToastNamesCreatedIssue() async throws {
+    let textView = makeTextView(text: "- file this")
+    let controller = VimController()
+    textView.attachVimController(controller)
+    textView.setSelectedRange(NSRange(location: 0, length: 0))
+    textView.onSendLinearTask = { _ in
+      ScratchpadHandoffReceipt(captureID: "PER-999", identifier: "PER-999")
+    }
+
+    textView.sendCurrentTaskToLinear(status: .triage, count: 1)
+    try await waitUntil { controller.message?.text == "Created PER-999 in Linear" }
+
+    #expect(controller.message?.kind == .success)
+    #expect(textView.string.isEmpty)
   }
 
   private func makeTextView(text: String) -> PlaceholderTextView {

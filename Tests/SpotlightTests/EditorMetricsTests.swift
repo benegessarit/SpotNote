@@ -27,13 +27,13 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.lineCount(in: "a\n") == 2)
   }
 
-  @Test("panelHeight stays roomy for short notes before growing")
-  func panelHeightRoomyFloorThenGrows() {
+  @Test("panelHeight grows one line at a time, Raycast-style")
+  func panelHeightGrowsPerLine() {
     let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
     let two = EditorMetrics.panelHeight(forLines: 2, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
-    #expect(one == three)
-    #expect(two == three)
+    #expect(two == one + EditorMetrics.lineHeight)
+    #expect(three == two + EditorMetrics.lineHeight)
   }
 
   @Test("panelHeight clamps at the supplied maxLines")
@@ -47,20 +47,18 @@ struct EditorMetricsTests {
 
   @Test("panelHeight honors a smaller user cap")
   func panelHeightHonorsSmallMax() {
-    let one = EditorMetrics.panelHeight(forLines: 1, maxLines: 3)
     let three = EditorMetrics.panelHeight(forLines: 3, maxLines: 3)
     let seven = EditorMetrics.panelHeight(forLines: 7, maxLines: 3)
-    #expect(one == three)
     #expect(three == seven)
   }
 
   @Test("panelHeight grows with a larger maxLines")
   func panelHeightHonoursLargerMax() {
-    let capped = EditorMetrics.panelHeight(forLines: 10, maxLines: 3)
-    let expanded = EditorMetrics.panelHeight(forLines: 10, maxLines: 10)
-    let wayBigger = EditorMetrics.panelHeight(forLines: 10, maxLines: 30)
+    let capped = EditorMetrics.panelHeight(forLines: 12, maxLines: 3)
+    let expanded = EditorMetrics.panelHeight(forLines: 12, maxLines: 12)
+    let wayBigger = EditorMetrics.panelHeight(forLines: 12, maxLines: 30)
     #expect(expanded > capped)
-    #expect(wayBigger == expanded, "row-count hits the ceiling at 10 when maxLines >= 10")
+    #expect(wayBigger == expanded, "row-count hits the ceiling at 12 when maxLines >= 12")
   }
 
   @Test("panelHeight treats zero and negative line counts as one line")
@@ -77,31 +75,45 @@ struct EditorMetricsTests {
     #expect(EditorMetrics.panelHeight(forLines: 5, maxLines: -7) == one)
   }
 
-  @Test("editor metrics use the slightly smaller nvim-style HUD scale")
-  func slightlySmallerNvimStyleScale() {
+  @Test("editor metrics use David's stepped-up body scale on Raycast chrome")
+  func editorBodyScale() {
+    // 22/45 is the deliberate step up from the measured Raycast 20/41
+    // ("make the font somewhat bigger", 2026-08-10) at the same
+    // leading-to-glyph ratio; the chrome metrics stay Raycast-exact.
     #expect(EditorMetrics.fontSize == 22)
-    #expect(EditorMetrics.lineHeight >= 34)
-    #expect(EditorMetrics.panelWidth >= 720)
+    #expect(EditorMetrics.lineHeight == 45)
+    #expect(EditorMetrics.panelWidth == 670)
+    #expect(EditorMetrics.surfaceCornerRadius == 26)
+    #expect(EditorMetrics.topBarHeight == 60)
+    #expect(EditorMetrics.bottomBarHeight == 56)
   }
 
-  @Test("short notes open at roughly twice the old four-line HUD height")
-  func shortNotesOpenAtDoubleHeight() {
-    let oldFourLineHeight =
-      CGFloat(4) * EditorMetrics.lineHeight
-      + EditorMetrics.verticalInset * 2
-      + EditorMetrics.outerPadding * 2
-    let openHeight = EditorMetrics.panelHeight(forLines: 4, maxLines: 10)
+  @Test("empty notes open one line tall and grow per line")
+  func emptyNotesOpenCompact() {
+    let openHeight = EditorMetrics.panelHeight(forLines: 1, maxLines: 12)
+    let totalRestingHeight =
+      openHeight + EditorMetrics.topBarHeight + EditorMetrics.bottomBarHeight
 
-    #expect(EditorMetrics.roomyVisibleLinesFloor == 9)
-    #expect(openHeight == EditorMetrics.panelHeight(forLines: 9, maxLines: 10))
-    #expect(openHeight >= oldFourLineHeight * 1.95)
+    #expect(EditorMetrics.roomyVisibleLinesFloor == 1)
+    // Chrome (60+56) + inset (20) + one 45pt line: the Raycast empty
+    // window's 177 shape scaled by the 22pt body's taller line.
+    #expect(totalRestingHeight == 181)
+    #expect(
+      EditorMetrics.panelHeight(forLines: 2, maxLines: 12)
+        == openHeight + EditorMetrics.lineHeight
+    )
   }
 
   @Test("task editor keeps restored breathing room before text")
   @MainActor
   func taskEditorKeepsRestoredLeadingTextGap() {
     #expect(EditorMetrics.leadingInset == 0)
-    #expect(LineNumberRuler.markerOnlyThickness(forLabelSize: LineNumberRuler.labelFontSize) == 0)
+    #expect(
+      LineNumberRuler.thickness(
+        showsLineFlashHints: false,
+        labelSize: LineNumberRuler.labelFontSize
+      ) == 0
+    )
     #expect(EditorMetrics.textLeadingGap >= 32)
   }
 

@@ -9,6 +9,7 @@ final class VimController: ObservableObject {
     case search
     case flash(VimFlashDirection, count: Int, scope: VimFlashScope)
     case lineFlash(count: Int)
+    case wordHint
   }
 
   enum MessageKind: Equatable { case info, success, error }
@@ -31,11 +32,6 @@ final class VimController: ObservableObject {
     var buffer: String
   }
 
-  struct SearchOutcome: Equatable {
-    let current: Int
-    let total: Int
-  }
-
   @Published var mode: VimMode = .normal
   @Published var prompt: Prompt?
   @Published var message: Message?
@@ -48,21 +44,17 @@ final class VimController: ObservableObject {
   /// HUD closes so we don't leak the AppKit view across panel teardowns.
   var lineJumpHandler: ((Int) -> Bool)?
   var substituteHandler: ((SubstituteRequest) -> Int)?
+  /// `\f` / `:fmt` -- tidy header spacing; returns whether anything changed.
+  var normalizeHandler: (() -> Bool)?
 
   /// Top-level command runner installed by the `SpotlightWindowController`
   /// so commands can reach the session, find controller, theme catalog,
   /// and the close-HUD path.
   var commandRunner: ((VimCommand) -> Message?)?
 
-  /// Search handler installed by the window controller. Returns the
-  /// resulting current/total match counts (or `nil` for no matches) so
-  /// the bottom bar can render a vim-native indicator instead of
-  /// opening the find bar.
-  var searchHandler: ((String) -> SearchOutcome?)?
-
-  /// Step handler for normal-mode `n` / `N`. Same return semantics as
-  /// `searchHandler`.
-  var findStepHandler: ((Int) -> SearchOutcome?)?
+  /// `:noh` reaches the view-owned vim search lane through this handler
+  /// (installed by the live text view alongside the others).
+  var searchClearHandler: (() -> Void)?
   /// One-character Flash-style jump handler installed by the live text view.
   /// Returns `true` when the caret moved.
   var flashHandler: ((VimFlashRequest) -> Bool)?
@@ -98,6 +90,28 @@ final class VimController: ObservableObject {
     prompt = current
   }
 
+  /// Wholesale buffer replacement for cmdline-style edits (Ctrl-W word
+  /// delete, Ctrl-U clear) that appendToPrompt/backspacePrompt can't
+  /// express. Keeps the prompt OPEN even when the buffer empties.
+  func replacePromptBuffer(_ buffer: String) {
+    guard var current = prompt else { return }
+    current.buffer = buffer
+    prompt = current
+  }
+
+  /// vim's cmdline chord edits (c_CTRL-W / c_CTRL-U), one rule for
+  /// every prompt kind: the new buffer for the chord, or nil when the
+  /// chord only swallows. Callers must consume the event either way --
+  /// falling through would reach the editor's own word delete at a
+  /// caret the user never chose.
+  static func promptBufferEdit(controlChord chars: String, buffer: String) -> String? {
+    switch chars {
+    case "w": return SearchTextEditing.deleteWordBackward(buffer)
+    case "u": return ""
+    default: return nil
+    }
+  }
+
   func backspacePrompt() {
     guard var current = prompt else { return }
     if current.buffer.isEmpty {
@@ -120,14 +134,9 @@ final class VimController: ObservableObject {
       let trimmed = buffer.trimmingCharacters(in: .whitespaces)
       guard !trimmed.isEmpty else { return true }
       runCommand(trimmed)
-    case .search:
-      let trimmed = buffer.trimmingCharacters(in: .whitespaces)
-      if trimmed.isEmpty {
-        searchStatus = nil
-      } else {
-        applySearchOutcome(searchHandler?(buffer))
-      }
-    case .flash, .lineFlash:
+    case .search, .flash, .lineFlash, .wordHint:
+      // These prompt kinds are fully handled by the view-side key
+      // routers; the generic submit path never fires for them.
       return true
     }
     return true
@@ -147,17 +156,15 @@ final class VimController: ObservableObject {
     }
   }
 
-  func findStep(_ delta: Int) {
-    applySearchOutcome(findStepHandler?(delta))
-  }
-
   func clearSearchStatus() {
     searchStatus = nil
   }
 
-  private func applySearchOutcome(_ outcome: SearchOutcome?) {
-    if let outcome, outcome.total > 0 {
-      searchStatus = "\(outcome.current)/\(outcome.total)"
+  /// Live counter from the vim search lane ("3/12", "3/500+",
+  /// "no matches").
+  func setSearchStatus(current: Int, total: Int, capped: Bool) {
+    if total > 0 {
+      searchStatus = "\(current)/\(total)\(capped ? "+" : "")"
     } else {
       searchStatus = "no matches"
     }
@@ -194,15 +201,13 @@ final class VimController: ObservableObject {
 enum VimCommand: Equatable {
   case quit
   case writeNoOp
-  case newNote
-  case deleteNote
-  case setLineNumbers(Bool)
   case setVimMode(Bool)
   case setTheme(String)
   case setMaxLines(Int)
   case substitute(SubstituteRequest)
   case gotoLine(Int)
   case clearHighlight
+  case formatDocument
   case help
 }
 
@@ -228,9 +233,8 @@ enum VimCommandParser {
   private static let headwordTable: [String: VimCommand] = [
     "q": .quit, "quit": .quit, "x": .quit,
     "w": .writeNoOp, "write": .writeNoOp, "wq": .writeNoOp,
-    "e": .newNote, "enew": .newNote,
-    "bd": .deleteNote, "bdelete": .deleteNote,
     "noh": .clearHighlight, "nohlsearch": .clearHighlight,
+    "fmt": .formatDocument, "format": .formatDocument,
     "h": .help, "help": .help
   ]
 
@@ -262,8 +266,6 @@ enum VimCommandParser {
 
   /// Boolean `:set` flags. Every entry here is a no-argument toggle.
   private static let setToggleTable: [String: VimCommand] = [
-    "number": .setLineNumbers(true), "nu": .setLineNumbers(true),
-    "nonumber": .setLineNumbers(false), "nonu": .setLineNumbers(false),
     "vim": .setVimMode(true), "novim": .setVimMode(false)
   ]
 
@@ -356,16 +358,6 @@ enum VimCommandReference {
           id: "x",
           usage: ":x",
           summary: "Close the HUD."
-        ),
-        Entry(
-          id: "e",
-          usage: ":e\n:enew",
-          summary: "Start a new note."
-        ),
-        Entry(
-          id: "bd",
-          usage: ":bd\n:bdelete",
-          summary: "Delete the current note."
         )
       ]
     ),
@@ -373,11 +365,6 @@ enum VimCommandReference {
       id: "settings",
       title: "Settings (:set)",
       entries: [
-        Entry(
-          id: "number",
-          usage: ":set number\n:set nonumber  (nu / nonu)",
-          summary: "Show or hide line numbers."
-        ),
         Entry(
           id: "vim",
           usage: ":set vim\n:set novim",
@@ -411,10 +398,18 @@ enum VimCommandReference {
         ),
         Entry(
           id: "section-jumps",
-          usage: "gH\ngD\ngT",
+          usage: ",d\n,t",
           summary:
-            "Jump to a fresh bullet in `## Habits` (gH), `## Todo` (gD), or `## Tray` (gT)"
-            + " and start typing; the section is created if it doesn't exist yet."
+            "Jump to a fresh bullet in `## Todo` (,d) or `## Tray` (,t) and start typing;"
+            + " the section is created if absent."
+        ),
+        Entry(
+          id: "leader",
+          usage: "\\t\n\\c\n\\f",
+          summary:
+            "`\\` leader: `\\t` appends the current line to spotnote-tray.md;"
+            + " `\\c` appends the current bullet to the hermes-build State.md (clears it after);"
+            + " `\\f` (or `:fmt`) tidies blank-line spacing around section headers."
         ),
         Entry(
           id: "noh",

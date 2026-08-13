@@ -46,7 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   )
   private var menuBar: MenuBarController?
   private var hotkey: GlobalHotkey?
-  private var appendHotkey: GlobalHotkey?
   private var onboarding: OnboardingController?
   private var cancellables: Set<AnyCancellable> = []
 
@@ -96,16 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
       self.spotlight.handleHotkey()
     }
-    appendHotkey = GlobalHotkey { [weak self] in
-      guard let self else { return }
-      if self.onboarding?.isActive == true { return }
-      self.spotlight.handleAppendToLastNote()
-    }
   }
 
   private func applyInitialHotkeyBindings() {
     applyToggleHotkey(shortcutStore.binding(for: .toggleHotkey))
-    applyAppendHotkey(shortcutStore.binding(for: .appendToLastNote))
   }
 
   private func observeShortcutBindings() {
@@ -115,15 +108,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       .dropFirst()
       .sink { [weak self] shortcut in
         MainActor.assumeIsolated { self?.applyToggleHotkey(shortcut) }
-      }
-      .store(in: &cancellables)
-
-    shortcutStore.$bindings
-      .map { $0[.appendToLastNote] ?? ShortcutAction.appendToLastNote.defaultShortcut }
-      .removeDuplicates()
-      .dropFirst()
-      .sink { [weak self] shortcut in
-        MainActor.assumeIsolated { self?.applyAppendHotkey(shortcut) }
       }
       .store(in: &cancellables)
   }
@@ -278,11 +262,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // should prevent this, but keep the toggle functional regardless).
     if hotkey?.apply(shortcut) == true { return }
     _ = hotkey?.apply(ShortcutAction.toggleHotkey.defaultShortcut)
-  }
-
-  private func applyAppendHotkey(_ shortcut: Shortcut) {
-    if appendHotkey?.apply(shortcut) == true { return }
-    _ = appendHotkey?.apply(ShortcutAction.appendToLastNote.defaultShortcut)
   }
 
   private static func environmentFlag(_ key: String) -> Bool {

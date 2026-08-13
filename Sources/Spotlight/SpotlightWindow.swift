@@ -7,6 +7,11 @@ import SwiftUI
 
 @MainActor
 public final class SpotlightWindowController {
+  /// Borderless mask for every panel (main HUD, toast, fuzzy preview).
+  /// The Raycast-style traffic lights are drawn by `RaycastTrafficLights`
+  /// in SwiftUI -- Raycast Notes positions and colors its own lights, and
+  /// a titled window cannot reproduce them (wrong offsets, no hide-on-
+  /// resign), so the shell owns them instead of AppKit.
   nonisolated static let panelStyleMask: NSWindow.StyleMask = [
     .borderless, .fullSizeContentView
   ]
@@ -50,19 +55,23 @@ public final class SpotlightWindowController {
   }
 
   private var panel: SpotlightPanel?
-  private var fuzzyPreviewPanel: FuzzyPreviewPanel?
+  /// Test seam: suites that open real controller panels must assert on
+  /// THEIR panel, not an app-wide `NSApp.windows` scan (parallel suites
+  /// interleave at every await).
+  var panelForTesting: SpotlightPanel? { panel }
   private var toastPanel: HermesToastPanel?
   private let focusTrigger = FocusTrigger()
+  private let keyState = PanelKeyState()
   let preferences: ThemePreferences
   let session: ChatSession
   private let shortcuts: ShortcutStore
   let findController = FindController()
   private let fuzzyController = FuzzyController()
-  private let commandController = CommandController()
   private let copyController = CopyController()
   private let handoffClient = ScratchpadHandoffClient()
   private let dailyNoteWriter = DailyNoteWriter()
   private let trayNoteWriter = TrayNoteWriter()
+  private let stateNoteWriter = StateNoteWriter()
   let vimController = VimController()
   private let onOpenSettings: () -> Void
   private let onWillShowHUD: () -> Void
@@ -73,6 +82,11 @@ public final class SpotlightWindowController {
   /// cached on first placement and reused thereafter so the bottom-right corner
   /// stays put and the panel doesn't "jump" between reshows.
   private var pinnedBottomY: CGFloat?
+  /// Screen-space X of the panel's pinned *right* edge once the user has
+  /// dragged the panel. `nil` = never dragged: the rest X re-derives as
+  /// the right-hugging default. Right edge (not left) so width changes
+  /// keep the dragged position stable like every other resize.
+  private var pinnedRightX: CGFloat?
   /// Drives `setPanelHeight`. The HUD is bottom-anchored at the bottom-right
   /// corner, so the rest state is `.bottomPinned(pinnedBottomY)`: the panel's
   /// bottom edge stays fixed and content (editor + navigation overlay) grows
@@ -90,10 +104,6 @@ public final class SpotlightWindowController {
       case .bottomPinned(let y): return .bottomPinned(y: y)
       }
     }
-  }
-  private enum FuzzyPreviewSide {
-    case left
-    case right
   }
   private var navAnchor: NavAnchorState = .none
   private struct MeasuredHeightCache {
@@ -116,27 +126,21 @@ public final class SpotlightWindowController {
   private var programmaticFrameToIgnore: NSRect?
   private var cancellables: Set<AnyCancellable> = []
 
-  /// Layout above the editor card inside the panel (find bar when visible).
-  /// Used to map between `panel.top` and `editorTopY`.
+  /// Layout above the editor card inside the panel (Raycast title bar,
+  /// plus the find bar when visible). Must mirror the top portion of
+  /// `SpotlightRootView.extraChromeHeight`; used to map between
+  /// `panel.top` and `editorTopY`.
   private var chromeAboveEditor: CGFloat {
-    var height: CGFloat = 0
+    var height: CGFloat = EditorMetrics.topBarHeight
     if findController.isVisible { height += EditorMetrics.findBarHeight }
     return height
   }
 
-  /// Layout below the editor card inside the panel -- fuzzy palette or
-  /// nav overlay, mutually exclusive. Used by `focusOrShow` to predict
-  /// SwiftUI's panel height before activating.
+  /// Layout below the editor card inside the panel. The Raycast modals
+  /// float in an overlay and never contribute height. Used by
+  /// `focusOrShow` to predict SwiftUI's panel height before activating.
   private var chromeBelowEditor: CGFloat {
-    var height: CGFloat = 0
-    if fuzzyController.isVisible {
-      height += FuzzyPalette.reservedHeight
-    } else if commandController.isVisible {
-      height += CommandPalette.reservedHeight
-    } else if session.navigationPreview != nil {
-      height += NavigationOverlay.reservedHeight
-    }
-    return height
+    EditorMetrics.bottomBarHeight
   }
 
   /// Total panel height SwiftUI will render with the current state.
@@ -179,83 +183,33 @@ public final class SpotlightWindowController {
     self.onDidHideHUD = onDidHideHUD
     FontLoader.registerBundledFonts()
     observeActiveApp()
-    installModifierMonitor()
-    observeNavigationPreview()
-    observeFuzzyPreview()
     observeToastMessages()
+    observeScreenChanges()
     installVimCommandRunner()
+    wireSaveFailureSurfacing(store: store, vaultDocuments: vaultDocuments ?? [])
     Task { [session] in await session.bootstrap() }
   }
 
-  /// Watches for modifier-only key transitions so the navigation
-  /// overlay can stay visible while the user holds the cycle modifier
-  /// (⌃ by default for ⌃N/⌃P). Releasing the key resumes the normal
-  /// auto-dismiss timer in `ChatSession.setNavigationHeldOpen(_:)`.
-  private func installModifierMonitor() {
-    _ = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-      guard let self else { return event }
-      let held = event.modifierFlags.contains(.control)
-      Task { @MainActor [session = self.session] in
-        session.setNavigationHeldOpen(held)
+  /// Debounced background persistence has no throwing caller left; a
+  /// swallowed failure is silent data loss. Both stores keep the text in
+  /// memory -- this surfaces the failure through the toast lane.
+  private func wireSaveFailureSurfacing(store: ChatStore, vaultDocuments: [VaultNoteDocument]) {
+    let vimController = vimController
+    Task {
+      await store.setPersistFailureHandler { _, error in
+        let detail = (error as NSError).localizedDescription
+        Task { @MainActor in
+          vimController.showMessage("Save failed — note kept in memory (\(detail))", kind: .error)
+        }
       }
-      return event
-    }
-  }
-
-  /// Flips `navAnchor` between `.none` and `.pendingFirstResize` as the
-  /// navigation overlay's visibility toggles. On dismissal we clear the
-  /// editor anchor and request an animated next-resize so the panel
-  /// smoothly returns to its rest position (the drift accumulated
-  /// during bottom-pinned cycling otherwise leaves the editor sitting
-  /// where the now-gone nav list used to be).
-  private func observeNavigationPreview() {
-    session.$navigationPreview
-      .map { $0 != nil }
-      .removeDuplicates()
-      .sink { [weak self] _ in
-        MainActor.assumeIsolated {
-          guard let self else { return }
-          // The panel is bottom-anchored, so the overlay simply grows the panel
-          // upward from the fixed bottom edge; keep the bottom pin on both
-          // appear and dismiss.
-          if let bottom = self.pinnedBottomY {
-            self.navAnchor = .bottomPinned(bottom)
+      for document in vaultDocuments {
+        await document.setConflictHandler { sibling in
+          let name = sibling.lastPathComponent
+          Task { @MainActor in
+            vimController.showMessage("Inbox changed on disk — your text is in \(name)", kind: .error)
           }
         }
       }
-      .store(in: &cancellables)
-  }
-
-  private func observeFuzzyPreview() {
-    fuzzyController.$isVisible
-      .combineLatest(fuzzyController.$results, fuzzyController.$selectedIndex)
-      .sink { [weak self] _, _, _ in
-        MainActor.assumeIsolated { self?.syncFuzzyPreviewPanel() }
-      }
-      .store(in: &cancellables)
-  }
-
-  private func syncFuzzyPreviewPanel() {
-    guard
-      fuzzyController.isVisible,
-      fuzzyController.selectedResult() != nil,
-      let panel,
-      panel.isVisible,
-      let frame = fuzzyPreviewFrame(for: panel)
-    else {
-      fuzzyPreviewPanel?.orderOut(nil)
-      return
-    }
-    let preview = fuzzyPreviewPanel ?? makeFuzzyPreviewPanel(parent: panel)
-    fuzzyPreviewPanel = preview
-    if preview.parent !== panel {
-      panel.addChildWindow(preview, ordered: .above)
-    }
-    if !Self.rect(preview.frame, isApproximatelyEqualTo: frame) {
-      preview.setFrame(frame, display: true)
-    }
-    if !preview.isVisible {
-      preview.orderFrontRegardless()
     }
   }
 
@@ -323,85 +277,28 @@ public final class SpotlightWindowController {
     )
   }
 
-  private func fuzzyPreviewFrame(for panel: NSPanel) -> NSRect? {
-    let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
-    guard let screenFrame else { return nil }
-    let panelFrame = panel.frame
-    let gap = FuzzyPreviewCard.gap
-    let rightSpace = screenFrame.maxX - panelFrame.maxX - gap
-    let leftSpace = panelFrame.minX - screenFrame.minX - gap
-    let preferred = FuzzyPreviewCard.preferredWidth
-    let minimum = FuzzyPreviewCard.minimumWidth
-    let side: FuzzyPreviewSide
-    let width: CGFloat
-    if rightSpace >= preferred {
-      side = .right
-      width = preferred
-    } else if leftSpace >= preferred {
-      side = .left
-      width = preferred
-    } else if rightSpace >= leftSpace, rightSpace >= minimum {
-      side = .right
-      width = rightSpace
-    } else if leftSpace >= minimum {
-      side = .left
-      width = leftSpace
-    } else {
-      return nil
-    }
-    let height = min(panelFrame.height, screenFrame.height)
-    let y = min(panelFrame.maxY, screenFrame.maxY) - height
-    let x: CGFloat
-    switch side {
-    case .right: x = panelFrame.maxX + gap
-    case .left: x = panelFrame.minX - gap - width
-    }
-    return NSRect(x: x.rounded(), y: y.rounded(), width: width.rounded(), height: height.rounded())
-  }
-
   public func handleHotkey() {
     handleVaultHotkey(.tasks)
   }
 
   private func handleVaultHotkey(_ state: VaultNoteState) {
-    if let panel, panel.isVisible, panel.isKeyWindow, NSApp.isActive, session.currentVaultState == state {
+    let hudIsFrontmost = panel?.isVisible == true && panel?.isKeyWindow == true && NSApp.isActive
+    if hudIsFrontmost, session.currentVaultState == state {
       close()
     } else {
-      openVaultState(state, announcing: false)
+      openVaultState(state)
     }
   }
 
   public func openHUD() {
-    openVaultState(.tasks, announcing: false)
+    openVaultState(.tasks)
   }
 
-  private func openVaultState(_ state: VaultNoteState, announcing: Bool) {
+  private func openVaultState(_ state: VaultNoteState) {
     Task { @MainActor [weak self] in
       guard let self else { return }
-      await self.session.switchVaultState(state, announcing: announcing)
+      await self.session.switchVaultState(state)
       self.focusOrShow()
-    }
-  }
-
-  /// Summons the HUD on the most recently edited note with the caret
-  /// already at the end. Bound to the `appendToLastNote` global chord
-  /// (default ⌘⇧.). Falls back to plain show if the chat list hasn't
-  /// finished bootstrapping yet.
-  public func handleAppendToLastNote() {
-    if panel == nil || panel?.isVisible == false {
-      focusOrShow()
-    } else {
-      NSApp.activate(ignoringOtherApps: true)
-      if let panel { bringPanelToFront(panel) }
-    }
-    if let mostRecent = session.chats.first {
-      session.jump(to: mostRecent)
-    }
-    // Defer the caret bump one runloop tick so SwiftUI has a chance to
-    // propagate the new chat's text into the NSTextView before we ask
-    // for end-of-text.
-    DispatchQueue.main.async { [weak self] in
-      self?.focusTrigger.requestCaretEnd()
     }
   }
 
@@ -421,7 +318,6 @@ public final class SpotlightWindowController {
   }
 
   public func close() {
-    fuzzyPreviewPanel?.orderOut(nil)
     toastPanel?.orderOut(nil)
     panel?.orderOut(nil)
     // If a bona-fide SpotNote window (Settings) is visible, leave the
@@ -466,7 +362,6 @@ public final class SpotlightWindowController {
     panel.orderFrontRegardless()
     panel.makeKeyAndOrderFront(nil)
     panel.orderFrontRegardless()
-    syncFuzzyPreviewPanel()
     syncToastPanel()
   }
 
@@ -474,21 +369,66 @@ public final class SpotlightWindowController {
     guard let screen = NSScreen.main else { return }
     let screenFrame = screen.visibleFrame
     let height = expectedPanelHeight
-    let bottom: CGFloat
+    var bottom: CGFloat
     if let cached = pinnedBottomY {
       bottom = cached
     } else {
       bottom = Self.restingOriginY(in: screenFrame, panelHeight: height)
-      pinnedBottomY = bottom
     }
-    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    let x: CGFloat
+    if let pinnedRightX {
+      x = pinnedRightX - panel.frame.width
+    } else {
+      x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    }
+    // A pin cached on a screen layout that no longer exists (display
+    // unplugged while hidden) must never strand the panel off-screen:
+    // clamp the SHOW frame and re-adopt the clamped pins.
+    let clamped = Self.clampedFrame(
+      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
+      into: screenFrame
+    )
+    bottom = clamped.origin.y
+    pinnedBottomY = bottom
+    if pinnedRightX != nil { pinnedRightX = clamped.maxX }
     // Bottom-anchored at the bottom-right corner: the origin (bottom edge) is
     // fixed and the panel grows upward as content reflows.
     navAnchor = .bottomPinned(bottom)
-    setPanelFrame(
-      NSRect(x: x, y: bottom, width: panel.frame.width, height: height),
-      display: false
+    setPanelFrame(clamped, display: false)
+  }
+
+  private func observeScreenChanges() {
+    observers.append(
+      NotificationCenter.default.addObserver(
+        forName: NSApplication.didChangeScreenParametersNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated { self?.reclampToVisibleScreen() }
+      }
     )
+  }
+
+  /// Resolution change, display unplug, or Dock/menu-bar resize can leave
+  /// the pinned position outside every visible frame. Re-clamp the live
+  /// panel and adopt the clamped pins so later shows stay on-screen.
+  private func reclampToVisibleScreen() {
+    guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
+    let clamped = Self.clampedFrame(panel.frame, into: screen.visibleFrame)
+    pinnedBottomY = clamped.origin.y
+    if pinnedRightX != nil { pinnedRightX = clamped.maxX }
+    guard clamped != panel.frame else { return }
+    navAnchor = .bottomPinned(clamped.origin.y)
+    setPanelFrame(clamped, display: true)
+  }
+
+  /// Pure clamp: translates `frame` the minimal distance so it lies inside
+  /// `visible` (or hugs its lower-left corner when it cannot fit).
+  static func clampedFrame(_ frame: NSRect, into visible: NSRect) -> NSRect {
+    var clamped = frame
+    clamped.origin.x = min(max(frame.origin.x, visible.minX), max(visible.maxX - frame.width, visible.minX))
+    clamped.origin.y = min(max(frame.origin.y, visible.minY), max(visible.maxY - frame.height, visible.minY))
+    return clamped
   }
 
   private func makePanel() -> SpotlightPanel {
@@ -504,15 +444,15 @@ public final class SpotlightWindowController {
       defer: false
     )
     Self.configurePanel(panel)
-    panel.contentView = NSHostingView(
+    let hosting = NSHostingView(
       rootView: SpotlightRootView(
         focusTrigger: focusTrigger,
+        keyState: keyState,
         preferences: preferences,
         session: session,
         shortcuts: shortcuts,
         find: findController,
         fuzzy: fuzzyController,
-        command: commandController,
         vimController: vimController,
         onHeightChange: { [weak self] height in
           self?.setPanelHeight(height, animated: false)
@@ -521,16 +461,24 @@ public final class SpotlightWindowController {
           self?.close()
         },
         onSendLinearTask: { [handoffClient] request in
-          _ = try await handoffClient.sendLinearTask(request)
+          try await handoffClient.sendLinearTask(request)
         },
         onAppendDailyNote: { [dailyNoteWriter] text in
           try await dailyNoteWriter.append(text)
         },
         onAppendTrayNote: { [trayNoteWriter] text in
           try await trayNoteWriter.append(text)
+        },
+        onAppendStateNote: { [stateNoteWriter] text in
+          try await stateNoteWriter.append(text)
         }
       )
     )
+    // The panel frame is fully programmatic (height solver). Left to its
+    // default sizing options, the hosting view imposes the SwiftUI
+    // content's minimum size on the window and fights the solver.
+    hosting.sizingOptions = []
+    panel.contentView = hosting
     panel.keyEquivalentHandler = { [weak self] event in
       self?.handleKeyEquivalent(event) ?? false
     }
@@ -550,31 +498,6 @@ public final class SpotlightWindowController {
     panel.collectionBehavior = panelCollectionBehavior
   }
 
-  private func makeFuzzyPreviewPanel(parent: NSPanel) -> FuzzyPreviewPanel {
-    let preview = FuzzyPreviewPanel(
-      contentRect: NSRect(
-        x: 0,
-        y: 0,
-        width: FuzzyPreviewCard.preferredWidth,
-        height: max(parent.frame.height, FuzzyPalette.reservedHeight)
-      ),
-      styleMask: Self.panelStyleMask,
-      backing: .buffered,
-      defer: false
-    )
-    Self.configurePanel(preview)
-    preview.hasShadow = false
-    preview.ignoresMouseEvents = false
-    preview.contentView = NSHostingView(
-      rootView: FuzzyPreviewCard(
-        controller: fuzzyController,
-        preferences: preferences
-      )
-    )
-    parent.addChildWindow(preview, ordered: .above)
-    return preview
-  }
-
   private static let driftCorrectionThreshold: CGFloat = 4
 
   private func pinnedOrigin(for panel: NSPanel) -> NSPoint? {
@@ -591,7 +514,12 @@ public final class SpotlightWindowController {
       bottom = Self.restingOriginY(in: screenFrame, panelHeight: initialHeight)
       pinnedBottomY = bottom
     }
-    let x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    let x: CGFloat
+    if let pinnedRightX {
+      x = pinnedRightX - panel.frame.width
+    } else {
+      x = Self.restingOriginX(in: screenFrame, panelWidth: panel.frame.width)
+    }
     return NSPoint(x: x, y: bottom)
   }
 
@@ -650,8 +578,27 @@ public final class SpotlightWindowController {
     guard let panel else { return }
     programmaticFrameToIgnore = frame
     panel.setFrame(frame, display: display, animate: animate)
-    syncFuzzyPreviewPanel()
     syncToastPanel()
+  }
+
+  /// Shared focus-loss reaction for the panel family resigning key: key
+  /// landing on any of our own windows (the panel, a modal child panel,
+  /// or a stacked submenu panel) is not focus loss; anything else dims
+  /// or closes per preference.
+  private func handlePanelFocusLoss() {
+    guard
+      ModalFocusPolicy.isPanelFocusLoss(
+        newKey: NSApp.keyWindow,
+        panel: panel,
+        isOwned: RaycastModalOverhang.isOwned
+      )
+    else { return }
+    keyState.isKey = false
+    if preferences.dimOnFocusLoss {
+      panel?.animator().alphaValue = CGFloat(preferences.unfocusedOpacity)
+    } else {
+      close()
+    }
   }
 
   private func shouldIgnoreProgrammaticMove(_ frame: NSRect) -> Bool {
@@ -679,14 +626,13 @@ extension SpotlightWindowController {
         forName: NSWindow.didResignKeyNotification,
         object: panel,
         queue: .main
-      ) { [weak self, weak panel] _ in
+      ) { [weak self] _ in
         MainActor.assumeIsolated {
           guard let self else { return }
-          if self.preferences.dimOnFocusLoss {
-            panel?.animator().alphaValue = CGFloat(self.preferences.unfocusedOpacity)
-          } else {
-            self.close()
-          }
+          // Key moves to the new window AFTER this fires: defer one tick
+          // so a child window taking key (the floating modals) never
+          // dims or closes the HUD under its own surface.
+          DispatchQueue.main.async { self.handlePanelFocusLoss() }
         }
       }
     )
@@ -698,7 +644,10 @@ extension SpotlightWindowController {
       ) { [weak self, weak panel] _ in
         MainActor.assumeIsolated {
           panel?.animator().alphaValue = 1.0
-          if let self, let panel { self.correctDriftIfNeeded(panel) }
+          if let self, let panel {
+            self.keyState.isKey = true
+            self.correctDriftIfNeeded(panel)
+          }
         }
       }
     )
@@ -713,54 +662,30 @@ extension SpotlightWindowController {
           if self.shouldIgnoreProgrammaticMove(panel.frame) { return }
           let newBottom = panel.frame.origin.y
           self.pinnedBottomY = newBottom
+          // Adopt X too: without it, `pinnedOrigin` keeps re-deriving the
+          // right-hugging rest X and the next drift correction can snap a
+          // deliberately dragged panel back to the screen edge.
+          self.pinnedRightX = panel.frame.maxX
           self.navAnchor = .bottomPinned(newBottom)
-          self.syncFuzzyPreviewPanel()
           self.syncToastPanel()
         }
       }
     )
   }
   /// Called from `SpotlightPanel.performKeyEquivalent(with:)` so every
-  /// chord in the HUD -- chat navigation, settings, undo, tutorial
-  /// toggle -- flows through a single user-customizable binding table
+  /// chord in the HUD -- settings, handoff, copy, and editor helpers --
+  /// flows through a single user-customizable binding table
   /// AND participates in AppKit's key-equivalent responder chain.
   /// Returning `true` tells macOS the event was consumed (no beep).
   ///
   private func handleKeyEquivalent(_ event: NSEvent) -> Bool {
     // #lizard forgives
-    if MainActor.assumeIsolated({ commandController.isVisible }) {
-      if event.keyCode == 53 {
-        MainActor.assumeIsolated { commandController.close() }
-        return true
-      }
-      if event.keyCode == 36 || event.keyCode == 76 {
-        return true
-      }
-    }
     let mask: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
     let mods = ShortcutModifierSet(event.modifierFlags.intersection(mask))
     let chars = Shortcut.normalize(event.charactersIgnoringModifiers ?? "")
     let resolved = MainActor.assumeIsolated { shortcuts.match(key: chars, modifiers: mods) }
     guard let action = resolved else { return false }
     if action == .toggleHotkey || action == .appendToLastNote { return false }
-    if MainActor.assumeIsolated({ commandController.isVisible }) {
-      switch action {
-      case .olderChat, .newerChat:
-        let delta = action == .olderChat ? 1 : -1
-        Task { @MainActor [weak self] in self?.commandController.moveSelection(by: delta) }
-        return true
-      default: break
-      }
-    }
-    if MainActor.assumeIsolated({ fuzzyController.isVisible }) {
-      switch action {
-      case .olderChat, .newerChat:
-        let delta = action == .olderChat ? 1 : -1
-        Task { @MainActor [weak self] in self?.fuzzyController.moveSelection(by: delta) }
-        return true
-      default: break
-      }
-    }
     if !shouldHandle(action: action) {
       if action == .copyContent {
         MainActor.assumeIsolated {
@@ -770,17 +695,12 @@ extension SpotlightWindowController {
       }
       return false
     }
-    if action == .newChat || action == .deleteChat, event.isARepeat { return true }
     Task { @MainActor [weak self] in self?.dispatch(action) }
     return true
   }
 
-  /// Pass-through gates for context-sensitive shortcuts (undo with no
-  /// pending delete, copy with an active selection).
+  /// Pass-through gates for context-sensitive shortcuts, such as copy with an active selection.
   private func shouldHandle(action: ShortcutAction) -> Bool {
-    if action == .undoDelete {
-      return MainActor.assumeIsolated { session.lastDeleted != nil }
-    }
     if action == .copyContent {
       let hasSelection = MainActor.assumeIsolated {
         (panel?.firstResponder as? NSTextView).map { $0.selectedRange.length > 0 } ?? false
@@ -793,20 +713,9 @@ extension SpotlightWindowController {
   // #lizard forgives
   private func dispatch(_ action: ShortcutAction) {
     switch action {
-    case .newChat, .olderChat, .newerChat, .deleteChat, .undoDelete:
-      dispatchSessionAction(action)
     case .findInNote:
       if fuzzyController.isVisible { fuzzyController.close() }
-      if commandController.isVisible { commandController.close() }
       findController.toggle(text: session.currentText)
-    case .fuzzyFindAll:
-      if findController.isVisible { findController.close() }
-      if commandController.isVisible { commandController.close() }
-      fuzzyController.toggle(corpus: session.chats)
-    case .commandPalette:
-      if findController.isVisible { findController.close() }
-      if fuzzyController.isVisible { fuzzyController.close() }
-      commandController.toggle(shortcuts: shortcuts, preferences: preferences)
     case .insertTodayBadge:
       _ = panel?.firstResponder?.tryToPerform(
         #selector(PlaceholderTextView.insertTodayBadgeToken(_:)),
@@ -822,38 +731,31 @@ extension SpotlightWindowController {
         #selector(PlaceholderTextView.appendCurrentLineToDailyNoteShortcut(_:)),
         with: nil
       )
-    case .pinNote:
-      Task { await session.togglePin() }
-    case .shareCurrentChat:
-      shareCurrentChat()
     case .copyContent:
       copyController.copy(session.currentText)
     case .openSettings: onOpenSettings()
+    case .newNote:
+      if fuzzyController.isVisible { fuzzyController.close() }
+      Task { @MainActor [weak self] in await self?.session.newNote() }
+    case .browseNotes:
+      fuzzyController.toggle(corpus: session.chats)
+    case .openActions:
+      if fuzzyController.isVisible { fuzzyController.close() }
+      focusTrigger.pulseActions()
+    case .duplicateNote:
+      Task { @MainActor [weak self] in await self?.session.duplicateCurrent() }
+    case .togglePin:
+      Task { @MainActor [weak self] in
+        guard let session = self?.session,
+          let chat = session.chats.first(where: { $0.id == session.currentID })
+        else { return }
+        await session.togglePin(chat)
+      }
+    case .goBack:
+      Task { @MainActor [weak self] in await self?.session.goBack() }
+    case .goForward:
+      Task { @MainActor [weak self] in await self?.session.goForward() }
     case .toggleHotkey, .appendToLastNote: break
-    }
-  }
-
-  private func shareCurrentChat() {
-    guard let chat = session.currentChatSnapshot(), let view = panel?.contentView else {
-      NSSound.beep()
-      return
-    }
-    do {
-      try ChatTransferService.share(chats: [chat], from: view)
-    } catch {
-      NSSound.beep()
-    }
-  }
-
-  private func dispatchSessionAction(_ action: ShortcutAction) {
-    let session = self.session
-    switch action {
-    case .newChat: Task { await session.newChat() }
-    case .olderChat: Task { await session.cycleOlder() }
-    case .newerChat: Task { await session.cycleNewer() }
-    case .deleteChat: Task { await session.deleteCurrent() }
-    case .undoDelete: Task { await session.undoDelete() }
-    default: break
     }
   }
 

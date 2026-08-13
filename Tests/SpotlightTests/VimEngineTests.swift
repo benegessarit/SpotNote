@@ -158,7 +158,10 @@ struct VimEngineTests {
     for (key, status) in cases {
       let engine = VimEngine()
       #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-      #expect(engine.handle(key: key, hasModifiers: false) == .sendCurrentTaskToLinear(status: status, count: 1))
+      #expect(
+        engine.handle(key: key, hasModifiers: false)
+          == .sendCurrentTaskToLinear(status: status, workspace: .personal, count: 1)
+      )
       #expect(engine.mode == .normal)
     }
   }
@@ -168,86 +171,148 @@ struct VimEngineTests {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "p", hasModifiers: false) == .sendCurrentTaskToLinear(status: .planned, count: 3))
+    #expect(
+      engine.handle(key: "p", hasModifiers: false)
+        == .sendCurrentTaskToLinear(status: .planned, workspace: .personal, count: 3)
+    )
   }
 
-  @Test("gy sends the current bullet to tray.md")
-  func gYSendsCurrentBulletToTrayNote() {
+  @Test("gc sends the current bullet to the Code workspace at Triage")
+  func gcSendsCurrentBulletToCodeWorkspace() {
     let engine = VimEngine()
-
     #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(
+      engine.handle(key: "c", hasModifiers: false)
+        == .sendCurrentTaskToLinear(status: .triage, workspace: .code, count: 1)
+    )
     #expect(engine.mode == .normal)
   }
 
-  @Test("counted gy sends counted bullets to tray.md")
-  func countedGYSendsCountedBulletsToTrayNote() {
+  @Test("\\f normalizes the document")
+  func backslashFNormalizesDocument() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "f", hasModifiers: false) == .normalizeDocument)
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("\\t sends the current bullet to the tray note")
+  func backslashTSendsCurrentBulletToTrayNote() {
+    let engine = VimEngine()
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted \\t sends counted bullets to the tray note")
+  func countedBackslashTSendsCountedBulletsToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 3))
   }
 
-  @Test("visual gy sends the active selection to tray.md and exits visual mode")
-  func visualGYSendsSelectionToTrayNote() {
+  @Test("visual \\t sends the active selection to the tray note and exits visual mode")
+  func visualBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "v", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
     #expect(engine.mode == .normal)
   }
 
-  @Test("visual-line gy sends the active line selection to tray.md and exits visual mode")
-  func visualLineGYSendsSelectionToTrayNote() {
+  @Test("visual-line \\t sends the active line selection to the tray note and exits visual mode")
+  func visualLineBackslashTSendsSelectionToTrayNote() {
     let engine = VimEngine()
     _ = engine.handle(key: "V", hasModifiers: false)
 
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "y", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "t", hasModifiers: false) == .appendCurrentLineToTrayNote(count: 1))
     #expect(engine.mode == .normal)
   }
 
-  @Test("gH jumps to the HABITS section")
-  func gShiftHJumpsToHabitsSection() {
+  @Test("\\c sends the current bullet to State.md")
+  func backslashCSendsCurrentBulletToStateNote() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "H", hasModifiers: false) == .jumpToHabitsSection)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("counted \\c sends counted bullets to State.md")
+  func countedBackslashCSendsCountedBulletsToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 3))
+  }
+
+  @Test("visual \\c sends the active selection to State.md and exits visual mode")
+  func visualBackslashCSendsSelectionToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("visual-line \\c sends the active line selection to State.md and exits visual mode")
+  func visualLineBackslashCSendsSelectionToStateNote() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "c", hasModifiers: false) == .appendCurrentLineToStateNote(count: 1))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("removed Habit leader no longer dispatches")
+  func removedHabitLeaderNoLongerDispatches() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "\\", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "h", hasModifiers: false) == .none)
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("removed section jumps no longer enter insert mode")
+  func removedSectionJumpsNoLongerEnterInsertMode() {
+    let hEngine = VimEngine()
+    #expect(hEngine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(hEngine.handle(key: "h", hasModifiers: false) == .none)
+    #expect(hEngine.mode == .normal)
+
+    let bEngine = VimEngine()
+    #expect(bEngine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(bEngine.handle(key: "b", hasModifiers: false) == .none)
+    #expect(bEngine.mode == .normal)
+  }
+
+  @Test(",d jumps to the Todo section")
+  func commaDJumpsToToDoSection() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "d", hasModifiers: false) == .jumpToToDoSection)
     #expect(engine.mode == .insert)
   }
 
-  @Test("gD jumps to the TODO section")
-  func gShiftDJumpsToToDoSection() {
+  @Test(",t jumps to the Tray section")
+  func commaTJumpsToTraySection() {
     let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "D", hasModifiers: false) == .jumpToToDoSection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test("gT jumps to the Tray section")
-  func gShiftTJumpsToTraySection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "g", hasModifiers: false) == .none)
-    #expect(engine.handle(key: "T", hasModifiers: false) == .jumpToTraySection)
-    #expect(engine.mode == .insert)
-  }
-
-  @Test("tt jumps to the Tray section")
-  func ttJumpsToTraySection() {
-    let engine = VimEngine()
-    #expect(engine.handle(key: "t", hasModifiers: false) == .none)
+    #expect(engine.handle(key: ",", hasModifiers: false) == .none)
     #expect(engine.handle(key: "t", hasModifiers: false) == .jumpToTraySection)
     #expect(engine.mode == .insert)
   }
 
-  @Test("s opens a whole-document forward Flash jump prompt")
-  func flashForwardPrompt() {
+  @Test("s opens the hop-style word-hint jump")
+  func wordHintPrompt() {
     let engine = VimEngine()
-    #expect(
-      engine.handle(key: "s", hasModifiers: false)
-        == .enterFlash(.forward, count: 1, scope: .document)
-    )
+    #expect(engine.handle(key: "s", hasModifiers: false) == .enterWordHint)
     #expect(engine.mode == .normal)
   }
 
@@ -293,8 +358,8 @@ struct VimEngineTests {
     let engine = VimEngine()
     _ = engine.handle(key: "3", hasModifiers: false)
     #expect(
-      engine.handle(key: "s", hasModifiers: false)
-        == .enterFlash(.forward, count: 3, scope: .document)
+      engine.handle(key: "f", hasModifiers: false)
+        == .enterFlash(.forward, count: 3, scope: .currentLine)
     )
     #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }
@@ -407,28 +472,124 @@ struct VimEngineTests {
   func dw() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "w", hasModifiers: false) == .delete(.wordForward(1)))
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .normal)
   }
 
   @Test("d$ deletes to line end")
   func dDollar() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "$", hasModifiers: false) == .delete(.lineEnd))
+    #expect(
+      engine.handle(key: "$", hasModifiers: false) == .applyOperator(.delete, .motion(.lineEnd))
+    )
   }
 
   @Test("d0 deletes to line start")
   func dZero() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "0", hasModifiers: false) == .delete(.lineStart))
+    #expect(
+      engine.handle(key: "0", hasModifiers: false) == .applyOperator(.delete, .motion(.lineStart))
+    )
   }
 
   @Test("db deletes a word backward")
   func db() {
     let engine = VimEngine()
     _ = engine.handle(key: "d", hasModifiers: false)
-    #expect(engine.handle(key: "b", hasModifiers: false) == .delete(.wordBackward(1)))
+    #expect(
+      engine.handle(key: "b", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordBackward(1)))
+    )
+  }
+
+  @Test("cw changes a word and enters insert mode")
+  func cwEntersInsert() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "c", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.change, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("2d3w multiplies the counts like vim (6 words)")
+  func countMultiplication() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.delete, .motion(.wordForward(6)))
+    )
+  }
+
+  @Test("yy yanks the current line; 3yy yanks three")
+  func yankLine() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .yankLine(count: 1))
+    _ = engine.handle(key: "3", hasModifiers: false)
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(engine.handle(key: "y", hasModifiers: false) == .yankLine(count: 3))
+  }
+
+  @Test("yw yanks a word and stays in normal mode")
+  func yankWord() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false)
+        == .applyOperator(.yank, .motion(.wordForward(1)))
+    )
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("ciw/diw/yiw compose operators with the inner-word object")
+  func innerWordObject() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "c", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.change, .innerWord)
+    )
+    #expect(engine.mode == .insert)
+    engine.reset()
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.delete, .innerWord)
+    )
+    #expect(engine.mode == .normal)
+    engine.reset()
+    _ = engine.handle(key: "y", hasModifiers: false)
+    _ = engine.handle(key: "i", hasModifiers: false)
+    #expect(engine.handle(key: "w", hasModifiers: false) == .applyOperator(.yank, .innerWord))
+  }
+
+  @Test("daw composes delete with the around-word object")
+  func aroundWordObject() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "d", hasModifiers: false)
+    _ = engine.handle(key: "a", hasModifiers: false)
+    #expect(
+      engine.handle(key: "w", hasModifiers: false) == .applyOperator(.delete, .aroundWord)
+    )
+  }
+
+  @Test("an aborted operator does not leak its count into the next key")
+  func abortedOperatorDropsCount() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "d", hasModifiers: false)
+    #expect(engine.handle(key: "q", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "j", hasModifiers: false) == .moveCursor(.down(1)))
   }
 
   // MARK: - Undo
@@ -530,15 +691,48 @@ struct VimEngineTests {
     )
   }
 
-  @Test("<count>G in visual line mode extends down to that line")
+  @Test("<count>G in visual line mode extends to that ABSOLUTE line")
   func visualLineCountedG() {
     let engine = VimEngine()
     _ = engine.handle(key: "V", hasModifiers: false)
     _ = engine.handle(key: "1", hasModifiers: false)
     _ = engine.handle(key: "0", hasModifiers: false)
+    // Vim snaps to line 10 itself; the old relative `.down(9)` walked
+    // nine lines from wherever the caret sat.
     #expect(
-      engine.handle(key: "G", hasModifiers: false) == .extendVisualLine(.down(9))
+      engine.handle(key: "G", hasModifiers: false) == .extendVisualLine(.toLine(10))
     )
+  }
+
+  @Test("o in visual mode swaps the selection ends")
+  func visualSwapEnds() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+    #expect(engine.handle(key: "o", hasModifiers: false) == .swapVisualEnds)
+    #expect(engine.mode == .visual)
+  }
+
+  @Test("p in visual mode pastes over the selection and returns to normal")
+  func visualPasteOver() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "v", hasModifiers: false)
+    #expect(engine.handle(key: "p", hasModifiers: false) == .pasteOverVisualSelection)
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("gv from normal reselects the last visual range")
+  func gvReselects() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "g", hasModifiers: false)
+    #expect(engine.handle(key: "v", hasModifiers: false) == .reselectLastVisual)
+  }
+
+  @Test("v in visual line mode switches to characterwise visual")
+  func visualLineToCharwise() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "V", hasModifiers: false)
+    #expect(engine.handle(key: "v", hasModifiers: false) == .enterVisual)
+    #expect(engine.mode == .visual)
   }
 
   @Test("y in visual line mode yanks and returns to normal")
@@ -592,5 +786,78 @@ struct VimEngineTests {
     _ = engine.handle(key: "V", hasModifiers: false)
     #expect(engine.handle(key: "z", hasModifiers: false) == .none)
     #expect(engine.mode == .visualLine)
+  }
+
+  // MARK: - Caps/tilde editing family (C, Y, P, J, X, ~, r)
+
+  @Test("C changes to end of line and enters insert")
+  func capCChangesToLineEnd() {
+    let engine = VimEngine()
+    let action = engine.handle(key: "C", hasModifiers: false)
+    #expect(action == .applyOperator(.change, .motion(.lineEnd)))
+    #expect(engine.mode == .insert)
+  }
+
+  @Test("Y yanks to end of line (nvim default), staying normal")
+  func capYYanksToLineEnd() {
+    let engine = VimEngine()
+    let action = engine.handle(key: "Y", hasModifiers: false)
+    #expect(action == .applyOperator(.yank, .motion(.lineEnd)))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("P pastes before with a count")
+  func capPPastesBefore() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "P", hasModifiers: false) == .pasteBefore(count: 3))
+  }
+
+  @Test("J joins lines with a count")
+  func capJJoins() {
+    let engine = VimEngine()
+    #expect(engine.handle(key: "J", hasModifiers: false) == .joinLines(count: 1))
+    _ = engine.handle(key: "3", hasModifiers: false)
+    #expect(engine.handle(key: "J", hasModifiers: false) == .joinLines(count: 3))
+  }
+
+  @Test("X deletes before the caret with a count")
+  func capXDeletesBack() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    #expect(engine.handle(key: "X", hasModifiers: false) == .deleteCharBefore(count: 2))
+  }
+
+  @Test("tilde toggles case with a count")
+  func tildeTogglesCase() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "4", hasModifiers: false)
+    #expect(engine.handle(key: "~", hasModifiers: false) == .toggleCase(count: 4))
+  }
+
+  @Test("r captures exactly one char and replaces with the count")
+  func replaceCharCaptures() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    #expect(engine.handle(key: "r", hasModifiers: false) == .none)
+    #expect(engine.handle(key: "z", hasModifiers: false) == .replaceChar("z", count: 2))
+    #expect(engine.mode == .normal)
+  }
+
+  @Test("r treats a digit as the literal replacement, not a count")
+  func replaceCharDigitIsLiteral() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "2", hasModifiers: false)
+    _ = engine.handle(key: "r", hasModifiers: false)
+    #expect(engine.handle(key: "3", hasModifiers: false) == .replaceChar("3", count: 2))
+  }
+
+  @Test("r aborts on Escape without consuming the next key")
+  func replaceCharEscapeAborts() {
+    let engine = VimEngine()
+    _ = engine.handle(key: "r", hasModifiers: false)
+    #expect(engine.handle(key: "\u{1B}", hasModifiers: false) == .none)
+    // The next key acts normally again.
+    #expect(engine.handle(key: "x", hasModifiers: false) == .deleteChar(count: 1))
   }
 }

@@ -20,6 +20,10 @@ enum Motion: Equatable, Sendable {
   case firstNonBlank
   case documentStart
   case documentEnd
+  /// `<n>G` as a MOTION so visual mode can extend to an absolute line
+  /// (the old relative `down(n-1)` snap walked from the caret, not
+  /// line n). Normal mode keeps the `.gotoLine` action.
+  case toLine(Int)
 }
 
 enum VimAction: Equatable, Sendable {
@@ -27,16 +31,40 @@ enum VimAction: Equatable, Sendable {
   case switchToInsert
   case switchToNormal
   case moveCursor(Motion)
-  case delete(Motion)
+  /// Operator × range-producer composition (d/c/y over motions and text
+  /// objects) -- the applicator resolves the range and applies the
+  /// operator in one place (`MultilineEditorVimOperator.swift`).
+  case applyOperator(VimOperator, VimRangeTarget)
+  case yankLine(count: Int)
   case deleteLine(count: Int)
   case deleteLineInsert(count: Int)
   case changeBulletBody
   case deleteToEndOfLine
   case deleteChar(count: Int)
+  /// `X` -- delete before the caret, clamped to the line start. Like `x`
+  /// it deliberately skips the register (small-delete noise).
+  case deleteCharBefore(count: Int)
+  /// `J` -- join the next line up with a single space, count-1 extra
+  /// joins (vim: 3J joins three lines).
+  case joinLines(count: Int)
+  /// `~` -- toggle case under the caret and advance, count chars.
+  case toggleCase(count: Int)
+  /// `r<char>` -- replace count chars with the typed char, caret on the
+  /// last replacement; aborts when the line runs out (vim).
+  case replaceChar(String, count: Int)
+  /// `<M-j>`/`<M-k>` -- David's mini.move maps: slide the caret's line
+  /// (normal) or the selected line block (visual, selection kept) down/up
+  /// count steps, clamping SILENTLY at the buffer edges (his config
+  /// retired the `:move` maps precisely because they errored at the top).
+  case moveLinesDown(count: Int)
+  case moveLinesUp(count: Int)
   case openLineBelow
   case openLineAbove
   case undo(count: Int)
   case pasteAfter(count: Int)
+  /// `P` -- paste before the caret (charwise) or above the current line
+  /// (linewise).
+  case pasteBefore(count: Int)
   case insertAtEndOfLine
   case insertAtFirstNonBlank
   case composite([VimAction])
@@ -44,13 +72,22 @@ enum VimAction: Equatable, Sendable {
   case enterSearch
   case findNext
   case findPrevious
+  /// `*`: search the word under the caret, landing on the next
+  /// occurrence (nvim default).
+  case searchWordUnderCaret
   case enterFlash(VimFlashDirection, count: Int, scope: VimFlashScope)
   case enterLineFlash(count: Int)
-  case sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int)
+  case enterWordHint
+  case sendCurrentTaskToLinear(
+    status: LinearTaskTargetStatus,
+    workspace: LinearTaskWorkspace,
+    count: Int
+  )
   case appendCurrentLineToDailyNote(count: Int)
   case appendCurrentLineToTrayNote(count: Int)
+  case appendCurrentLineToStateNote(count: Int)
+  case normalizeDocument
   case jumpToTraySection
-  case jumpToHabitsSection
   case jumpToToDoSection
   case gotoLine(Int)
   case enterVisual
@@ -63,12 +100,26 @@ enum VimAction: Equatable, Sendable {
   case yankVisualLine
   case deleteVisualLineSelection
   case changeVisualLineSelection
+  /// Visual `o` -- swap the anchor and the moving end (both wises).
+  case swapVisualEnds
+  /// Visual `p` -- replace the selection with the register WITHOUT
+  /// clobbering it (David's nvim maps visual p to `"_dP`).
+  case pasteOverVisualSelection
+  /// Normal `gv` -- reselect the last visual range.
+  case reselectLastVisual
 }
 
 final class VimEngine {
   private(set) var mode: VimMode = .normal
-  private var pendingBuffer: String = ""
+  // `pendingBuffer` and the count/motion helpers are module-internal (not private)
+  // so the normal-mode pending-prefix handlers can live in a VimEngine extension
+  // file (VimEngineNormalPending.swift), keeping this file within its length budget.
+  var pendingBuffer: String = ""
   private var countAccumulator: Int = 0
+  /// Count typed BEFORE the pending prefix (`2` in `2d3w`). Vim
+  /// multiplies it with the post-operator count; a single accumulator
+  /// concatenated the digits (`2d3w` became 23 words).
+  var pendingCount: Int = 0
 
   func handle(key: String, hasModifiers: Bool) -> VimAction {
     if hasModifiers { return .none }
@@ -79,9 +130,9 @@ final class VimEngine {
     case .normal:
       return handleNormal(key: key)
     case .visual:
-      return handleVisual(key: key)
+      return handleVisualMode(key: key, wise: .char)
     case .visualLine:
-      return handleVisualLine(key: key)
+      return handleVisualMode(key: key, wise: .line)
     }
   }
 
@@ -89,18 +140,26 @@ final class VimEngine {
     mode = .normal
     pendingBuffer = ""
     countAccumulator = 0
+    pendingCount = 0
   }
+
+  /// Sanctioned mode transition for the extension-hosted pending handlers, which
+  /// cannot touch `mode`'s private setter directly from another file.
+  func enterInsertMode() { mode = .insert }
 
   private func handleInsert(key: String) -> VimAction {
     guard key == "\u{1B}" || key == "escape" else { return .none }
     mode = .normal
     pendingBuffer = ""
     countAccumulator = 0
+    pendingCount = 0
     return .switchToNormal
   }
 
   private func handleNormal(key: String) -> VimAction {
-    if key.count == 1, let ch = key.first, ch.isNumber {
+    // Digits accumulate counts everywhere EXCEPT after `r`, where the
+    // next key is the literal replacement character (vim: `r3`).
+    if key.count == 1, let ch = key.first, ch.isNumber, pendingBuffer != "r" {
       let digit = ch.wholeNumberValue ?? 0
       if digit > 0 || countAccumulator > 0 {
         countAccumulator = countAccumulator * 10 + digit
@@ -115,81 +174,17 @@ final class VimEngine {
     return handleSingle(key: key)
   }
 
-  // swiftlint:disable:next cyclomatic_complexity
-  private func handlePending(key: String) -> VimAction {
-    let count = resolvedCount
-    defer { clearAccumulator() }
-
-    switch pendingBuffer {
-    case "d":
-      pendingBuffer = ""
-      if key == "d" { return .deleteLine(count: count) }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "c":
-      if key == "i" {
-        pendingBuffer = "ci"
-        return .none
-      }
-      pendingBuffer = ""
-      if key == "c" {
-        mode = .insert
-        return .deleteLineInsert(count: count)
-      }
-      if key == "B" {
-        mode = .insert
-        return .changeBulletBody
-      }
-      if let motion = motionForKey(key, count: count) { return .delete(motion) }
-      return .none
-    case "ci":
-      pendingBuffer = ""
-      if key == "b" {
-        mode = .insert
-        return .changeBulletBody
-      }
-      return .none
-    case "g":
-      return handlePendingG(key: key, count: count)
-    case "t":
-      return handlePendingT(key: key)
-    default:
-      pendingBuffer = ""
-      return .none
-    }
-  }
-
-  private func handlePendingG(key: String, count: Int) -> VimAction {
-    pendingBuffer = ""
-    if key == "g" { return .moveCursor(.documentStart) }
-    if key == "d" { return .sendCurrentTaskToLinear(status: .done, count: count) }
-    if key == "p" { return .sendCurrentTaskToLinear(status: .planned, count: count) }
-    if key == "t" { return .sendCurrentTaskToLinear(status: .triage, count: count) }
-    if key == "s" { return .sendCurrentTaskToLinear(status: .started, count: count) }
-    if key == "l" { return .sendCurrentTaskToLinear(status: .later, count: count) }
-    if key == "y" { return .appendCurrentLineToTrayNote(count: count) }
-    // Consistent section jumps (capital g-prefix): each jumps to its `## …`
-    // section and drops into insert on a fresh bullet.
-    if key == "H" { return jumpToSectionInsertAction(.jumpToHabitsSection) }
-    if key == "D" { return jumpToSectionInsertAction(.jumpToToDoSection) }
-    if key == "T" { return jumpToSectionInsertAction(.jumpToTraySection) }
-    return .none
-  }
-
-  private func handlePendingT(key: String) -> VimAction {
-    pendingBuffer = ""
-    if key == "t" { return jumpToSectionInsertAction(.jumpToTraySection) }
-    return .none
-  }
-
-  private func jumpToSectionInsertAction(_ action: VimAction) -> VimAction {
-    mode = .insert
-    return action
-  }
+  /// Keys that open a pending sequence: operators, prefix leaders, and
+  /// the single-char replace capture.
+  private static let pendingPrefixes: Set<String> = ["d", "c", "y", "g", ",", "\\", "r"]
 
   private func handleSingle(key: String) -> VimAction {
-    if key == "d" || key == "g" || key == "c" || key == "t" {
+    if Self.pendingPrefixes.contains(key) {
       pendingBuffer = key
+      // Capture the pre-operator count so post-operator digits start a
+      // FRESH count that multiplies (vim: 2d3w = 6 words).
+      pendingCount = countAccumulator
+      countAccumulator = 0
       return .none
     }
 
@@ -218,9 +213,35 @@ final class VimEngine {
   private func editingAction(for key: String, count: Int) -> VimAction? {
     switch key {
     case "x": return .deleteChar(count: count)
+    case "X": return .deleteCharBefore(count: count)
     case "D": return .deleteToEndOfLine
+    case "C":
+      // `C` = c$ -- change to end of line, like the D/Y caps family.
+      mode = .insert
+      return .applyOperator(.change, .motion(.lineEnd))
+    case "Y":
+      // nvim's default maps Y to y$ (not the vi yy quirk).
+      return .applyOperator(.yank, .motion(.lineEnd))
+    default: return lineEditAction(for: key, count: count)
+    }
+  }
+
+  private func lineEditAction(for key: String, count: Int) -> VimAction? {
+    switch key {
     case "p": return .pasteAfter(count: count)
+    case "P": return .pasteBefore(count: count)
+    case "J": return .joinLines(count: count)
+    case "~": return .toggleCase(count: count)
     case "u": return .undo(count: count)
+    default: return moveLinesAction(for: key, count: count)
+    }
+  }
+
+  /// Shared by normal and visual mode: his mini.move `<M-j>`/`<M-k>`.
+  private func moveLinesAction(for key: String, count: Int) -> VimAction? {
+    switch key {
+    case "<M-j>": return .moveLinesDown(count: count)
+    case "<M-k>": return .moveLinesUp(count: count)
     default: return nil
     }
   }
@@ -256,13 +277,14 @@ final class VimEngine {
     case "/": return .enterSearch
     case "n": return .findNext
     case "N": return .findPrevious
+    case "*": return .searchWordUnderCaret
     default: return .none
     }
   }
 
   private func flashAction(for key: String, count: Int) -> VimAction? {
     switch key {
-    case "s": return .enterFlash(.forward, count: count, scope: .document)
+    case "s": return .enterWordHint
     case "S": return .enterFlash(.backward, count: count, scope: .document)
     case "f": return .enterFlash(.forward, count: count, scope: .currentLine)
     case "F": return .enterFlash(.backward, count: count, scope: .currentLine)
@@ -272,7 +294,7 @@ final class VimEngine {
   }
 
   // swiftlint:disable:next cyclomatic_complexity
-  private func motionForKey(_ key: String, count: Int) -> Motion? {
+  func motionForKey(_ key: String, count: Int) -> Motion? {
     // #lizard forgives
     switch key {
     case "h": return .left(count)
@@ -290,9 +312,13 @@ final class VimEngine {
     }
   }
 
-  private var resolvedCount: Int { max(1, countAccumulator) }
+  var resolvedCount: Int { max(1, countAccumulator) }
 
-  private func clearAccumulator() { countAccumulator = 0 }
+  /// Vim count semantics across an operator: count-before × count-after
+  /// (each defaulting to 1).
+  var pendingResolvedCount: Int { max(1, pendingCount) * max(1, countAccumulator) }
+
+  func clearAccumulator() { countAccumulator = 0 }
 }
 
 extension VimEngine {
@@ -309,11 +335,17 @@ extension VimEngine {
     }
   }
 
-  // MARK: - Visual line mode
+  // MARK: - Visual modes (one handler; `wise` picks the emissions)
 
-  private func handleVisualLine(key: String) -> VimAction {
+  /// Characterwise vs linewise visual: the SAME grammar (digits, g/\
+  /// prefixes, <n>G absolute snap, motions extend, one command table)
+  /// with per-wise action emissions. The old twin handlers drifted --
+  /// this is the single owner.
+  private enum VisualWise { case char, line }
+
+  private func handleVisualMode(key: String, wise: VisualWise) -> VimAction {
     if !pendingBuffer.isEmpty {
-      return handleVisualLinePending(key: key)
+      return handleVisualPending(key: key, wise: wise)
     }
     if key.count == 1, let ch = key.first, ch.isNumber {
       let digit = ch.wholeNumberValue ?? 0
@@ -322,128 +354,95 @@ extension VimEngine {
         return .none
       }
     }
-    if key == "g" {
-      pendingBuffer = "g"
+    if key == "g" || key == "\\" {
+      pendingBuffer = key
       return .none
     }
-
-    // `<count>G` jumps to a specific line and snaps the visual range
-    // to it; bare `G` falls through to the documentEnd motion.
+    // `<count>G` snaps the moving end to that ABSOLUTE line (vim);
+    // bare `G` falls through to the documentEnd motion.
     if key == "G", countAccumulator > 0 {
       let target = countAccumulator
       clearAccumulator()
-      return .extendVisualLine(.down(max(0, target - 1)))
+      return extendAction(.toLine(target), wise: wise)
     }
 
     let count = resolvedCount
     defer { clearAccumulator() }
 
     if let motion = motionForKey(key, count: count) {
-      return .extendVisualLine(motion)
+      return extendAction(motion, wise: wise)
     }
-    return visualLineCommand(for: key)
+    if let action = moveLinesAction(for: key, count: count) { return action }
+    return visualCommand(for: key, wise: wise)
   }
 
-  private func handleVisualLinePending(key: String) -> VimAction {
+  private func extendAction(_ motion: Motion, wise: VisualWise) -> VimAction {
+    wise == .char ? .extendVisual(motion) : .extendVisualLine(motion)
+  }
+
+  private func handleVisualPending(key: String, wise: VisualWise) -> VimAction {
     let buffered = pendingBuffer
     let count = resolvedCount
     pendingBuffer = ""
     if buffered == "g", key == "g" {
       clearAccumulator()
-      return .extendVisualLine(.documentStart)
+      return extendAction(.documentStart, wise: wise)
     }
-    if buffered == "g", key == "y" {
+    if buffered == "\\", key == "t" {
       clearAccumulator()
       mode = .normal
       return .appendCurrentLineToTrayNote(count: count)
     }
+    if buffered == "\\", key == "c" {
+      clearAccumulator()
+      mode = .normal
+      return .appendCurrentLineToStateNote(count: count)
+    }
     return .none
   }
 
-  private func visualLineCommand(for key: String) -> VimAction {
+  // swiftlint:disable:next cyclomatic_complexity
+  private func visualCommand(for key: String, wise: VisualWise) -> VimAction {
     switch key {
-    case "V", "\u{1B}", "escape":
+    case "\u{1B}", "escape":
       mode = .normal
       return .switchToNormal
-    case "y":
-      mode = .normal
-      return .yankVisualLine
-    case "d", "x":
-      mode = .normal
-      return .deleteVisualLineSelection
-    case "c", "s":
-      mode = .insert
-      return .changeVisualLineSelection
-    default:
-      return .none
-    }
-  }
-
-  func handleVisual(key: String) -> VimAction {
-    if !pendingBuffer.isEmpty {
-      return handleVisualPending(key: key)
-    }
-    if key.count == 1, let ch = key.first, ch.isNumber {
-      let digit = ch.wholeNumberValue ?? 0
-      if digit > 0 || countAccumulator > 0 {
-        countAccumulator = countAccumulator * 10 + digit
-        return .none
+    case "v":
+      if wise == .line {
+        mode = .visual
+        return .enterVisual
       }
-    }
-    if key == "g" {
-      pendingBuffer = "g"
-      return .none
-    }
-    if key == "G", countAccumulator > 0 {
-      let target = countAccumulator
-      clearAccumulator()
-      return .extendVisual(.down(max(0, target - 1)))
-    }
-
-    let count = resolvedCount
-    defer { clearAccumulator() }
-
-    if let motion = motionForKey(key, count: count) {
-      return .extendVisual(motion)
-    }
-    return visualCommand(for: key)
-  }
-
-  private func handleVisualPending(key: String) -> VimAction {
-    let buffered = pendingBuffer
-    let count = resolvedCount
-    pendingBuffer = ""
-    if buffered == "g", key == "g" {
-      clearAccumulator()
-      return .extendVisual(.documentStart)
-    }
-    if buffered == "g", key == "y" {
-      clearAccumulator()
-      mode = .normal
-      return .appendCurrentLineToTrayNote(count: count)
-    }
-    return .none
-  }
-
-  private func visualCommand(for key: String) -> VimAction {
-    switch key {
-    case "v", "\u{1B}", "escape":
       mode = .normal
       return .switchToNormal
     case "V":
-      mode = .visualLine
-      return .enterVisualLine
+      if wise == .char {
+        mode = .visualLine
+        return .enterVisualLine
+      }
+      mode = .normal
+      return .switchToNormal
     case "y":
       mode = .normal
-      return .yankVisualSelection
+      return wise == .char ? .yankVisualSelection : .yankVisualLine
     case "d", "x":
       mode = .normal
-      return .deleteVisualSelection
-    case "c", "s":
+      return wise == .char ? .deleteVisualSelection : .deleteVisualLineSelection
+    case "c":
       mode = .insert
-      return .changeVisualSelection
+      return wise == .char ? .changeVisualSelection : .changeVisualLineSelection
+    case "o":
+      return .swapVisualEnds
+    case "p":
+      mode = .normal
+      return .pasteOverVisualSelection
+    case "s":
+      return .enterWordHint
     default:
       return .none
     }
   }
+
+  /// Sanctioned re-entry for `gv` (the view owns the remembered range
+  /// and its wise; the engine cannot know which to restore).
+  func enterVisualMode(linewise: Bool) { mode = linewise ? .visualLine : .visual }
 }

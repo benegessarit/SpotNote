@@ -2,8 +2,6 @@
 import AppKit
 import SwiftUI
 
-private enum VimWordClass: Equatable { case whitespace, keyword, punctuation }
-
 /// The HUD's text surface -- `NSTextView` in an `NSScrollView` with a
 /// custom `NSRulerView` line-number gutter.
 ///
@@ -19,7 +17,6 @@ struct MultilineEditor: NSViewRepresentable {
   var onChecklistLinesChange: ([Int: ChecklistLineState]) -> Void = { _ in }
   let theme: Theme
   let placeholder: String
-  let showLineNumbers: Bool
   let font: NSFont
   let focusRequest: Int
   /// Counter from `FocusTrigger.caretEndTick`; when it changes, the
@@ -53,13 +50,18 @@ struct MultilineEditor: NSViewRepresentable {
   /// Sends a normalized current-line title to the local Hermes/Marginal
   /// ingress, which creates the Linear issue without embedding Linear
   /// credentials in SpotNote.
-  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt)?
+
   /// Appends current/counted lines to today's vault daily note. The editor
   /// clears the original lines only after this durable write succeeds.
   var onAppendDailyNote: ((String) async throws -> URL)?
-  /// Appends current/counted lines to the misc thoughts dump (`tray.md`), then
+  /// Appends current/counted lines to the misc thoughts dump (`spotnote-tray.md`), then
   /// clears the original lines only after this durable write succeeds.
   var onAppendTrayNote: ((String) async throws -> URL)?
+  /// Appends current/counted bullet blocks to the hermes-build `State.md` as one
+  /// flattened `- ` line per block, then clears the originals only after the
+  /// durable write succeeds.
+  var onAppendStateNote: ((String) async throws -> URL)?
   /// Called from the AppKit delegate synchronously, so the panel resizes in
   /// the same runloop tick as the text change. A SwiftUI `@State` round-trip
   /// would defer the resize by one runloop, causing a visible flash.
@@ -76,7 +78,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onChecklistLinesChange = onChecklistLinesChange
     textView.placeholderString = placeholder
     refreshAttributes(on: textView)
-    configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
+    configureRuler(scroll: scroll, textView: textView)
     installSuggestionField(on: textView)
     textView.vimModeEnabled = vimModeEnabled
     textView.attachVimController(vimController)
@@ -84,6 +86,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onSendLinearTask = onSendLinearTask
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
+    textView.onAppendStateNote = onAppendStateNote
     return scroll
   }
 
@@ -128,6 +131,12 @@ struct MultilineEditor: NSViewRepresentable {
     guard let textView = scroll.documentView as? PlaceholderTextView else { return }
     context.coordinator.parent = self
     if textView.string != text {
+      // The programmatic string swap never fires didChangeText, so the
+      // search session must tear down FIRST: stale match offsets into
+      // the old (possibly longer) note would crash n / band drawing,
+      // and the hidden-glyph ranges must be removed against the OLD
+      // layout before it goes away.
+      textView.endVimSearchForTextSwap()
       textView.string = text
       refreshAttributes(on: textView)
       textView.vimController?.clearSearchStatus()
@@ -140,6 +149,7 @@ struct MultilineEditor: NSViewRepresentable {
     textView.onSendLinearTask = onSendLinearTask
     textView.onAppendDailyNote = onAppendDailyNote
     textView.onAppendTrayNote = onAppendTrayNote
+    textView.onAppendStateNote = onAppendStateNote
     textView.onChecklistLinesChange = onChecklistLinesChange
     applyStyleAndRefreshAttributesIfNeeded(on: textView)
     if textView.checklistLines != checklistLines {
@@ -150,7 +160,7 @@ struct MultilineEditor: NSViewRepresentable {
       textView.placeholderString = placeholder
       textView.needsDisplay = true
     }
-    configureRuler(scroll: scroll, textView: textView, visible: showLineNumbers)
+    configureRuler(scroll: scroll, textView: textView)
 
     if context.coordinator.lastFocusRequest != focusRequest {
       context.coordinator.lastFocusRequest = focusRequest
@@ -310,6 +320,11 @@ struct MultilineEditor: NSViewRepresentable {
     func textViewDidChangeSelection(_ notification: Notification) {
       guard let textView = notification.object as? PlaceholderTextView else { return }
       parent.refreshSuggestion(on: textView)
+      // Caret moved onto/off a pasted link: restyle once so the conceal
+      // opens (or re-collapses) -- nvim's cursor-line conceal reveal.
+      if textView.linkRevealStateChanged() {
+        parent.applyCodeStyling(on: textView)
+      }
     }
 
     func textDidChange(_ notification: Notification) {
@@ -344,6 +359,9 @@ struct MultilineEditor: NSViewRepresentable {
       // Stop showing "2/5" once the user starts editing -- match indices
       // are about to be wrong anyway.
       textView.vimController?.clearSearchStatus()
+      // Editing under an open preview card: the anchored link may have
+      // moved or vanished, so drop the card rather than track it.
+      textView.linkPreview.dismiss()
       if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
         ruler.updateRequiredThickness()
         ruler.needsDisplay = true
@@ -438,13 +456,15 @@ struct MultilineEditor: NSViewRepresentable {
     let cursorColor = NSColor(theme.resolvedCursor)
     textView.insertionPointColor = cursorColor
     textView.editorCursorColor = cursorColor
+    textView.editorVimBlockCursorColor = NSColor(theme.vimBlockCursor)
+    textView.editorSurfaceColor = NSColor(theme.background)
     textView.placeholderColor = newPlaceholderColor
     textView.defaultParagraphStyle = fixedParagraphStyle
     textView.typingAttributes = textAttributes
     textView.editorTextAttributes = textAttributes
-    textView.editorHeadingTextColor = NSColor(theme.headingText)
+    textView.editorHeadingTextColor = NSColor(theme.text)
+    textView.editorTheme = theme
     if let ruler = textView.enclosingScrollView?.verticalRulerView as? LineNumberRuler {
-      ruler.textColor = newPlaceholderColor.withAlphaComponent(0.8)
       ruler.editorFont = font
     }
   }
@@ -466,7 +486,7 @@ struct MultilineEditor: NSViewRepresentable {
         textView.editorTextAttributes[.foregroundColor] as? NSColor,
         NSColor(theme.text)
       ),
-      colorsMatch(textView.editorHeadingTextColor, NSColor(theme.headingText)),
+      colorsMatch(textView.editorHeadingTextColor, NSColor(theme.text)),
       paragraphStylesMatch(
         textView.editorTextAttributes[.paragraphStyle] as? NSParagraphStyle,
         fixedParagraphStyle
@@ -500,6 +520,12 @@ struct MultilineEditor: NSViewRepresentable {
     let fixed = FixedLineHeightLayoutManager()
     fixed.fixedLineHeight = EditorMetrics.lineHeight
     fixed.editorFont = font
+    // The editor is on TextKit 1 by construction (this swap + CodeStyler
+    // both drive NSLayoutManager), where noncontiguous layout is OFF by
+    // default -- without it a long note lays out fully on every edit and
+    // the scroll stutters. TextKit 2 gets viewport layout for free;
+    // TextKit 1 has to opt in.
+    fixed.allowsNonContiguousLayout = true
     if let existing = storage.layoutManagers.first {
       storage.removeLayoutManager(existing)
     }
@@ -561,19 +587,15 @@ struct MultilineEditor: NSViewRepresentable {
     CodeStyler.apply(to: textView, theme: theme)
   }
 
-  private func configureRuler(scroll: NSScrollView, textView: NSTextView, visible: Bool) {
-    let ruler: LineNumberRuler
-    if let existing = scroll.verticalRulerView as? LineNumberRuler {
-      ruler = existing
-    } else {
-      ruler = LineNumberRuler(textView: textView, editorFont: font, showsLineNumbers: visible)
-      scroll.verticalRulerView = ruler
-    }
-    if ruler.showsLineNumbers != visible {
-      ruler.showsLineNumbers = visible
+  private func configureRuler(scroll: NSScrollView, textView: NSTextView) {
+    if !(scroll.verticalRulerView is LineNumberRuler) {
+      scroll.verticalRulerView = LineNumberRuler(textView: textView, editorFont: font)
     }
     scroll.hasVerticalRuler = true
     scroll.rulersVisible = true
+    if abs(textView.textContainerInset.width - EditorMetrics.textLeadingGap) > 0.5 {
+      textView.textContainerInset = NSSize(width: EditorMetrics.textLeadingGap, height: 0)
+    }
   }
 
 }
@@ -611,6 +633,52 @@ final class PlaceholderTextView: NSTextView {
   /// Active theme's cursor color; falls back to `normalModeCursorColor` when the
   /// style pass hasn't run yet.
   var editorCursorColor: NSColor?
+  /// Active theme's vim BLOCK cursor (normal/visual) -- nvim-parity
+  /// rosewater-family chrome, never the accent (Theme.vimBlockCursor).
+  var editorVimBlockCursorColor: NSColor?
+  /// Active theme's surface color; the glyph under a block cursor flips
+  /// to it (nvim: Cursor fg=base reverse video).
+  var editorSurfaceColor: NSColor?
+  /// nvim-Visual selection band (5%/9% surface->text blend); owned by
+  /// `CodeStyler.applyVisualSelectionColor`, painted by the view itself
+  /// in visual mode so the non-key gray substitution never shows.
+  var editorVisualSelectionColor: NSColor?
+  /// Typing hot path: false while the note holds no code styling, so
+  /// `CodeStyler.apply` can skip its full-document temporary-attribute
+  /// clear (which invalidates the whole layout on every keystroke).
+  var codeStylerLeftAttributes = true
+  /// Yank flash state ("scan, lift, dissolve" -- see
+  /// MultilineEditorVimYankFlash.swift).
+  var yankFlashRange: NSRange?
+  var yankFlashFrame: YankFlashFrame?
+  var yankFlashGeneration = 0
+  /// Vim `/` flash-search state -- fully view-owned, never touches the
+  /// ⌘F FindController (see MultilineEditorVimSearch.swift).
+  var vimSearchQuery = ""
+  var vimSearchMatches: [NSRange] = []
+  var vimSearchCurrent: Int?
+  var vimSearchLabelPlans: [VimSearchLabelPlan] = []
+  var vimSearchCommitted = false
+  var vimSearchBandsVisible = false
+  var vimSearchCapped = false
+  var vimSearchOriginCaret: Int?
+  var vimSearchHiddenRanges: [NSRange] = []
+  /// The committed search stashed while a new `/` prompt is open, so
+  /// Escape restores it -- nvim keeps the previous pattern (n/N still
+  /// work after an aborted search).
+  var vimSearchStash: VimSearchStash?
+  /// Dim band under every search match; the current match wears the
+  /// Visual band. Set by CodeStyler.applyVisualSelectionColor.
+  var editorSearchDimBandColor: NSColor?
+  /// Pasted-link conceal + hover preview state (LinkDetection,
+  /// CodeStylerLinks, MultilineEditorLinkHover). `linkSpans` is refreshed
+  /// by every CodeStylerLinks pass; `linkRevealCache` tracks which span
+  /// the caret last touched so restyles run per transition, not per move.
+  var linkSpans: [LinkSpan] = []
+  var linkRevealCache: NSRange?
+  var linkTrackingArea: NSTrackingArea?
+  var editorTheme: Theme?
+  let linkPreview = LinkPreviewController()
   /// Fallback cursor color used before a theme is applied.
   static let normalModeCursorColor = NSColor(
     srgbRed: 221 / 255,
@@ -631,20 +699,35 @@ final class PlaceholderTextView: NSTextView {
   /// extend symmetrically instead of always re-collapsing to a fixed
   /// edge of the snapped line range.
   var visualLineCaret: Int?
+  /// Last visual range for `gv` (wise + endpoints, captured on every
+  /// visual exit).
+  struct VisualRangeMemo {
+    let anchor: Int
+    let caret: Int
+    let linewise: Bool
+  }
+  var lastVisualRange: VisualRangeMemo?
   var vimPasteboard: NSPasteboard = .general
   var vimEngine: VimEngine?
   weak var vimController: VimController?
   var onEscape: (() -> Void)?
-  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> Void)?
+  var onSendLinearTask: ((LinearTaskHandoffRequest) async throws -> ScratchpadHandoffReceipt)?
   var onAppendDailyNote: ((String) async throws -> URL)?
   var onAppendTrayNote: ((String) async throws -> URL)?
+  var onAppendStateNote: ((String) async throws -> URL)?
   var checklistLines: [Int: ChecklistLineState] = [:]
   var onChecklistLinesChange: (([Int: ChecklistLineState]) -> Void)?
   var linearTaskToday: Date?
+  /// Guards the irreversible network handoff (Linear / habit) against a fast
+  /// double-press creating two external writes: set before the in-flight Task,
+  /// cleared in its `defer`. Main-actor only, so no synchronization is needed.
+  private var isHandoffInFlight = false
   var flashHints: [VimFlashTarget] = []
   var flashLabelBuffer: String = ""
   var isShowingLineFlashHints = false
   var flashTemporaryAttributeRanges: [NSRange] = []
+  var wordHintTargets: [VimFlashTarget] = []
+  var wordHintBuffer: String = ""
   private var lastRenderedToken: RenderedToken?
   private var lastEditContext: EditContext?
   private var lastInsertionPointDisplayRect: NSRect?
@@ -658,6 +741,13 @@ final class PlaceholderTextView: NSTextView {
       } else {
         vimEngine = nil
         clearFlashHints()
+        // With vim off there is no :noh or n to clear a committed
+        // search -- stranded bands would persist until an edit -- and
+        // an open prompt would keep eating keys with no surface to
+        // render it (the root view drops the cmdline with vim off).
+        vimController?.cancelPrompt()
+        clearVimSearch()
+        vimController?.clearSearchStatus()
       }
       notifyVimModeChanged()
       needsDisplay = true
@@ -668,20 +758,25 @@ final class PlaceholderTextView: NSTextView {
     stabilizeTypingAttributes()
     let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
     let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-    if mods == .command, chars == "z", revertLastRenderedTokenIfPossible() {
+    // The prompt owns its keys while it is open: the token revert and
+    // the editor's own word deletes are real text edits that would fire
+    // mid-`/`/`:` (the incsearch caret can rest anywhere) and wipe the
+    // live search state.
+    let promptClosed = vimController?.prompt == nil
+    if mods == .command, chars == "z", promptClosed, revertLastRenderedTokenIfPossible() {
       return
     }
-    if mods.isEmpty, event.keyCode == 51, revertLastRenderedTokenIfPossible() {
+    if mods.isEmpty, event.keyCode == 51, promptClosed, revertLastRenderedTokenIfPossible() {
       return
     }
     if let controller = vimController, controller.prompt != nil {
       if handlePromptKey(event: event, controller: controller, mods: mods) { return }
     }
-    if mods == .control, chars == "w" {
+    if mods == .control, chars == "w", promptClosed {
       deleteWordBackward(self)
       return
     }
-    if mods == .control, chars == "u" {
+    if mods == .control, chars == "u", promptClosed {
       deleteToBeginningOfLine(self)
       return
     }
@@ -873,8 +968,8 @@ final class PlaceholderTextView: NSTextView {
   }
 
   func executeMotion(_ motion: Motion) {
-    if let delta = logicalLineDelta(for: motion) {
-      moveByLogicalLines(delta)
+    if let delta = verticalLineDelta(for: motion) {
+      moveByDisplayLines(delta)
       return
     }
     if executeVisibleBoundaryMotion(motion) { return }
@@ -888,6 +983,8 @@ final class PlaceholderTextView: NSTextView {
       moveToDocumentStartForVim()
     case .documentEnd:
       moveToDocumentEndForVim()
+    case .toLine(let line):
+      _ = jumpToLine(line)
     default:
       return
     }
@@ -998,13 +1095,9 @@ final class PlaceholderTextView: NSTextView {
     return nsString.length
   }
 
-  private func vimWordClass(at location: Int, in nsString: NSString) -> VimWordClass {
+  private func vimWordClass(at location: Int, in nsString: NSString) -> VimCharClass {
     guard location >= 0, location < nsString.length else { return .whitespace }
-    let codeUnit = nsString.character(at: location)
-    guard let scalar = UnicodeScalar(UInt32(codeUnit)) else { return .punctuation }
-    if CharacterSet.whitespacesAndNewlines.contains(scalar) { return .whitespace }
-    if CharacterSet.alphanumerics.contains(scalar) || scalar.value == 95 { return .keyword }
-    return .punctuation
+    return VimCharClass.of(nsString.character(at: location))
   }
 
   private func markdownListBodyStart(containing location: Int, in nsString: NSString) -> Int? {
@@ -1019,10 +1112,162 @@ final class PlaceholderTextView: NSTextView {
     return min(line.location + (prefix as NSString).length, contentEnd)
   }
 
-  private func logicalLineDelta(for motion: Motion) -> Int? {
+  private func verticalLineDelta(for motion: Motion) -> Int? {
     if case .up(let count) = motion { return -count }
     if case .down(let count) = motion { return count }
     return nil
+  }
+
+  /// `j`/`k` move by *display* line (one wrapped visual row), so a long wrapped
+  /// bullet is walked row-by-row instead of skipped whole. Implemented with
+  /// layout-fragment hit-testing — robust to fenced code blocks and rendered
+  /// markers, which is why we don't use AppKit's native `moveUp:`/`moveDown:`
+  /// (those once mis-stepped through code blocks). Falls back to logical-line
+  /// motion when layout geometry is unavailable. For unwrapped lines, one display
+  /// step equals one logical line, so the existing j/k contracts are preserved.
+  private func moveByDisplayLines(_ delta: Int) {
+    guard delta != 0 else { return }
+    guard let layoutManager, let textContainer else {
+      moveByLogicalLines(delta)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    layoutManager.ensureLayout(for: textContainer)
+    let caret = min(selectedRange.location, nsString.length)
+    guard
+      layoutManager.numberOfGlyphs > 0,
+      let start = displayCaretGeometry(
+        at: caret,
+        in: nsString,
+        layoutManager: layoutManager,
+        container: textContainer
+      )
+    else {
+      moveByLogicalLines(delta)
+      return
+    }
+    // Goal x is fixed for the whole motion (so a multi-row `3j` doesn't drift left
+    // when it passes a short row); it's the caret's current horizontal position.
+    let goalX = start.x
+    let down = delta > 0
+    var fragment = start.fragment
+    var location = caret
+    for _ in 0..<abs(delta) {
+      guard
+        let step = displayLineStep(
+          from: fragment,
+          goalX: goalX,
+          down: down,
+          nsString: nsString,
+          layoutManager: layoutManager,
+          container: textContainer
+        )
+      else { break }
+      location = step.location
+      guard let advanced = step.fragment else { break }  // moved, but no row beyond it
+      fragment = advanced
+    }
+    setInsertionPoint(min(location, nsString.length))
+    scrollVimLogicalMotionTargetIntoView()
+  }
+
+  /// One display-row step for `moveByDisplayLines`. Returns the new caret location
+  /// and the row it landed on (`fragment == nil` means it moved onto a trailing
+  /// empty line and stepping should stop); returns `nil` to stop without moving
+  /// (hit the top/bottom edge, or the hit-test didn't reach a new row).
+  private func displayLineStep(
+    from fragment: NSRect,
+    goalX: CGFloat,
+    down: Bool,
+    nsString: NSString,
+    layoutManager: NSLayoutManager,
+    container: NSTextContainer
+  ) -> (location: Int, fragment: NSRect?)? {
+    let usedRect = layoutManager.usedRect(for: container)
+    let probeY = down ? fragment.maxY + 1 : fragment.minY - 1
+    if !down, probeY < usedRect.minY { return nil }  // already on the first row
+    if down, probeY >= usedRect.maxY {
+      // Past the last laid-out row: step onto a trailing empty line if present.
+      let extra = layoutManager.extraLineFragmentRect
+      if !extra.isEmpty, probeY < extra.maxY { return (nsString.length, nil) }
+      return nil
+    }
+    var fraction: CGFloat = 0
+    let glyph = layoutManager.glyphIndex(
+      for: NSPoint(x: goalX, y: probeY),
+      in: container,
+      fractionOfDistanceThroughGlyph: &fraction
+    )
+    var glyphRange = NSRange()
+    let targetFragment = layoutManager.lineFragmentRect(
+      forGlyphAt: glyph,
+      effectiveRange: &glyphRange
+    )
+    guard targetFragment.minY != fragment.minY else { return nil }  // probe stayed on this row
+    var index = layoutManager.characterIndexForGlyph(at: glyph)
+    // Honor right-edge affinity only when it stays on the target row. On the row's
+    // LAST glyph the `+1` would spill onto the next visual row, which resolves back
+    // to the row we came from — the bug that stranded `k` on a far-right column.
+    let lastGlyphInRow = glyphRange.location + glyphRange.length - 1
+    if fraction > 0.5, glyph < lastGlyphInRow { index += 1 }
+    let location = min(max(0, index), nsString.length)
+    return (location, targetFragment)
+  }
+
+  /// Top (container-space `minY`) of the display row the caret sits on, or `nil`
+  /// when geometry is unavailable. The first visual row reports `0`. Exposed for
+  /// motion tests that assert `k`/`j` reach the first/last display row.
+  func caretDisplayRowTop(at caret: Int) -> CGFloat? {
+    guard let layoutManager, let textContainer else { return nil }
+    layoutManager.ensureLayout(for: textContainer)
+    let nsString = string as NSString
+    return displayCaretGeometry(
+      at: caret,
+      in: nsString,
+      layoutManager: layoutManager,
+      container: textContainer
+    )?.fragment.minY
+  }
+
+  /// The caret's line-fragment rect and horizontal position, both in container
+  /// coordinates (the space `glyphIndex(for:in:)` and `usedRect(for:)` use), so the
+  /// display-line mover can hit-test without view-coordinate conversions.
+  private func displayCaretGeometry(
+    at caret: Int,
+    in nsString: NSString,
+    layoutManager: NSLayoutManager,
+    container: NSTextContainer
+  ) -> (fragment: NSRect, x: CGFloat)? {
+    guard layoutManager.numberOfGlyphs > 0 else { return nil }
+    if caret == nsString.length, caret > 0, nsString.character(at: caret - 1) == 0x0A {
+      let extra = layoutManager.extraLineFragmentRect
+      if !extra.isEmpty { return (extra, extra.minX) }
+    }
+    let refChar = caret >= nsString.length ? max(0, nsString.length - 1) : caret
+    let glyph = min(
+      layoutManager.glyphIndexForCharacter(at: refChar),
+      max(0, layoutManager.numberOfGlyphs - 1)
+    )
+    let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+    let x: CGFloat
+    if caret <= 0 {
+      x = fragment.minX
+    } else if caret >= nsString.length || nsString.character(at: caret) == 0x0A {
+      let priorGlyph = layoutManager.glyphIndexForCharacter(at: caret - 1)
+      x =
+        layoutManager.boundingRect(
+          forGlyphRange: NSRange(location: priorGlyph, length: 1),
+          in: container
+        ).maxX
+    } else {
+      x =
+        layoutManager.boundingRect(
+          forGlyphRange: NSRange(location: glyph, length: 1),
+          in: container
+        ).minX
+    }
+    return (fragment, x)
   }
 
   private func moveByLogicalLines(_ delta: Int) {
@@ -1290,17 +1535,6 @@ final class PlaceholderTextView: NSTextView {
     return current
   }
 
-  func executeDeleteMotion(_ motion: Motion) {
-    let before = selectedRange.location
-    executeMotion(motion)
-    let after = selectedRange.location
-    let start = min(before, after)
-    let length = abs(after - before)
-    guard length > 0 else { return }
-    setSelectedRange(NSRange(location: start, length: 0))
-    insertText("", replacementRange: NSRange(location: start, length: length))
-  }
-
   func executeDeleteLines(_ count: Int) {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
@@ -1344,29 +1578,42 @@ final class PlaceholderTextView: NSTextView {
     sendCurrentTaskToLinear(status: .triage, count: count)
   }
 
-  func sendCurrentTaskToLinear(status: LinearTaskTargetStatus, count: Int) {
+  func sendCurrentTaskToLinear(
+    status: LinearTaskTargetStatus,
+    workspace: LinearTaskWorkspace = .personal,
+    count: Int
+  ) {
     guard let onSendLinearTask else {
       vimController?.showMessage("Linear handoff unavailable", kind: .error, icon: .hermes)
       return
     }
     let range = selectedTaskRange(count: max(1, count), in: string as NSString)
+    // The Code motion (gc) lands in Triage with the assignable Develop label;
+    // Linear parent label groups are not assignable. Personal motions carry only
+    // the bullet's #labels.
+    let extraLabels = workspace == .code ? ["Develop"] : []
     commitSelectedRange(
       range,
       preparing: { [weak self] original, _ in
         LinearTaskMetadataParser.request(
           from: original,
           targetStatus: status,
+          workspace: workspace,
+          labels: extraLabels,
           today: self?.linearTaskToday ?? Date()
         )
       },
       messages: LineCommitMessages(
         empty: "No Linear task on this bullet",
         progress: "Sending to Linear",
-        success: "Sent to Hermes for Linear",
+        success: "Sent to Linear",
         changed: "Linear sent; bullet changed",
         failure: "Linear send failed"
       ),
-      commit: { try await onSendLinearTask($0) }
+      commit: {
+        let receipt = try await onSendLinearTask($0)
+        return receipt.linearSuccessMessage
+      }
     )
   }
 
@@ -1387,13 +1634,16 @@ final class PlaceholderTextView: NSTextView {
         changed: "Daily note updated; line changed",
         failure: "Daily note append failed"
       ),
-      commit: { _ = try await onAppendDailyNote($0) }
+      commit: {
+        _ = try await onAppendDailyNote($0)
+        return nil
+      }
     )
   }
 
   func appendCurrentLinesToTrayNote(_ count: Int) {
     guard let onAppendTrayNote else {
-      vimController?.showMessage("tray.md handoff unavailable", kind: .error, icon: .hermes)
+      vimController?.showMessage("spotnote-tray.md handoff unavailable", kind: .error, icon: .hermes)
       return
     }
     let nsString = string as NSString
@@ -1403,14 +1653,80 @@ final class PlaceholderTextView: NSTextView {
       range,
       preparing: { original, _ in TrayNotePayload.normalized(original) },
       messages: LineCommitMessages(
-        empty: "No tray.md text on this line",
-        progress: "Appending to tray.md",
-        success: "Sent to tray.md",
-        changed: "Sent to tray.md; line changed",
-        failure: "tray.md append failed"
+        empty: "No spotnote-tray.md text on this line",
+        progress: "Appending to spotnote-tray.md",
+        success: "Sent to spotnote-tray.md",
+        changed: "Sent to spotnote-tray.md; line changed",
+        failure: "spotnote-tray.md append failed"
       ),
-      commit: { _ = try await onAppendTrayNote($0) }
+      commit: {
+        _ = try await onAppendTrayNote($0)
+        return nil
+      }
     )
+  }
+
+  func appendCurrentLinesToStateNote(_ count: Int) {
+    guard let onAppendStateNote else {
+      vimController?.showMessage("State.md handoff unavailable", kind: .error, icon: .hermes)
+      return
+    }
+    let nsString = string as NSString
+    guard nsString.length > 0 else { return }
+    let range = selectedTrayNoteRange(count: max(1, count), in: nsString)
+    commitSelectedRange(
+      range,
+      preparing: { original, _ in Self.stateNotePayload(from: original) },
+      messages: LineCommitMessages(
+        empty: "No State text on this line",
+        progress: "Appending to State",
+        success: "Sent to hermes-build State",
+        changed: "Sent to State; line changed",
+        failure: "State append failed"
+      ),
+      commit: {
+        _ = try await onAppendStateNote($0)
+        return nil
+      }
+    )
+  }
+
+  /// Shapes captured bullet block(s) for the hermes-build State.md: one flattened
+  /// `- ` line per block (so `3\c` files three separate items, never one fused
+  /// run-on line). Returns nil when nothing usable remains.
+  static func stateNotePayload(from original: String) -> String? {
+    let lines =
+      splitIntoBulletBlocks(original)
+      .compactMap { LinearTaskTitleNormalizer.title(fromSpotNoteLine: $0) }
+      .map { "- " + $0 }
+    return lines.isEmpty ? nil : lines.joined(separator: "\n")
+  }
+
+  /// Groups the captured text into per-item segments using indentation as the
+  /// continuation signal (SpotNote indents wrapped/nested bullet lines): a
+  /// NON-indented, non-blank line starts a new item (a top-level bullet OR a plain
+  /// line), and any INDENTED line folds into the current item (so a wrapped
+  /// continuation flattens into the same `- ` line). Blanks are skipped. This makes
+  /// `2\c` over two distinct items emit two `- ` lines, while a wrapped bullet stays
+  /// one line.
+  static func splitIntoBulletBlocks(_ text: String) -> [String] {
+    var blocks: [String] = []
+    var current: [String] = []
+    func flush() {
+      if !current.isEmpty {
+        blocks.append(current.joined(separator: "\n"))
+        current = []
+      }
+    }
+    for rawLine in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+      let line = String(rawLine)
+      if line.allSatisfy({ $0 == " " || $0 == "\t" }) { continue }
+      let isIndented = line.first == " " || line.first == "\t"
+      if !isIndented { flush() }
+      current.append(line)
+    }
+    flush()
+    return blocks
   }
 
   private func selectedTrayNoteRange(count: Int, in nsString: NSString) -> NSRange {
@@ -1439,7 +1755,7 @@ final class PlaceholderTextView: NSTextView {
     count: Int,
     preparing payloadFor: @escaping (String, NSRange) -> Payload?,
     messages: LineCommitMessages,
-    commit: @escaping (Payload) async throws -> Void
+    commit: @escaping (Payload) async throws -> String?
   ) {
     let nsString = string as NSString
     guard nsString.length > 0 else { return }
@@ -1456,7 +1772,7 @@ final class PlaceholderTextView: NSTextView {
     _ range: NSRange,
     preparing payloadFor: @escaping (String, NSRange) -> Payload?,
     messages: LineCommitMessages,
-    commit: @escaping (Payload) async throws -> Void
+    commit: @escaping (Payload) async throws -> String?
   ) {
     let nsString = string as NSString
     guard nsString.length > 0,
@@ -1469,11 +1785,17 @@ final class PlaceholderTextView: NSTextView {
       vimController?.showMessage(messages.empty, kind: .error, icon: .hermes)
       return
     }
+    guard !isHandoffInFlight else {
+      vimController?.showMessage(messages.progress, kind: .info, icon: .hermes)
+      return
+    }
+    isHandoffInFlight = true
     vimController?.showMessage(messages.progress, kind: .info, icon: .hermes)
     Task { @MainActor [weak self, range, original, payload, messages, commit] in
       guard let self else { return }
+      defer { self.isHandoffInFlight = false }
       do {
-        try await commit(payload)
+        let successMessage = try await commit(payload) ?? messages.success
         let current = self.string as NSString
         guard range.location + range.length <= current.length,
           current.substring(with: range) == original
@@ -1489,7 +1811,7 @@ final class PlaceholderTextView: NSTextView {
         self.didChangeText()
         let cursor = min(range.location, (self.string as NSString).length)
         self.setSelectedRange(NSRange(location: cursor, length: 0))
-        self.vimController?.showMessage(messages.success, kind: .success, icon: .hermes)
+        self.vimController?.showMessage(successMessage, kind: .success, icon: .hermes)
       } catch {
         self.vimController?.showMessage(messages.failure, kind: .error, icon: .hermes)
       }
@@ -1653,7 +1975,11 @@ final class PlaceholderTextView: NSTextView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
+    drawYankGhost(in: dirtyRect)
+    drawVisualBlockCursor(in: dirtyRect)
     drawFlashHints(in: dirtyRect)
+    drawWordHints(in: dirtyRect)
+    drawVimSearchLabels(in: dirtyRect)
     guard string.isEmpty, !placeholderString.isEmpty else { return }
     let effectiveFont = font ?? .systemFont(ofSize: 14)
     let attrs: [NSAttributedString.Key: Any] = [
@@ -1681,8 +2007,7 @@ final class PlaceholderTextView: NSTextView {
       let blockRect = normalModeCursorDisplayRect(for: rect, turnedOn: flag)
       if flag {
         lastInsertionPointDisplayRect = blockRect
-        (editorCursorColor ?? Self.normalModeCursorColor).withAlphaComponent(0.82).setFill()
-        blockRect.fill()
+        fillVimBlockCursor(blockRect, coveringCharAt: selectedRange.location)
       } else {
         invalidateInsertionPointRect(blockRect)
       }
@@ -1705,7 +2030,7 @@ final class PlaceholderTextView: NSTextView {
     return shrinkInsertionPointRectToFont(baseRect)
   }
 
-  private func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
+  func shrinkInsertionPointRectToFont(_ rect: NSRect) -> NSRect {
     let caretFont = font ?? .systemFont(ofSize: 14)
     let fontHeight = caretFont.ascender - caretFont.descender
     let centeredGlyphInset = max(0, rect.height - fontHeight) / 2
@@ -2054,7 +2379,37 @@ final class FixedLineHeightLayoutManager: NSLayoutManager {
   /// `at: 0` from storage on every glyph placement, which is fragile
   /// when position 0 falls back to a different font metric than the
   /// editor font.
-  var editorFont: NSFont = .systemFont(ofSize: EditorMetrics.fontSize)
+  var editorFont: NSFont = SpotNoteFont.editor()
+
+  /// Vim visual band: AppKit substitutes the light unemphasized gray
+  /// for `selectedTextAttributes` whenever the view is not first
+  /// responder -- the band David flagged as "not appropriate". The
+  /// selection highlight is painted HERE (the layout manager background
+  /// pass), so this is the one place a substitution holds in every key
+  /// state; nvim's Visual blend replaces whatever color arrives while
+  /// visual mode owns the selection.
+  override func fillBackgroundRectArray(
+    _ rectArray: UnsafePointer<NSRect>,
+    count rectCount: Int,
+    forCharacterRange charRange: NSRange,
+    color: NSColor
+  ) {
+    super.fillBackgroundRectArray(
+      rectArray,
+      count: rectCount,
+      forCharacterRange: charRange,
+      color: vimVisualBandColor(for: charRange) ?? color
+    )
+  }
+
+  private func vimVisualBandColor(for charRange: NSRange) -> NSColor? {
+    guard let view = firstTextView as? PlaceholderTextView,
+      view.vimVisualBandActive,
+      let visual = view.editorVisualSelectionColor,
+      NSIntersectionRange(charRange, view.selectedRange).length > 0
+    else { return nil }
+    return visual
+  }
 
   override func setLineFragmentRect(
     _ fragmentRect: NSRect,
