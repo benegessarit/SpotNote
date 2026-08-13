@@ -36,16 +36,20 @@ enum CodeStylerLinks {
       let storage = textView.textStorage
     else { return }
     let selection = textView.selectedRange
+    // Storage conceal and temporary-attribute tint stay in SEPARATE
+    // phases: a temporary attribute inside beginEditing/endEditing makes
+    // display invalidation generate glyphs mid-edit, which raises (and
+    // crashed the app at launch on a window-hosted first style).
     storage.beginEditing()
-    for span in spans {
-      let revealed = touches(selection, span.range)
-      if !revealed {
-        conceal(span.leadingConceal, in: storage)
-        conceal(span.trailingConceal, in: storage)
-      }
-      tint(span, revealed: revealed, style: style, layoutManager: layoutManager)
+    for span in spans where !touches(selection, span.range) {
+      conceal(span.leadingConceal, in: storage)
+      conceal(span.trailingConceal, in: storage)
     }
     storage.endEditing()
+    for span in spans {
+      let revealed = touches(selection, span.range)
+      tint(span, revealed: revealed, style: style, layoutManager: layoutManager)
+    }
   }
 
   /// Selection-adjacency used for reveal: a zero-length caret touching
