@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit is intentionally not part of Marginal's automatic PR-review loop.
+# Cursor Bugbot is the only automatic semantic PR reviewer for this repo.
+reviews:
+  auto_review:
+    enabled: false
+    description_keyword: ""
+    labels: []
+chat:
+  auto_reply: false

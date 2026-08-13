@@ -1,0 +1,66 @@
+---
+description: "Minimal PR workflow gates for SpotNote"
+alwaysApply: true
+---
+
+# SpotNote PR workflow
+
+## Before editing
+
+- Check the current branch and dirty state. David often has parallel work in SpotNote; do not switch branches in the shared checkout unless explicitly asked.
+- Read relevant files before changing them; do not invent imports, symbols, or workflow names.
+- For behavior changes, add or update focused tests when practical.
+- Plan the smallest safe smoke before claiming a runnable feature/fix/workflow is done.
+
+## Local quality gate
+
+SpotNote's primary local check is:
+
+```bash
+make ci
+```
+
+For narrow workflow-only edits, run the targeted workflow/script checks plus the closest local proof, and say if full `make ci` was not run.
+
+For runnable changes, include smoke evidence:
+
+```text
+Smoke: setup=<temp fixture, test build, or real entrypoint exercised>; result=<observed pass signal>; cleanup=<removed temp files/reverted state/no persistent state created>.
+```
+
+If no real smoke is safe or possible:
+
+```text
+Smoke: not run — reason=<why>; substitute=<closest verification that did run>.
+```
+
+Use `scripts/headless-smoke.sh` for agent-safe launch smokes when a visible HUD launch would interrupt David.
+
+## PR gate when asked to push, open, or finish a PR
+
+1. Stage only intended files and commit with a concise SpotNote-style message.
+2. Push the branch and open/update the PR.
+3. Read the exact PR head SHA:
+
+```bash
+gh pr view --json headRefOid --jq '.headRefOid'
+```
+
+4. Wait for deterministic CI on that SHA.
+5. Wait for Repo Quality checks when configured.
+6. Wait for Review Annotations when configured; treat them as advisory unless branch protection says otherwise.
+7. Wait for Cursor Bugbot when the check exists on this repo.
+8. Fix real findings, then rerun local proof and repeat exact-head PR verification.
+
+Final evidence shape:
+
+```text
+Local checks: <command + pass/fail>
+Smoke: <setup/result/cleanup, or not-run reason + substitute>
+PR head SHA: <sha>
+CI gate: <passed/failed/pending/unavailable>
+Repo Quality: <passed/findings handled/pending/unavailable>
+Review Annotations: <advisory passed/findings handled/pending/unavailable>
+Cursor Bugbot: <passed/findings handled/pending/unavailable>
+Not covered: <honest gaps>
+```
